@@ -1,0 +1,36 @@
+body {
+    font-family: system-ui, sans-serif;
+    background: #111;
+    color: #eee;
+    padding: 20px;
+    margin: 0;
+}
+
+h1 { font-size: 1.6em; margin-bottom: 6px; }
+
+input, select, textarea {
+    margin: 8px 0;
+    padding: 6px;
+    background: #222;
+    color: #eee;
+    border: 1px solid #444;
+}
+
+button {
+    margin-left: 8px;
+    padding: 6px 10px;
+    background: #222;
+    color: #eee;
+    border: 1px solid #444;
+    cursor: pointer;
+}
+
+button:hover { background: #2a2a2a; }
+
+button.danger {
+    background-color: #8b2c2c;
+    color: white;
+    border: none;
+}
+
+button.danger:hover { background-color: #a83838; }
