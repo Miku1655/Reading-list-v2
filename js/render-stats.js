@@ -199,7 +199,7 @@ function renderStats() {
     createDoughnut("countryChart", countryData, "Country Distribution" + (dist.readCount > 0 ? ` (${dist.readCount} read books)` : ""));
     createDoughnut("genreChart", genreData, "Genre Distribution" + (dist.readCount > 0 ? ` (${dist.readCount} read books)` : ""));
 
-    // Cumulative line chart with proper destroy check + fallback
+    // Cumulative line chart – improved consistency
     const cumulativeContainer = document.getElementById("cumulativeChartContainer");
     const ctxLine = document.getElementById("cumulativeChart").getContext("2d");
     if (window.cumulativeChart && typeof window.cumulativeChart.destroy === 'function') {
@@ -272,6 +272,13 @@ function renderStats() {
             }
         });
     } else {
-        cumulativeContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px; font-size:1.1em;">No finished reads yet!<br><br>Mark some books as finished to see your cumulative progress.</p><canvas id="cumulativeChart" style="display:none;"></canvas>';
+        // Improved fallback – only show if truly no data
+        const currentYear = getCurrentYear();
+        const currentStats = perYear[currentYear] || { books: 0, pages: 0 };
+        if (currentStats.books > 0 || currentStats.pages > 0) {
+            cumulativeContainer.innerHTML = '<p style="text-align:center; color:#ff6; padding:120px 20px;">Temporary data glitch detected – try refreshing the page!</p><canvas id="cumulativeChart" style="display:none;"></canvas>';
+            console.warn("perYear has current year data but no labels – possible timestamp issue", perYear);
+        } else {
+            cumulativeContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px; font-size:1.1em;">No finished reads yet!<br><br>Mark some books as finished to see your cumulative progress.</p><canvas id="cumulativeChart" style="display:none;"></canvas>';
+        }
     }
-}
