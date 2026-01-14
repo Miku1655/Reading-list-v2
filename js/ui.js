@@ -43,6 +43,9 @@ function switchTab(name) {
     if (name === "list") renderYearGoalProgress();
     if (name === "stats") renderStats();
     if (name === "timeline") renderTimeline();
+    if (name === "list") renderYearGoalProgress();
+    if (name === "stats") renderStats();
+    if (name === "timeline") renderTimeline();
     if (name === "challenges") loadGoalsForYear();
     renderTable(); // always refresh list on any tab switch
 }
