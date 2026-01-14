@@ -124,8 +124,10 @@ function renderStats() {
     html += '</div></div>';
     container.innerHTML = html;
 
-    // Yearly bar chart
     const labels = Object.keys(perYear).sort((a,b) => a - b);
+
+    // Yearly bar chart with fallback
+    const barContainer = document.getElementById("statsChartContainer");
     if (labels.length > 0) {
         const booksData = labels.map(y => perYear[y].books);
         const pagesData = labels.map(y => perYear[y].pages);
@@ -145,6 +147,8 @@ function renderStats() {
                 plugins: { legend: { labels: { color: '#eee' } } }
             }
         });
+    } else {
+        barContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px; font-size:1.1em;">No finished reads yet!<br><br>Mark some books as finished to see yearly stats.</p><canvas id="statsChart" style="display:none;"></canvas>';
     }
 
     // Doughnut charts (unchanged)
@@ -195,11 +199,14 @@ function renderStats() {
     createDoughnut("countryChart", countryData, "Country Distribution" + (dist.readCount > 0 ? ` (${dist.readCount} read books)` : ""));
     createDoughnut("genreChart", genreData, "Genre Distribution" + (dist.readCount > 0 ? ` (${dist.readCount} read books)` : ""));
 
-    // New: Cumulative line chart
-    if (labels.length > 0) {
-        const ctxLine = document.getElementById("cumulativeChart").getContext("2d");
-        if (window.cumulativeChart) window.cumulativeChart.destroy();
+    // Cumulative line chart with proper destroy check + fallback
+    const cumulativeContainer = document.getElementById("cumulativeChartContainer");
+    const ctxLine = document.getElementById("cumulativeChart").getContext("2d");
+    if (window.cumulativeChart && typeof window.cumulativeChart.destroy === 'function') {
+        window.cumulativeChart.destroy();
+    }
 
+    if (labels.length > 0) {
         let cumBooks = 0;
         let cumPages = 0;
         const cumBooksData = [];
@@ -264,5 +271,7 @@ function renderStats() {
                 }
             }
         });
+    } else {
+        cumulativeContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px; font-size:1.1em;">No finished reads yet!<br><br>Mark some books as finished to see your cumulative progress.</p><canvas id="cumulativeChart" style="display:none;"></canvas>';
     }
 }
