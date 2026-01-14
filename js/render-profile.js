@@ -76,3 +76,23 @@ function renderFavourites() {
     }
     if (!hasContent) container.innerHTML = "<p>No favourites yet.</p>";
 }
+
+function renderWaitingWidget() {
+    const widget = document.getElementById("waitingWidget");
+    const toRead = books.filter(b => b.exclusiveShelf === "to-read");
+    if (toRead.length === 0) {
+        widget.innerHTML = "<p>All caught up! No to-read books waiting.</p>";
+        return;
+    }
+    const randomBook = toRead[Math.floor(Math.random() * toRead.length)];
+    const daysSince = randomBook.dateAdded ? Math.floor((Date.now() - randomBook.dateAdded) / (1000*60*60*24)) : "?";
+    const coverHtml = randomBook.coverUrl 
+        ? `<img src="${randomBook.coverUrl}" style="max-height:200px; border:1px solid #444; border-radius:6px;">`
+        : `<div class="no-cover" style="width:160px; height:200px; margin:auto;">No cover</div>`;
+
+    widget.innerHTML = `
+        ${coverHtml}
+        <p style="margin:12px 0;"><strong>${randomBook.title}</strong> by ${randomBook.author || "Unknown"}</p>
+        <p>Added ${daysSince} day${daysSince === 1 ? '' : 's'} ago... still waiting for you!</p>
+    `;
+}
