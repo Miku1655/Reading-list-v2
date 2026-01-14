@@ -81,6 +81,10 @@ function calculatePerYear() {
             if (read.finished) {
                 const dt = new Date(read.finished);
                 const y = dt.getFullYear();
+                if (isNaN(y)) {
+                    console.warn("Invalid finished date skipped:", read.finished, "in book:", b.title);
+                    return; // skip bad timestamps
+                }
                 perYear[y] = perYear[y] || { books: 0, pages: 0 };
                 perYear[y].books++;
                 perYear[y].pages += b.pages || 0;
