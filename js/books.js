@@ -231,8 +231,9 @@ function updateEmojiDisplay() {
 
 updateEmojiDisplay();
 
-// Left-click to remove emoji, right-click to edit page
-currentEmojisSpan.addEventListener("click", (e) => {
+// Use direct assignment for handlers so repeated opens replace previous handlers
+// Left-click to remove emoji
+currentEmojisSpan.onclick = (e) => {
     const span = e.target.closest("span[data-index]");
     if (span) {
         const i = Number(span.dataset.index);
@@ -240,10 +241,10 @@ currentEmojisSpan.addEventListener("click", (e) => {
         pageInput.value = "";
         updateEmojiDisplay();
     }
-});
+};
 
 // Right-click to edit page number
-currentEmojisSpan.addEventListener("contextmenu", (e) => {
+currentEmojisSpan.oncontextmenu = (e) => {
     e.preventDefault();
     const span = e.target.closest("span[data-index]");
     if (span) {
@@ -255,23 +256,25 @@ currentEmojisSpan.addEventListener("contextmenu", (e) => {
             updateEmojiDisplay();
         }
     }
-});
+    return false;
+};
 
 // Initialize picker HTML once with clean emojis
 picker.innerHTML = emojiList.map(e => `<span style="margin:0 6px; cursor:pointer;">${e}</span>`).join("");
 
-picker.addEventListener("click", (e) => {
+// Replace previous picker handler on each open
+picker.onclick = (e) => {
     const span = e.target.closest("span");
     if (span && emojiList.includes(span.textContent.trim())) {
         const emoji = span.textContent.trim();
         const pageVal = pageInput.value.trim();
         const page = pageVal ? Number(pageVal) : null;
-        
+
         editingBook.emojis.push({ emoji, page });
         pageInput.value = "";
         updateEmojiDisplay();
     }
-});
+};
 
     // Collapsed persistence (clean)
     const key = "reading_edit_collapsed_sections";
