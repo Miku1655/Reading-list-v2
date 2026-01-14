@@ -218,12 +218,12 @@ const emojiPickerText = "🙂 😐 😞 😭 😂 😢 😡 🤔 🔥 ❄️ �
 const emojiList = emojiPickerText.trim().split(/\s+/).filter(e => e.length);
 
 // Update display
-let editingEmojiIndex = null; // Track which emoji is being edited for page
 function updateEmojiDisplay() {
     currentEmojisSpan.innerHTML = editingBook.emojis.length 
         ? editingBook.emojis.map((e, i) => 
-            `<span style="margin:0 6px; cursor:pointer; border-radius:4px; padding:2px 6px; ${editingEmojiIndex === i ? 'background:#ddd;' : ''}" data-index="${i}" title="Click to edit page number">
-                ${e.emoji}${e.page ? ` <small>(p.${e.page})</small>` : " <small>(no page)</small>"}
+            `<span style="margin:0 6px; cursor:pointer; border-radius:4px; padding:4px 8px; background:#f0f0f0; display:inline-block; user-select:none;" data-index="${i}" title="Click to remove, right-click to edit page">
+                ${e.emoji} ${e.page ? `<small>(p.${e.page})</small>` : ''}
+                <small style="margin-left:4px; opacity:0.6;">✕</small>
             </span>`
           ).join("")
         : "None";
@@ -231,34 +231,29 @@ function updateEmojiDisplay() {
 
 updateEmojiDisplay();
 
-// Delegation for editing emoji page numbers (click any displayed emoji)
+// Left-click to remove emoji, right-click to edit page
 currentEmojisSpan.addEventListener("click", (e) => {
     const span = e.target.closest("span[data-index]");
     if (span) {
         const i = Number(span.dataset.index);
-        if (editingEmojiIndex === i) {
-            // Click again to cancel editing
-            editingEmojiIndex = null;
-            pageInput.value = "";
-            pageInput.placeholder = "e.g. 150";
-            updateEmojiDisplay();
-        } else {
-            // Select this emoji for editing
-            editingEmojiIndex = i;
-            pageInput.value = editingBook.emojis[i].page || "";
-            pageInput.placeholder = `Page for "${editingBook.emojis[i].emoji}"`;
-            pageInput.focus();
-            updateEmojiDisplay();
-        }
+        editingBook.emojis.splice(i, 1);
+        pageInput.value = "";
+        updateEmojiDisplay();
     }
 });
 
-// Handle page input - update the selected emoji
-pageInput.addEventListener("change", (e) => {
-    if (editingEmojiIndex !== null) {
-        const pageVal = pageInput.value.trim();
-        editingBook.emojis[editingEmojiIndex].page = pageVal ? Number(pageVal) : null;
-        updateEmojiDisplay();
+// Right-click to edit page number
+currentEmojisSpan.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    const span = e.target.closest("span[data-index]");
+    if (span) {
+        const i = Number(span.dataset.index);
+        const currentPage = editingBook.emojis[i].page;
+        const newPage = prompt(`Set page number for ${editingBook.emojis[i].emoji}:`, currentPage || "");
+        if (newPage !== null) {
+            editingBook.emojis[i].page = newPage ? Number(newPage) : null;
+            updateEmojiDisplay();
+        }
     }
 });
 
@@ -269,19 +264,12 @@ picker.addEventListener("click", (e) => {
     const span = e.target.closest("span");
     if (span && emojiList.includes(span.textContent.trim())) {
         const emoji = span.textContent.trim();
-        // Check if emoji already exists
-        if (editingBook.emojis.some(e => e.emoji === emoji)) {
-            alert("This emoji is already added!");
-        } else {
-            const pageVal = pageInput.value.trim();
-            const page = pageVal ? Number(pageVal) : null;
-            
-            editingBook.emojis.push({ emoji, page });
-            editingEmojiIndex = null;
-            pageInput.value = "";
-            pageInput.placeholder = "e.g. 150";
-            updateEmojiDisplay();
-        }
+        const pageVal = pageInput.value.trim();
+        const page = pageVal ? Number(pageVal) : null;
+        
+        editingBook.emojis.push({ emoji, page });
+        pageInput.value = "";
+        updateEmojiDisplay();
     }
 });
 
