@@ -41,6 +41,9 @@ function switchTab(name) {
         renderFavourites();
     }
     if (name === "list") renderYearGoalProgress();
+    if (name === "stats") renderStats();
+    if (name === "timeline") renderTimeline();
+    if (name === "challenges") loadGoalsForYear();
     renderTable(); // always refresh list on any tab switch
 }
 
@@ -452,14 +455,6 @@ document.getElementById("signUpBtn").addEventListener("click", () => {
 });
 document.getElementById("signOutBtn").addEventListener("click", () => auth.signOut());
 
-// Update switchTab to refresh more tabs
-function switchTab(name) {
-    // ... (existing code)
-    if (name === "stats") renderStats();
-    if (name === "timeline") renderTimeline();
-    if (name === "challenges") loadGoalsForYear();
-    // ... rest
-}
 
 // Initial setup
 document.getElementById("goalYear").value = new Date().getFullYear();
