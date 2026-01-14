@@ -166,28 +166,42 @@ function renderYearGoalProgress() {
     const container = document.getElementById("yearGoalProgressContainer");
     container.innerHTML = "";
     if (!showYearGoalProgress) return;
-    const currentYear = new Date().getFullYear();
-    const perYear = calculatePerYear();
-    const stats = perYear[currentYear] || { books: 0, pages: 0 };
+
+    const currentYear = getCurrentYear();
+    const stats = getYearStats(currentYear);
     const goal = goals[currentYear] || {};
-    if (!goal.books && !goal.pages) {
-        container.innerHTML = `<div style="background:#1a1a1a;padding:12px;border:1px solid #333;border-radius:8px;"><p>No goals set for ${currentYear}.</p></div>`;
-        return;
+    const daysElapsed = getDaysElapsed(currentYear);
+
+    let html = `<div style="background:#1a1a1a;padding:14px;border:1px solid #333;border-radius:8px; font-size:0.95em;">`;
+    html += `<strong>${currentYear} Pace & Projection</strong><br>`;
+    html += `Finished: ${stats.books} books • ${stats.pages} pages<br>`;
+
+    if (daysElapsed > 0) {
+        const booksPace = (stats.books / daysElapsed).toFixed(2);
+        const pagesPace = Math.round(stats.pages / daysElapsed);
+        html += `Daily pace: ${booksPace} books • ${pagesPace} pages<br>`;
+        const projectedBooks = calculateProjection(stats.books, currentYear);
+        const projectedPages = calculateProjection(stats.pages, currentYear);
+        html += `<strong>Projected by Dec 31: ${projectedBooks} books • ${projectedPages} pages</strong><br><br>`;
     }
-    let html = `<div style="background:#1a1a1a;padding:16px;border:1px solid #333;border-radius:8px;"><h3>${currentYear} Goal Progress</h3>`;
-    if (goal.books) {
-        const percent = goal.books ? Math.min(100, Math.round(stats.books / goal.books * 100)) : 0;
-        html += `<p>Books: ${stats.books} / ${goal.books} (${percent}%)</p>`;
-        html += `<div style="background:#333;height:20px;border-radius:10px;overflow:hidden;margin-bottom:12px;">
-                    <div style="background:#4caf50;width:${percent}%;height:100%;transition:width 0.4s;"></div>
-                 </div>`;
-    }
-    if (goal.pages) {
-        const percent = goal.pages ? Math.min(100, Math.round(stats.pages / goal.pages * 100)) : 0;
-        html += `<p>Pages: ${stats.pages} / ${goal.pages} (${percent}%)</p>`;
-        html += `<div style="background:#333;height:20px;border-radius:10px;overflow:hidden;">
-                    <div style="background:#2196f3;width:${percent}%;height:100%;transition:width 0.4s;"></div>
-                 </div>`;
+
+    if (goal.books || goal.pages) {
+        if (goal.books) {
+            const percent = goal.books > 0 ? Math.min(100, Math.round(stats.books / goal.books * 100)) : 0;
+            let text = `${stats.books} / ${goal.books} (${percent}%)`;
+            if (stats.books >= goal.books) text += ` ✓ Completed (+${stats.books - goal.books})`;
+            html += `<strong>Books goal:</strong> ${text}<br>`;
+            html += `<div class="progress-bar-container"><div class="progress-bar-fill books-fill" style="width:${percent}%;"></div></div>`;
+        }
+        if (goal.pages) {
+            const percent = goal.pages > 0 ? Math.min(100, Math.round(stats.pages / goal.pages * 100)) : 0;
+            let text = `${stats.pages} / ${goal.pages} (${percent}%)`;
+            if (stats.pages >= goal.pages) text += ` ✓ Completed (+${stats.pages - goal.pages})`;
+            html += `<strong>Pages goal:</strong> ${text}<br>`;
+            html += `<div class="progress-bar-container"><div class="progress-bar-fill pages-fill" style="width:${percent}%;"></div></div>`;
+        }
+    } else {
+        html += `<em>No goals set for ${currentYear}.</em>`;
     }
     html += `</div>`;
     container.innerHTML = html;
