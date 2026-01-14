@@ -78,17 +78,22 @@ function calculatePerYear() {
     books.forEach(b => {
         if (!b.reads) return;
         b.reads.forEach(read => {
-            if (read.finished) {
-                const dt = new Date(read.finished);
-                const y = dt.getFullYear();
-                if (isNaN(y)) {
-                    console.warn("Invalid finished date skipped:", read.finished, "in book:", b.title);
-                    return; // skip bad timestamps
-                }
-                perYear[y] = perYear[y] || { books: 0, pages: 0 };
-                perYear[y].books++;
-                perYear[y].pages += b.pages || 0;
+            if (!read.finished) return;
+            // Normalize timestamp: handle number or string safely
+            let timestamp = read.finished;
+            if (typeof timestamp === 'string') {
+                timestamp = Date.parse(timestamp);
             }
+            if (isNaN(timestamp)) {
+                console.warn("Invalid finished timestamp skipped:", read.finished, "in book:", b.title);
+                return;
+            }
+            const dt = new Date(timestamp);
+            const y = dt.getFullYear();
+            if (isNaN(y)) return; // extra safety
+            perYear[y] = perYear[y] || { books: 0, pages: 0 };
+            perYear[y].books++;
+            perYear[y].pages += b.pages || 0;
         });
     });
     return perYear;
