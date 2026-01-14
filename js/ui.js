@@ -34,6 +34,8 @@ function switchTab(name) {
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
     document.querySelectorAll(".tab-content").forEach(c => c.classList.toggle("active", c.id === "tab-" + name));
     localStorage.setItem(TAB_KEY, name);
+
+    // Tab-specific immediate actions (minimal, fast)
     if (name === "options") { renderShelfManager(); updateCoversCount(); }
     if (name === "profile") {
         renderProfileStats();
@@ -42,13 +44,11 @@ function switchTab(name) {
         renderWaitingWidget();
     }
     if (name === "list") renderYearGoalProgress();
-    if (name === "stats") renderStats();
-    if (name === "timeline") renderTimeline();
-    if (name === "challenges") {
-        loadGoalsForYear();
-        renderChallengesTab();
-    }
-    renderTable(); // always refresh list on any tab switch
+
+    renderTable(); // always fast
+
+    // Full refresh including heavy tab-specific renders
+    renderAll();
 }
 
 function renderAll() {
@@ -61,6 +61,15 @@ function renderAll() {
     renderWaitingWidget();
     updateCoversCount();
     if (document.querySelector('.tab.active')?.dataset.tab === "options") renderShelfManager();
+
+    // Tab-specific heavy renders (charts/timeline/challenges) – safe & consistent
+    const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+    if (activeTab === "stats") renderStats();
+    if (activeTab === "timeline") renderTimeline();
+    if (activeTab === "challenges") {
+        loadGoalsForYear();
+        renderChallengesTab();
+    }
 }
 
 function renderShelfManager() {
