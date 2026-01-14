@@ -68,3 +68,22 @@
     width: 100% !important;
     height: 300px !important;
 }
+
+.progress-bar-container {
+    background: #222;
+    height: 24px;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 10px 0;
+    position: relative;
+}
+.progress-bar-fill {
+    height: 100%;
+    transition: width 0.5s ease-in-out;
+}
+.books-fill {
+    background: linear-gradient(to right, #4caf50, #66bb6a);
+}
+.pages-fill {
+    background: linear-gradient(to right, #2196f3, #42a5f5);
+}
