@@ -136,7 +136,7 @@ function renderTable() {
         const lastReadTs = getLatestFinished(book);
         const lastReadDisplay = lastReadTs > 0 ? new Date(lastReadTs).toLocaleDateString() : "-";
         tr.innerHTML = `
-            <td>${showNumbers ? (idx + 1) + ". " : ""}${book.title || ""}${book.notes ? ' <span class="noteIcon" style="cursor:help;color:#888;">📝</span>' : ''}</td>
+            <td>${showNumbers ? (idx + 1) + ". " : ""}${book.title || ""}${book.notes ? ' <span class="noteIcon" style="cursor:help;color:#888;">📝</span>' : ''}${book.emojis ? `<span style="font-size:1.4em; margin-left:8px;">${book.emojis.join(" ")}</span>` : ""}</td>
             <td>${book.rating || "-"}</td>
             <td>${book.author || ""}</td>
             <td>${coverHtml}</td>
