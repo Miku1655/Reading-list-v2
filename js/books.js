@@ -5,8 +5,7 @@ function createBookCard(book) {
 
     // Book-level emojis display
     const emojis = book.emojis || [];
-    const emojisHtml = emojis.length ? `<div style="margin-top:4px; font-size:1.4em;">${emojis.join(" ")}</div>` : "";
-
+const emojisHtml = emojis.length ? `<div style="margin-top:4px; font-size:1.4em;" title="${emojis.map(e => `${e.emoji} ${e.page ? `(page ${e.page})` : ""}`).join(", ")}">${emojis.map(e => e.emoji).join(" ")}</div>` : "";
     // Stacked re-reads (up to 5 extra layers for a total of 6 visible "cards")
     const readCount = getReadCount(book);
     const extraLayers = Math.min(Math.max(readCount - 1, 0), 5);
