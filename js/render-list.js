@@ -135,8 +135,10 @@ function renderTable() {
         const coverHtml = book.coverUrl ? `<img src="${book.coverUrl}" alt="Cover" style="max-height:80px;" onerror="this.style.display='none'">` : "";
         const lastReadTs = getLatestFinished(book);
         const lastReadDisplay = lastReadTs > 0 ? new Date(lastReadTs).toLocaleDateString() : "-";
+        const bookEmojis = book.emojis || [];
+        const emojisHtml = bookEmojis.length ? `<span style="font-size:1.4em; margin-left:8px;">${bookEmojis.join(" ")}</span>` : "";
         tr.innerHTML = `
-            <td>${showNumbers ? (idx + 1) + ". " : ""}${book.title || ""}${book.notes ? ' <span class="noteIcon" style="cursor:help;color:#888;">📝</span>' : ''}${allEmojis.length ? `<span style="font-size:1.4em; margin-left:8px;">${allEmojis.join(" ")}</span>` : ""}</td>
+            <td>${showNumbers ? (idx + 1) + ". " : ""}${book.title || ""}${book.notes ? ' <span class="noteIcon" style="cursor:help;color:#888;">📝</span>' : ''}${emojisHtml}</td>
             <td>${book.rating || "-"}</td>
             <td>${book.author || ""}</td>
             <td>${coverHtml}</td>
