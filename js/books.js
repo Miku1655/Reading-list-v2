@@ -251,7 +251,7 @@ function closeEditModal() {
     const picker = document.getElementById("emojiPicker");
     if (!currentEmojisSpan || !pageInput || !picker) return;
 
-    const emojiPickerText = "🙂 😐 😞 😭 😂 😢 😡 🤔 🔥 ❄️ 🧠 🖤 ✨ ❤️ 🎯 🌫️ ☕️";
+    const emojiPickerText = "🙂 😐 😞 😭 💢 😂 😢 😡 🤔 🔥 ❄️ 🧠 🖤 ✨ ❤️ 🎯 🌫️ ☕️";
     const emojiList = emojiPickerText.trim().split(/\s+/).filter(e => e.length);
 
     function updateEmojiDisplay() {
