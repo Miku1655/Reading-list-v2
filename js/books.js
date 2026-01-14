@@ -204,34 +204,64 @@ function openEditModal(book = null) {
         rebuildReadsList();
     };
 
-    // Book-level Feelings emojis
-    const currentEmojisSpan = document.getElementById("currentEmojis");
-    editingBook.emojis = editingBook.emojis || [];
-    function updateEmojiDisplay() {
-        const wrapped = editingBook.emojis.map(e => `<span style="margin:0 4px; cursor:pointer;">${e}</span>`).join("");
-        currentEmojisSpan.innerHTML = wrapped || "None";
+    // Book-level Feelings emojis with optional page
+editingBook.emojis = editingBook.emojis || []; // array of {emoji, page}
+
+const currentEmojisSpan = document.getElementById("currentEmojis");
+
+function updateEmojiDisplay() {
+    if (editingBook.emojis.length === 0) {
+        currentEmojisSpan.innerHTML = "None";
+        currentEmojisSpan.style.fontSize = "1em";
+        currentEmojisSpan.style.color = "#888";
+    } else {
+        currentEmojisSpan.style.fontSize = "1.6em";
+        currentEmojisSpan.style.color = "#eee";
+        currentEmojisSpan.innerHTML = editingBook.emojis.map((e, i) => 
+            `<span style="margin:0 6px; cursor:pointer; display:inline-block;" data-index="${i}">
+                ${e.emoji} ${e.page ? `(page ${e.page})` : ""}
+            </span>`
+        ).join("");
     }
-    updateEmojiDisplay();
+}
 
-    // Individual remove
-    currentEmojisSpan.onclick = (e) => {
-        if (e.target.tagName === "SPAN") {
-            const emoji = e.target.textContent;
-            editingBook.emojis = editingBook.emojis.filter(e => e !== emoji);
-            updateEmojiDisplay();
-        }
+updateEmojiDisplay();
+
+// Individual remove – click displayed entry
+currentEmojisSpan.onclick = (e) => {
+    const span = e.target.closest("span[data-index]");
+    if (span) {
+        const index = Number(span.dataset.index);
+        editingBook.emojis.splice(index, 1);
+        updateEmojiDisplay();
+    }
+};
+
+// Picker – add with optional page
+const pageInput = document.createElement("input");
+pageInput.type = "number";
+pageInput.min = "1";
+pageInput.placeholder = "optional page";
+pageInput.style.width = "120px";
+pageInput.style.marginTop = "8px";
+
+// Insert page input after picker
+const pickerContainer = document.getElementById("emojiPicker").parentElement;
+pickerContainer.appendChild(pageInput);
+
+// Wrap picker emojis
+const picker = document.getElementById("emojiPicker");
+const emojiList = picker.textContent.trim().split(/\s+/);
+picker.innerHTML = emojiList.map(e => `<span style="margin:0 6px; display:inline-block; cursor:pointer;">${e}</span>`).join("");
+
+picker.querySelectorAll("span").forEach(span => {
+    span.onclick = () => {
+        const page = pageInput.value.trim() ? Number(pageInput.value) : null;
+        pageInput.value = ""; // clear after add
+        editingBook.emojis.push({ emoji: span.textContent, page });
+        updateEmojiDisplay();
     };
-
-    // Picker add (allow duplicates)
-    const picker = document.getElementById("emojiPicker");
-    const emojiList = picker.textContent.trim().split(/\s+/);
-    picker.innerHTML = emojiList.map(e => `<span style="margin:0 6px; display:inline-block; cursor:pointer;">${e}</span>`).join("");
-    picker.querySelectorAll("span").forEach(span => {
-        span.onclick = () => {
-            editingBook.emojis.push(span.textContent);
-            updateEmojiDisplay();
-        };
-    });
+});
 
     // Collapsed persistence (clean)
     const key = "reading_edit_collapsed_sections";
