@@ -5,7 +5,9 @@ function createBookCard(book) {
 
     // Book-level emojis display
     const emojis = book.emojis || [];
-const emojisHtml = emojis.length ? `<div style="margin-top:4px; font-size:1.4em;" title="${emojis.map(e => `${e.emoji} ${e.page ? `(page ${e.page})` : ""}`).join(", ")}">${emojis.map(e => e.emoji).join(" ")}</div>` : "";
+    const emojisDisplay = emojis.map(e => e.emoji).join(" ");
+    const tooltip = emojis.map(e => `${e.emoji}${e.page ? ` (p.${e.page})` : ""}`).join(", ");
+    const emojisHtml = emojis.length ? `<div style="margin-top:4px; font-size:1.4em;" title="${tooltip}">${emojisDisplay}</div>` : "";
     // Stacked re-reads (up to 5 extra layers for a total of 6 visible "cards")
     const readCount = getReadCount(book);
     const extraLayers = Math.min(Math.max(readCount - 1, 0), 5);
@@ -204,49 +206,50 @@ function openEditModal(book = null) {
     };
 
     // Book-level Feelings emojis with optional page
+// Book-level Feelings emojis with optional page
 editingBook.emojis = editingBook.emojis || []; // [{emoji: "😊", page: 150}, ...]
 
 const currentEmojisSpan = document.getElementById("currentEmojis");
-const pageInput = document.getElementById("emojiPageInput"); // static reference
+const pageInput = document.getElementById("emojiPageInput");
+const picker = document.getElementById("emojiPicker");
 
+// Update display
 function updateEmojiDisplay() {
-    if (editingBook.emojis.length === 0) {
-        currentEmojisSpan.textContent = "None";
-    } else {
-        currentEmojisSpan.innerHTML = editingBook.emojis.map((e, i) => 
-            `<span style="margin:0 6px; cursor:pointer; display:inline-block;" data-index="${i}">
+    currentEmojisSpan.innerHTML = editingBook.emojis.length 
+        ? editingBook.emojis.map((e, i) => 
+            `<span style="margin:0 6px; cursor:pointer;" data-index="${i}">
                 ${e.emoji}${e.page ? ` <small>(p.${e.page})</small>` : ""}
             </span>`
-        ).join("");
-    }
+          ).join("")
+        : "None";
 }
 
 updateEmojiDisplay();
 
-// Individual remove – click displayed entry
-currentEmojisSpan.onclick = (e) => {
+// Delegation for remove (click any displayed emoji)
+currentEmojisSpan.addEventListener("click", (e) => {
     const span = e.target.closest("span[data-index]");
     if (span) {
-        const index = Number(span.dataset.index);
-        editingBook.emojis.splice(index, 1);
+        const i = Number(span.dataset.index);
+        editingBook.emojis.splice(i, 1);
         updateEmojiDisplay();
     }
-};
+});
 
-// Wrap picker emojis
-const picker = document.getElementById("emojiPicker");
-const emojiList = picker.textContent.trim().split(/\s+/);
-picker.innerHTML = emojiList.map(e => `<span style="margin:0 6px; display:inline-block; cursor:pointer;">${e}</span>`).join("");
+// Wrap picker once + delegation for add
+const emojiList = picker.textContent.trim().split(/\s+/).filter(e => e.length);
+picker.innerHTML = emojiList.map(e => `<span style="margin:0 6px; cursor:pointer;">${e}</span>`).join("");
 
-picker.querySelectorAll("span").forEach(span => {
-    span.onclick = () => {
+picker.addEventListener("click", (e) => {
+    const span = e.target.closest("span");
+    if (span && emojiList.includes(span.textContent.trim())) {
         const pageVal = pageInput.value.trim();
         const page = pageVal ? Number(pageVal) : null;
-        pageInput.value = ""; // clear for next emoji
+        pageInput.value = ""; // clear
 
         editingBook.emojis.push({ emoji: span.textContent.trim(), page });
         updateEmojiDisplay();
-    };
+    }
 });
 
     // Collapsed persistence (clean)
