@@ -3,19 +3,15 @@ function createBookCard(book) {
     div.className = "book-card";
     div.dataset.bookId = book.importOrder;
 
-    // Collect all emojis from all reads
-    const allEmojis = [];
-    (book.reads || []).forEach(read => {
-        (read.emojis || []).forEach(e => {
-            if (!allEmojis.includes(e.emoji)) allEmojis.push(e.emoji);
-        });
-    });
-    const emojisHtml = allEmojis.length ? `<div style="margin-top:4px; font-size:1.4em;">${allEmojis.join(" ")}</div>` : "";
+    // Book-level emojis display
+    const emojis = book.emojis || [];
+    const emojisHtml = emojis.length ? `<div style="margin-top:4px; font-size:1.4em;">${emojis.join(" ")}</div>` : "";
 
-    // Stacked layers (up to 5 fake + main = 6 total visual cards)
+    // Stacked re-reads (up to 5 extra layers for a total of 6 visible "cards")
     const readCount = getReadCount(book);
-    const stackCount = Math.min(readCount > 0 ? readCount : 1, 6) - 1; // subtract main card
-    for (let i = 0; i < stackCount; i++) {
+    const extraLayers = Math.min(Math.max(readCount - 1, 0), 5);
+    if (extraLayers > 0) div.classList.add("stacked");
+    for (let i = 0; i < extraLayers; i++) {
         const layer = document.createElement("div");
         layer.className = "stack-layer";
         div.appendChild(layer);
@@ -60,6 +56,7 @@ function createSeriesCard(series) {
 }
 
 function makeFavouritesDraggable(container) {
+    // (unchanged – your original drag code)
     container.addEventListener("dragstart", e => {
         const card = e.target.closest(".book-card");
         if (card) {
@@ -125,9 +122,9 @@ function makeFavouritesDraggable(container) {
 }
 
 function openEditModal(book = null) {
-    editingBook = book || { reads: [], tags: [], exclusiveShelf: "to-read", dateAdded: Date.now() };
+    editingBook = book || { reads: [], tags: [], exclusiveShelf: "to-read", dateAdded: Date.now(), emojis: [] };
 
-    // Fill all fields
+    // Fill all fields (your original)
     document.getElementById("editTitle").value = book?.title || "";
     document.getElementById("editAuthor").value = book?.author || "";
     document.getElementById("editSeries").value = book?.series || "";
@@ -163,7 +160,7 @@ function openEditModal(book = null) {
         document.getElementById("favSeriesLabel").style.display = "none";
     }
 
-    // === Reads list + per-read emojis ===
+    // Simple reads list (original – no emojis here)
     const readsList = document.getElementById("readsList");
     readsList.innerHTML = "";
 
@@ -172,95 +169,33 @@ function openEditModal(book = null) {
         editingBook.reads.forEach((read, idx) => {
             const div = document.createElement("div");
             div.className = "read-entry";
-            div.style.marginBottom = "16px";
-            div.style.paddingBottom = "12px";
-            div.style.borderBottom = "1px solid #333";
-
-            // Current emojis for this read
-            let readEmojisHtml = "";
-            (read.emojis || []).forEach(e => {
-                readEmojisHtml += `${e.emoji} ${e.page ? `(page ${e.page})` : ""} `;
-            });
-
             div.innerHTML = `
                 <input type="date" class="readStart" value="${read.started ? new Date(read.started).toISOString().substring(0,10) : ''}">
                 <input type="date" class="readFinish" value="${read.finished ? new Date(read.finished).toISOString().substring(0,10) : ''}">
                 <button type="button" class="removeRead">Remove</button>
-
-                <div style="margin-top:8px;">
-                    <p style="margin:4px 0;">Emojis for this read: 
-                        <span class="readEmojisDisplay" style="font-size:1.4em;">${readEmojisHtml || "None"}</span>
-                    </p>
-                    <div class="emojiPicker" style="font-size:1.8em; cursor:pointer; line-height:1.6;">
-                        🙂 😐 😞 😭 😂 😢 😡 🤔 🔥 ❄️ 🧠 🖤 ✨ ❤️ 🎯 🌫️ ☕️
-                    </div>
-                    <label style="display:block; margin-top:6px;">
-                        Page for new emoji: <input type="number" class="emojiPage" min="1" placeholder="optional" style="width:100px;">
-                    </label>
-                </div>
             `;
-
-            // Remove read
             div.querySelector(".removeRead").onclick = () => {
                 editingBook.reads.splice(idx, 1);
                 rebuildReadsList();
             };
-
-            // Date changes
-            div.querySelector(".readStart").onchange = e => {
-                read.started = e.target.value ? new Date(e.target.value).getTime() : null;
-            };
-            div.querySelector(".readFinish").onchange = e => {
-                read.finished = e.target.value ? new Date(e.target.value).getTime() : null;
-            };
-
-            // Wrap emojis in spans for individual clicks
-            const picker = div.querySelector(".emojiPicker");
-            const emojis = picker.textContent.trim().split(/\s+/);
-            picker.innerHTML = emojis.map(e => `<span style="margin:0 4px; display:inline-block;">${e}</span>`).join("");
-
-            // Click to add emoji
-            picker.querySelectorAll("span").forEach(span => {
-                span.onclick = () => {
-                    if (!read.emojis) read.emojis = [];
-                    const pageInput = div.querySelector(".emojiPage");
-                    const page = pageInput.value.trim() ? Number(pageInput.value) : null;
-                    if (page !== null) pageInput.value = ""; // clear after use
-
-                    read.emojis.push({ emoji: span.textContent.trim(), page });
-
-                    // Update display
-                    let display = "";
-                    read.emojis.forEach(e => display += `${e.emoji} ${e.page ? `(page ${e.page})` : ""} `);
-                    div.querySelector(".readEmojisDisplay").textContent = display || "None";
-                };
-            });
-
-            // Click display to clear all emojis for this read
-            div.querySelector(".readEmojisDisplay").onclick = () => {
-                read.emojis = [];
-                div.querySelector(".readEmojisDisplay").textContent = "None";
-            };
-
+            div.querySelector(".readStart").onchange = e => read.started = e.target.value ? new Date(e.target.value).getTime() : null;
+            div.querySelector(".readFinish").onchange = e => read.finished = e.target.value ? new Date(e.target.value).getTime() : null;
             readsList.appendChild(div);
         });
     }
 
     rebuildReadsList();
 
-    // Add new read
     document.getElementById("addReadBtn").onclick = () => {
         editingBook.reads.push({ started: Date.now(), finished: null });
         rebuildReadsList();
     };
 
-    // Exclusive shelf change (auto-add current read)
     document.getElementById("editExclusiveShelf").onchange = () => {
         const status = document.getElementById("editExclusiveShelf").value;
         editingBook.exclusiveShelf = status;
         if (status === "currently-reading") {
-            const last = editingBook.reads[editingBook.reads.length - 1];
-            if (!last || last.finished !== null) {
+            if (editingBook.reads.length === 0 || editingBook.reads[editingBook.reads.length - 1].finished !== null) {
                 editingBook.reads.push({ started: Date.now(), finished: null });
             }
         } else if (status !== "read") {
@@ -269,51 +204,62 @@ function openEditModal(book = null) {
         rebuildReadsList();
     };
 
-    // === Collapsed sections persistence ===
-    const collapsedKey = "reading_edit_collapsed_sections";
-    const savedCollapsed = JSON.parse(localStorage.getItem(collapsedKey) || "[]");
+    // Book-level Feelings emojis
+    const currentEmojisSpan = document.getElementById("currentEmojis");
+    editingBook.emojis = editingBook.emojis || [];
+    function updateEmojiDisplay() {
+        const wrapped = editingBook.emojis.map(e => `<span style="margin:0 4px; cursor:pointer;">${e}</span>`).join("");
+        currentEmojisSpan.innerHTML = wrapped || "None";
+    }
+    updateEmojiDisplay();
 
-    // Apply saved state
-    document.querySelectorAll(".edit-section").forEach((sec, idx) => {
-        if (savedCollapsed.includes(idx)) {
-            sec.classList.add("collapsed");
-        } else {
-            sec.classList.remove("collapsed");
+    // Individual remove
+    currentEmojisSpan.onclick = (e) => {
+        if (e.target.tagName === "SPAN") {
+            const emoji = e.target.textContent;
+            editingBook.emojis = editingBook.emojis.filter(e => e !== emoji);
+            updateEmojiDisplay();
         }
+    };
+
+    // Picker add (allow duplicates)
+    const picker = document.getElementById("emojiPicker");
+    const emojiList = picker.textContent.trim().split(/\s+/);
+    picker.innerHTML = emojiList.map(e => `<span style="margin:0 6px; display:inline-block; cursor:pointer;">${e}</span>`).join("");
+    picker.querySelectorAll("span").forEach(span => {
+        span.onclick = () => {
+            editingBook.emojis.push(span.textContent);
+            updateEmojiDisplay();
+        };
     });
 
-    // Save on close/save
+    // Collapsed persistence (clean)
+    const key = "reading_edit_collapsed_sections";
+    const saved = JSON.parse(localStorage.getItem(key) || "[]");
+    document.querySelectorAll(".edit-section").forEach((sec, i) => {
+        sec.classList.toggle("collapsed", saved.includes(i));
+    });
+
     const saveCollapsed = () => {
-        const nowCollapsed = [];
-        document.querySelectorAll(".edit-section").forEach((sec, idx) => {
-            if (sec.classList.contains("collapsed")) nowCollapsed.push(idx);
+        const now = [];
+        document.querySelectorAll(".edit-section").forEach((sec, i) => {
+            if (sec.classList.contains("collapsed")) now.push(i);
         });
-        localStorage.setItem(collapsedKey, JSON.stringify(nowCollapsed));
+        localStorage.setItem(key, JSON.stringify(now));
     };
 
-    // Override save/close to persist collapsed state
-    const originalSave = document.getElementById("saveEdit").onclick;
-    document.getElementById("saveEdit").onclick = (e) => {
+    document.getElementById("saveEdit").addEventListener("click", saveCollapsed);
+    document.getElementById("closeEdit").addEventListener("click", () => {
         saveCollapsed();
-        if (originalSave) originalSave(e);
-    };
-
-    const originalClose = document.getElementById("closeEdit").onclick;
-    document.getElementById("closeEdit").onclick = () => {
-        saveCollapsed();
-        if (originalClose) originalClose();
         closeEditModal();
-    };
-
-    // Modal backdrop click
-    document.getElementById("editModal").onclick = (e) => {
+    });
+    document.getElementById("editModal").addEventListener("click", (e) => {
         if (e.target === document.getElementById("editModal")) {
             saveCollapsed();
             closeEditModal();
         }
-    };
+    });
 
-    // Finally show modal
     document.getElementById("editModal").style.display = "flex";
 }
 
@@ -322,10 +268,9 @@ function closeEditModal() {
     document.getElementById("editModal").style.display = "none";
 }
 
-// saveEdit logic
+// saveEdit (add emojis save)
 document.getElementById("saveEdit").addEventListener("click", () => {
     const now = Date.now();
-
     const daStr = document.getElementById("editDateAdded").value;
     const dateAdded = daStr ? new Date(daStr).getTime() : (editingBook.dateAdded || now);
 
@@ -349,6 +294,7 @@ document.getElementById("saveEdit").addEventListener("click", () => {
         emojis: editingBook.emojis || [],
         dateAdded: dateAdded
     };
+    
 const collapsed = [];
     document.querySelectorAll(".edit-section").forEach((sec, idx) => {
         if (sec.classList.contains("collapsed")) collapsed.push(idx);
