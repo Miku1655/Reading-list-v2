@@ -147,7 +147,15 @@ function updateSortIndicators() {
 }
 
 // Close modal handlers
-document.getElementById("closeEdit").addEventListener("click", closeEditModal);
+document.getElementById("closeEdit").addEventListener("click", () => {
+    // Save collapsed on close too
+    const collapsed = [];
+    document.querySelectorAll(".edit-section").forEach((sec, idx) => {
+        if (sec.classList.contains("collapsed")) collapsed.push(idx);
+    });
+    localStorage.setItem("reading_edit_collapsed_sections", JSON.stringify(collapsed));
+    closeEditModal();
+});
 document.getElementById("editModal").addEventListener("click", e => {
     if (e.target === document.getElementById("editModal")) closeEditModal();
 });
