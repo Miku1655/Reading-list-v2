@@ -2,13 +2,26 @@ function createBookCard(book) {
     const div = document.createElement("div");
     div.className = "book-card";
     div.dataset.bookId = book.importOrder;
+
+    // Stacked re-reads visual
+    const readCount = getReadCount(book);
+    if (readCount > 1) {
+        const stackLevel = Math.min(readCount - 1, 8); // up to 8 extra layers
+        div.classList.add(`stacked`, `stacked-${stackLevel}`);
+    }
+
+    // Emojis display
+    const emojisHtml = book.emojis ? book.emojis.join(" ") : "";
+
     const coverHtml = book.coverUrl
         ? `<img src="${book.coverUrl}" alt="Cover" onerror="this.style.display='none'">`
         : `<div class="no-cover">No cover</div>`;
+
     div.innerHTML = `
         ${coverHtml}
         <strong class="profile-book-title">${book.title || "No title"}</strong>
         <span class="profile-book-author">${book.author || ""}</span>
+        ${emojisHtml ? `<div style="margin-top:4px; font-size:1.4em;">${emojisHtml}</div>` : ""}
     `;
     div.title = `${book.title} — ${book.author}`;
     div.addEventListener("click", () => openEditModal(book));
@@ -132,6 +145,29 @@ function openEditModal(book = null) {
         preview.style.display = "none";
     }
 
+    // Emojis handling
+    const currentEmojisSpan = document.getElementById("currentEmojis");
+    if (book?.emojis) {
+        currentEmojisSpan.textContent = book.emojis.join(" ");
+    } else {
+        currentEmojisSpan.textContent = "None";
+    }
+
+    document.querySelectorAll("#emojiPicker *").forEach(emoji => {
+        emoji.onclick = () => {
+            if (!editingBook.emojis) editingBook.emojis = [];
+            if (!editingBook.emojis.includes(emoji.textContent)) {
+                editingBook.emojis.push(emoji.textContent);
+                currentEmojisSpan.textContent = editingBook.emojis.join(" ");
+            }
+        };
+    });
+
+    currentEmojisSpan.onclick = () => {
+        editingBook.emojis = [];
+        currentEmojisSpan.textContent = "None";
+    };
+
     document.getElementById("editFavourite").checked = !!book && profile.favourites.includes(book.importOrder);
 
     const series = book?.series || "";
@@ -217,6 +253,7 @@ document.getElementById("saveEdit").addEventListener("click", () => {
         notes: document.getElementById("editNotes").value.trim(),
         coverUrl: document.getElementById("editCoverUrl").value.trim() || null,
         reads: editingBook.reads.map(r => ({ started: r.started, finished: r.finished })),
+        emojis: editingBook.emojis || [],
         dateAdded: dateAdded
     };
 
