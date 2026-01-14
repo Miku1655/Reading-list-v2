@@ -205,76 +205,9 @@ function openEditModal(book = null) {
         rebuildReadsList();
     };
 
-    // Book-level Feelings emojis with optional page
-// Book-level Feelings emojis with optional page
-editingBook.emojis = editingBook.emojis || []; // [{emoji: "😊", page: 150}, ...]
-
-const currentEmojisSpan = document.getElementById("currentEmojis");
-const pageInput = document.getElementById("emojiPageInput");
-const picker = document.getElementById("emojiPicker");
-
-// Extract emoji list once on initialization (from original text content)
-const emojiPickerText = "🙂 😐 😞 😭 😂 😢 😡 🤔 🔥 ❄️ 🧠 🖤 ✨ ❤️ 🎯 🌫️ ☕️";
-const emojiList = emojiPickerText.trim().split(/\s+/).filter(e => e.length);
-
-// Update display
-function updateEmojiDisplay() {
-    currentEmojisSpan.innerHTML = editingBook.emojis.length 
-        ? editingBook.emojis.map((e, i) => 
-            `<span style="margin:0 6px; cursor:pointer; border-radius:4px; padding:4px 8px; background:#f0f0f0; display:inline-block; user-select:none;" data-index="${i}" title="Click to remove, right-click to edit page">
-                ${e.emoji} ${e.page ? `<small>(p.${e.page})</small>` : ''}
-                <small style="margin-left:4px; opacity:0.6;">✕</small>
-            </span>`
-          ).join("")
-        : "None";
-}
-
-updateEmojiDisplay();
-
-// Use direct assignment for handlers so repeated opens replace previous handlers
-// Left-click to remove emoji
-currentEmojisSpan.onclick = (e) => {
-    const span = e.target.closest("span[data-index]");
-    if (span) {
-        const i = Number(span.dataset.index);
-        editingBook.emojis.splice(i, 1);
-        pageInput.value = "";
-        updateEmojiDisplay();
-    }
-};
-
-// Right-click to edit page number
-currentEmojisSpan.oncontextmenu = (e) => {
-    e.preventDefault();
-    const span = e.target.closest("span[data-index]");
-    if (span) {
-        const i = Number(span.dataset.index);
-        const currentPage = editingBook.emojis[i].page;
-        const newPage = prompt(`Set page number for ${editingBook.emojis[i].emoji}:`, currentPage || "");
-        if (newPage !== null) {
-            editingBook.emojis[i].page = newPage ? Number(newPage) : null;
-            updateEmojiDisplay();
-        }
-    }
-    return false;
-};
-
-// Initialize picker HTML once with clean emojis
-picker.innerHTML = emojiList.map(e => `<span style="margin:0 6px; cursor:pointer;">${e}</span>`).join("");
-
-// Replace previous picker handler on each open
-picker.onclick = (e) => {
-    const span = e.target.closest("span");
-    if (span && emojiList.includes(span.textContent.trim())) {
-        const emoji = span.textContent.trim();
-        const pageVal = pageInput.value.trim();
-        const page = pageVal ? Number(pageVal) : null;
-
-        editingBook.emojis.push({ emoji, page });
-        pageInput.value = "";
-        updateEmojiDisplay();
-    }
-};
+    // Ensure emojis array exists and refresh display (handlers initialized once globally)
+    editingBook.emojis = editingBook.emojis || [];
+    if (window.__updateEmojiDisplay) window.__updateEmojiDisplay();
 
     // Collapsed persistence (clean)
     const key = "reading_edit_collapsed_sections";
@@ -310,6 +243,58 @@ function closeEditModal() {
     editingBook = null;
     document.getElementById("editModal").style.display = "none";
 }
+
+// --- Emoji picker/display handlers (single initialization) ---
+(() => {
+    const currentEmojisSpan = document.getElementById("currentEmojis");
+    const pageInput = document.getElementById("emojiPageInput");
+    const picker = document.getElementById("emojiPicker");
+    if (!currentEmojisSpan || !pageInput || !picker) return;
+
+    const emojiPickerText = "🙂 😐 😞 😭 😂 😢 😡 🤔 🔥 ❄️ 🧠 🖤 ✨ ❤️ 🎯 🌫️ ☕️";
+    const emojiList = emojiPickerText.trim().split(/\s+/).filter(e => e.length);
+
+    function updateEmojiDisplay() {
+        if (!editingBook || !Array.isArray(editingBook.emojis) || editingBook.emojis.length === 0) {
+            currentEmojisSpan.innerHTML = "None";
+            return;
+        }
+        currentEmojisSpan.innerHTML = editingBook.emojis.map((e, i) =>
+            `<span style="margin:0 6px; cursor:pointer; border-radius:4px; padding:2px 6px; background:transparent; display:inline-block; user-select:none;" data-index="${i}" title="Click to remove">
+                ${e.emoji} ${e.page ? `<small>(p.${e.page})</small>` : ''}
+            </span>`
+        ).join("");
+    }
+
+    // Expose for openEditModal to call after editingBook is set
+    window.__updateEmojiDisplay = updateEmojiDisplay;
+
+    // Left-click to remove emoji
+    currentEmojisSpan.onclick = (ev) => {
+        const span = ev.target.closest("span[data-index]");
+        if (!span || !editingBook) return;
+        const i = Number(span.dataset.index);
+        if (!Number.isFinite(i)) return;
+        editingBook.emojis.splice(i, 1);
+        pageInput.value = "";
+        updateEmojiDisplay();
+    };
+
+    // Picker click to add emoji (use pageInput value if present)
+    picker.innerHTML = emojiList.map(e => `<span style="margin:0 6px; cursor:pointer;">${e}</span>`).join("");
+    picker.onclick = (ev) => {
+        const span = ev.target.closest("span");
+        if (!span || !editingBook) return;
+        const emoji = span.textContent.trim();
+        if (!emojiList.includes(emoji)) return;
+        const pageVal = pageInput.value.trim();
+        const page = pageVal ? Number(pageVal) : null;
+        editingBook.emojis = editingBook.emojis || [];
+        editingBook.emojis.push({ emoji, page });
+        pageInput.value = "";
+        updateEmojiDisplay();
+    };
+})();
 
 // saveEdit (add emojis save)
 document.getElementById("saveEdit").addEventListener("click", () => {
