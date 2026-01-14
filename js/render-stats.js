@@ -199,79 +199,85 @@ function renderStats() {
     createDoughnut("countryChart", countryData, "Country Distribution" + (dist.readCount > 0 ? ` (${dist.readCount} read books)` : ""));
     createDoughnut("genreChart", genreData, "Genre Distribution" + (dist.readCount > 0 ? ` (${dist.readCount} read books)` : ""));
 
-    // Cumulative line chart – improved consistency
+        // Cumulative line chart – deferred for reliable sizing on initial load
     const cumulativeContainer = document.getElementById("cumulativeChartContainer");
-    const ctxLine = document.getElementById("cumulativeChart").getContext("2d");
+    const ctxLine = document.getElementById("cumulativeChart")?.getContext("2d");
+    if (!ctxLine) {
+        console.warn("Cumulative canvas not ready yet");
+        cumulativeContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px;">Loading chart...</p>';
+        return;
+    }
     if (window.cumulativeChart && typeof window.cumulativeChart.destroy === 'function') {
         window.cumulativeChart.destroy();
     }
 
-    if (labels.length > 0) {
-        let cumBooks = 0;
-        let cumPages = 0;
-        const cumBooksData = [];
-        const cumPagesData = [];
+    setTimeout(() => {
+        if (labels.length > 0) {
+            let cumBooks = 0;
+            let cumPages = 0;
+            const cumBooksData = [];
+            const cumPagesData = [];
 
-        labels.forEach(y => {
-            cumBooks += perYear[y].books;
-            cumPages += perYear[y].pages;
-            cumBooksData.push(cumBooks);
-            cumPagesData.push(cumPages);
-        });
+            labels.forEach(y => {
+                cumBooks += perYear[y].books;
+                cumPages += perYear[y].pages;
+                cumBooksData.push(cumBooks);
+                cumPagesData.push(cumPages);
+            });
 
-        window.cumulativeChart = new Chart(ctxLine, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Cumulative Books',
-                        data: cumBooksData,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        fill: true,
-                        tension: 0.3,
-                        yAxisID: 'y'
-                    },
-                    {
-                        label: 'Cumulative Pages',
-                        data: cumPagesData,
-                        borderColor: 'rgba(153, 102, 255, 1)',
-                        backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                        fill: true,
-                        tension: 0.3,
-                        yAxisID: 'y1'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                scales: {
-                    y: { beginAtZero: true, position: 'left', ticks: { color: '#eee' }, grid: { color: '#333' } },
-                    y1: { beginAtZero: true, position: 'right', ticks: { color: '#eee' }, grid: { drawOnChartArea: false } },
-                    x: { ticks: { color: '#eee' }, grid: { color: '#333' } }
+            window.cumulativeChart = new Chart(ctxLine, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Cumulative Books',
+                            data: cumBooksData,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            fill: true,
+                            tension: 0.3,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Cumulative Pages',
+                            data: cumPagesData,
+                            borderColor: 'rgba(153, 102, 255, 1)',
+                            backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                            fill: true,
+                            tension: 0.3,
+                            yAxisID: 'y1'
+                        }
+                    ]
                 },
-                plugins: {
-                    legend: { labels: { color: '#eee' } },
-                    title: {
-                        display: true,
-                        text: 'Cumulative Reading Progress Over Time',
-                        color: '#eee',
-                        font: { size: 16 }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y: { beginAtZero: true, position: 'left', ticks: { color: '#eee' }, grid: { color: '#333' } },
+                        y1: { beginAtZero: true, position: 'right', ticks: { color: '#eee' }, grid: { drawOnChartArea: false } },
+                        x: { ticks: { color: '#eee' }, grid: { color: '#333' } }
                     },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                    plugins: {
+                        legend: { labels: { color: '#eee' } },
+                        title: {
+                            display: true,
+                            text: 'Cumulative Reading Progress Over Time',
+                            color: '#eee',
+                            font: { size: 16 }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
-    } else {
-        cumulativeContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px; font-size:1.1em;">No finished reads yet!<br><br>Mark some books as finished to see your cumulative progress.</p><canvas id="cumulativeChart" style="display:none;"></canvas>';
-    }
-}
+            });
+        } else {
+            cumulativeContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px; font-size:1.1em;">No finished reads yet!<br><br>Mark some books as finished to see your cumulative progress.</p><canvas id="cumulativeChart" style="display:none;"></canvas>';
+        }
+    }, 100); // Small delay for DOM settle – reliable without noticeable lag
