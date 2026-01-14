@@ -1,5 +1,9 @@
 function renderTimeline() {
     const container = document.getElementById("timelineContainer");
+    if (!container) {
+        console.error("Timeline container not found in DOM!");
+        return;
+    }
     container.innerHTML = "";
     const entries = [];
     books.forEach(b => {
@@ -12,7 +16,7 @@ function renderTimeline() {
         }
     });
     if (entries.length === 0) {
-        container.innerHTML = "<p>No reading history yet.</p>";
+        container.innerHTML = "<p style='text-align:center; color:#aaa; padding:80px; font-size:1.1em;'>No finished reads yet!<br><br>Mark some books as finished to build your reading timeline.</p>";
         return;
     }
     entries.sort((a, b) => b.date - a.date);
