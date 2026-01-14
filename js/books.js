@@ -39,7 +39,6 @@ function createSeriesCard(series) {
 }
 
 function makeFavouritesDraggable(container) {
-    // (full drag code from original – touch + mouse support)
     container.addEventListener("dragstart", e => {
         const card = e.target.closest(".book-card");
         if (card) {
@@ -70,7 +69,6 @@ function makeFavouritesDraggable(container) {
         }
     });
     container.addEventListener("drop", e => e.preventDefault());
-    // Touch support (same as original)
     container.addEventListener("touchstart", e => {
         if (e.touches.length === 1) {
             const card = e.target.closest(".book-card");
@@ -108,7 +106,7 @@ function makeFavouritesDraggable(container) {
 function openEditModal(book = null) {
     editingBook = book || { reads: [], tags: [], exclusiveShelf: "to-read", dateAdded: Date.now() };
 
-    // Fill all fields (same as original)
+    // Fill all fields
     document.getElementById("editTitle").value = book?.title || "";
     document.getElementById("editAuthor").value = book?.author || "";
     document.getElementById("editSeries").value = book?.series || "";
@@ -195,7 +193,7 @@ function closeEditModal() {
     document.getElementById("editModal").style.display = "none";
 }
 
-// saveEdit logic (full from original – with favourite handling)
+// saveEdit logic
 document.getElementById("saveEdit").addEventListener("click", () => {
     const now = Date.now();
 
