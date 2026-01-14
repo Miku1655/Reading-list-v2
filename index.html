@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Reading List</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/stats-timeline.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<h1>Reading List</h1>
+
+<div class="tabs">
+    <button class="tab" data-tab="profile">Profile</button>
+    <button class="tab active" data-tab="list">List</button>
+    <button class="tab" data-tab="stats">Stats</button>
+    <button class="tab" data-tab="timeline">Timeline</button>
+    <button class="tab" data-tab="challenges">Challenges</button>
+    <button class="tab" data-tab="options">Options</button>
+</div>
+
+<!-- The sections stay exactly the same as in your original code -->
+<section id="tab-list" class="tab-content active"> ... </section>
+<section id="tab-stats" class="tab-content"> ... </section>
+<section id="tab-timeline" class="tab-content"> ... </section>
+<section id="tab-profile" class="tab-content"> ... </section>
+<section id="tab-challenges" class="tab-content"> ... </section>
+<section id="tab-options" class="tab-content"> ... </section>
+
+<!-- Edit modal stays the same -->
+<div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); justify-content:center; align-items:center; z-index:1000;">
+    <!-- ... entire modal content as in original ... -->
+</div>
+
+<!-- JavaScript files – order matters a bit -->
+<script src="js/config.js"></script>
+<script src="js/state.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/firebase.js"></script>
+<script src="js/books.js"></script>
+<script src="js/render-list.js"></script>
+<script src="js/render-profile.js"></script>
+<script src="js/render-stats.js"></script>
+<script src="js/render-timeline.js"></script>
+<script src="js/covers.js"></script>
+<script src="js/ui.js"></script>
+
+</body>
+</html>
