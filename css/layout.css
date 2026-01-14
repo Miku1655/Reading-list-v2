@@ -1,0 +1,72 @@
+.tabs {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.tab {
+    padding: 6px 12px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #ccc;
+    cursor: pointer;
+}
+
+.tab.active {
+    background: #222;
+    color: #fff;
+    border-color: #555;
+}
+
+.tab:hover { background: #2a2a2a; }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+#filterInfo { cursor: help; color: #888; }
+
+#cloudButtons, #coverCloudButtons { margin-top: 12px; }
+
+.edit-section {
+    background: #1a1a1a;
+    padding: 12px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    border: 1px solid #333;
+}
+
+.edit-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 1em;
+    cursor: pointer;
+    user-select: none;
+}
+
+.edit-section.collapsed .edit-section-content { display: none; }
+
+.read-entry {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.read-entry button {
+    background: #8b2c2c;
+    padding: 4px 8px;
+    font-size: 0.8em;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+}
+
+.modal-actions-right {
+    display: flex;
+    gap: 8px;
+}
