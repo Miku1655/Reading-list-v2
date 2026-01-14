@@ -94,40 +94,22 @@ tr:hover { background: #1f1f1f; }
     color: #ccc;
 }
 
-/* Stacked re-reads visual */
-.book-card.stacked::after {
-    content: '';
+.book-card .stack-layer {
     position: absolute;
-    bottom: -4px;
-    left: 4px;
-    right: 4px;
+    bottom: 0;
+    left: 0;
+    right: 0;
     height: 140px;
     background: #1a1a1a;
     border: 1px solid #444;
     border-radius: 6px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
     z-index: -1;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    opacity: 0.8;
 }
 
-.book-card.stacked-2::after { bottom: -8px; }
-.book-card.stacked-3::after { bottom: -12px; }
-.book-card.stacked-4::after { bottom: -16px; }
-.book-card.stacked-5::after { bottom: -20px; }
-.book-card.stacked-6::after { bottom: -24px; }
-.book-card.stacked-7::after { bottom: -28px; }
-.book-card.stacked-8::after { bottom: -32px; }
-
-/* Extra layers (fake stack) */
-.book-card.stacked::before {
-    content: '';
-    position: absolute;
-    bottom: -2px;
-    left: 2px;
-    right: 2px;
-    height: 140px;
-    background: #222;
-    border: 1px solid #444;
-    border-radius: 6px;
-    z-index: -2;
-    opacity: 0.6;
-}
+.book-card .stack-layer:nth-child(1) { bottom: -6px; left: 6px; right: 6px; opacity: 0.9; }
+.book-card .stack-layer:nth-child(2) { bottom: -12px; left: 12px; right: 12px; opacity: 0.8; }
+.book-card .stack-layer:nth-child(3) { bottom: -18px; left: 18px; right: 18px; opacity: 0.7; }
+.book-card .stack-layer:nth-child(4) { bottom: -24px; left: 24px; right: 24px; opacity: 0.6; }
+.book-card .stack-layer:nth-child(5) { bottom: -30px; left: 30px; right: 30px; opacity: 0.5; }
