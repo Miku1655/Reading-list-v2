@@ -44,10 +44,10 @@ function switchTab(name) {
     if (name === "list") renderYearGoalProgress();
     if (name === "stats") renderStats();
     if (name === "timeline") renderTimeline();
-    if (name === "list") renderYearGoalProgress();
-    if (name === "stats") renderStats();
-    if (name === "timeline") renderTimeline();
-    if (name === "challenges") loadGoalsForYear();
+    if (name === "challenges") {
+        loadGoalsForYear();
+        renderChallengesTab();
+    }
     renderTable(); // always refresh list on any tab switch
 }
 
@@ -343,9 +343,8 @@ document.getElementById("clearStorage").addEventListener("click", () => {
 // Goals
 document.getElementById("goalYear").addEventListener("change", () => {
     loadGoalsForYear();
-    renderStats();
+    renderChallengesTab();
 });
-
 document.getElementById("saveGoal").addEventListener("click", () => {
     const year = Number(document.getElementById("goalYear").value) || new Date().getFullYear();
     const booksG = Number(document.getElementById("yearBooksGoal").value) || 0;
@@ -356,19 +355,95 @@ document.getElementById("saveGoal").addEventListener("click", () => {
         delete goals[year];
     }
     localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
-    renderStats();
+    renderChallengesTab();
     renderYearGoalProgress();
 });
-
 document.getElementById("removeGoal").addEventListener("click", () => {
     const year = Number(document.getElementById("goalYear").value);
     if (goals[year] && confirm(`Remove goals for ${year}?`)) {
         delete goals[year];
         localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
         loadGoalsForYear();
-        renderStats();
+        renderChallengesTab();
+        renderYearGoalProgress();
     }
 });
+
+// New function
+function renderChallengesTab() {
+    const container = document.getElementById("challengesProgressContainer");
+    if (!container) return;
+    let html = "";
+    const currentYear = getCurrentYear();
+    const stats = getYearStats(currentYear);
+    const goal = goals[currentYear] || {};
+    const daysElapsed = getDaysElapsed(currentYear);
+
+    html += `<div class="stats-block"><h2>${currentYear} Pace & Projection</h2><div class="stats-list">`;
+    html += `Finished so far (${daysElapsed} days into the year): <strong>${stats.books} books</strong>, <strong>${stats.pages} pages</strong><br><br>`;
+    if (daysElapsed > 0) {
+        const booksPace = (stats.books / daysElapsed).toFixed(2);
+        const pagesPace = Math.round(stats.pages / daysElapsed);
+        html += `Current pace: <strong>${booksPace} books/day</strong>, <strong>${pagesPace} pages/day</strong><br><br>`;
+        const projectedBooks = calculateProjection(stats.books, currentYear);
+        const projectedPages = calculateProjection(stats.pages, currentYear);
+        html += `Projected by Dec 31: <strong>${projectedBooks} books</strong>, <strong>${projectedPages} pages</strong><br><br>`;
+    } else {
+        html += `Year just started – no pace data yet.<br><br>`;
+    }
+
+    if (goal.books || goal.pages) {
+        html += `<strong>Goal Progress</strong><br>`;
+        if (goal.books) {
+            const rawPercent = goal.books > 0 ? (stats.books / goal.books * 100) : 0;
+            const percent = Math.min(100, Math.round(rawPercent));
+            let text = `${stats.books} / ${goal.books} (${Math.round(rawPercent)}%)`;
+            if (stats.books >= goal.books) text += ` ✓ Goal completed (+${stats.books - goal.books} extra)`;
+            html += `${text}<br>`;
+            html += `<div class="progress-bar-container"><div class="progress-bar-fill books-fill" style="width:${percent}%;"></div></div>`;
+        }
+        if (goal.pages) {
+            const rawPercent = goal.pages > 0 ? (stats.pages / goal.pages * 100) : 0;
+            const percent = Math.min(100, Math.round(rawPercent));
+            let text = `${stats.pages} / ${goal.pages} (${Math.round(rawPercent)}%)`;
+            if (stats.pages >= goal.pages) text += ` ✓ Goal completed (+${stats.pages - goal.pages} extra)`;
+            html += `${text}<br>`;
+            html += `<div class="progress-bar-container"><div class="progress-bar-fill pages-fill" style="width:${percent}%;"></div></div>`;
+        }
+    } else {
+        html += `<em>No goals set for ${currentYear} yet.</em>`;
+    }
+    html += `</div></div>`;
+
+    const selectedYear = Number(document.getElementById("goalYear").value) || currentYear;
+    if (selectedYear !== currentYear) {
+        const sStats = getYearStats(selectedYear);
+        const sGoal = goals[selectedYear] || {};
+        if (sGoal.books || sGoal.pages) {
+            html += `<div class="stats-block" style="margin-top:20px;"><h2>Goal Progress for ${selectedYear}</h2><div class="stats-list">`;
+            html += `Finished: ${sStats.books} books, ${sStats.pages} pages<br><br>`;
+            if (sGoal.books) {
+                const rawPercent = sGoal.books > 0 ? (sStats.books / sGoal.books * 100) : 0;
+                const percent = Math.min(100, Math.round(rawPercent));
+                let text = `${sStats.books} / ${sGoal.books} (${Math.round(rawPercent)}%)`;
+                if (sStats.books >= sGoal.books) text += ` (completed)`;
+                html += `${text}<br>`;
+                html += `<div class="progress-bar-container"><div class="progress-bar-fill books-fill" style="width:${percent}%;"></div></div>`;
+            }
+            if (sGoal.pages) {
+                const rawPercent = sGoal.pages > 0 ? (sStats.pages / sGoal.pages * 100) : 0;
+                const percent = Math.min(100, Math.round(rawPercent));
+                let text = `${sStats.pages} / ${sGoal.pages} (${Math.round(rawPercent)}%)`;
+                if (sStats.pages >= sGoal.pages) text += ` (completed)`;
+                html += `${text}<br>`;
+                html += `<div class="progress-bar-container"><div class="progress-bar-fill pages-fill" style="width:${percent}%;"></div></div>`;
+            }
+            html += `</div></div>`;
+        }
+    }
+
+    container.innerHTML = html;
+}
 
 // Settings
 document.getElementById("showYearGoalProgress").addEventListener("change", e => {
