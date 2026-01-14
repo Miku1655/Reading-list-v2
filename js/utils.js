@@ -128,3 +128,29 @@ function prepareChartData(map, maxItems = 8) {
     }
     return { labels, values };
 }
+function getCurrentYear() {
+    return new Date().getFullYear();
+}
+function isLeapYear(year) {
+    return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+}
+function getDaysInYear(year) {
+    return isLeapYear(year) ? 366 : 365;
+}
+function getDaysElapsed(year) {
+    const currentYear = getCurrentYear();
+    if (year !== currentYear) return getDaysInYear(year);
+    const now = new Date();
+    const start = new Date(currentYear, 0, 1);
+    const diffMs = now - start;
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1; // inclusive of today
+}
+function calculateProjection(current, year) {
+    const daysElapsed = getDaysElapsed(year);
+    if (daysElapsed === 0) return current;
+    const daily = current / daysElapsed;
+    return Math.round(daily * getDaysInYear(year));
+}
+function getYearStats(year) {
+    return calculatePerYear()[year] || { books: 0, pages: 0 };
+}
