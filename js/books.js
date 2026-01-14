@@ -204,13 +204,14 @@ function openEditModal(book = null) {
     };
 
     // Book-level Feelings emojis with optional page
-editingBook.emojis = editingBook.emojis || []; // array of {emoji, page}
+editingBook.emojis = editingBook.emojis || []; // array of {emoji: string, page: number|null}
 
 const currentEmojisSpan = document.getElementById("currentEmojis");
+const pageInput = document.getElementById("emojiPageInput");
 
 function updateEmojiDisplay() {
     if (editingBook.emojis.length === 0) {
-        currentEmojisSpan.innerHTML = "None";
+        currentEmojisSpan.textContent = "None";
         currentEmojisSpan.style.fontSize = "1em";
         currentEmojisSpan.style.color = "#888";
     } else {
@@ -218,7 +219,7 @@ function updateEmojiDisplay() {
         currentEmojisSpan.style.color = "#eee";
         currentEmojisSpan.innerHTML = editingBook.emojis.map((e, i) => 
             `<span style="margin:0 6px; cursor:pointer; display:inline-block;" data-index="${i}">
-                ${e.emoji} ${e.page ? `(page ${e.page})` : ""}
+                ${e.emoji}${e.page ? ` <small>(p. ${e.page})</small>` : ""}
             </span>`
         ).join("");
     }
@@ -226,7 +227,7 @@ function updateEmojiDisplay() {
 
 updateEmojiDisplay();
 
-// Individual remove – click displayed entry
+// Individual remove – click displayed emoji
 currentEmojisSpan.onclick = (e) => {
     const span = e.target.closest("span[data-index]");
     if (span) {
@@ -236,28 +237,18 @@ currentEmojisSpan.onclick = (e) => {
     }
 };
 
-// Picker – add with optional page
-const pageInput = document.createElement("input");
-pageInput.type = "number";
-pageInput.min = "1";
-pageInput.placeholder = "optional page";
-pageInput.style.width = "120px";
-pageInput.style.marginTop = "8px";
-
-// Insert page input after picker
-const pickerContainer = document.getElementById("emojiPicker").parentElement;
-pickerContainer.appendChild(pageInput);
-
-// Wrap picker emojis
+// Picker – wrap once + add with page
 const picker = document.getElementById("emojiPicker");
 const emojiList = picker.textContent.trim().split(/\s+/);
 picker.innerHTML = emojiList.map(e => `<span style="margin:0 6px; display:inline-block; cursor:pointer;">${e}</span>`).join("");
 
 picker.querySelectorAll("span").forEach(span => {
     span.onclick = () => {
-        const page = pageInput.value.trim() ? Number(pageInput.value) : null;
-        pageInput.value = ""; // clear after add
-        editingBook.emojis.push({ emoji: span.textContent, page });
+        const pageVal = pageInput.value.trim();
+        const page = pageVal ? Number(pageVal) : null;
+        pageInput.value = ""; // clear for next
+
+        editingBook.emojis.push({ emoji: span.textContent.trim(), page });
         updateEmojiDisplay();
     };
 });
