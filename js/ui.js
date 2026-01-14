@@ -39,6 +39,7 @@ function switchTab(name) {
         renderProfileStats();
         renderRecentBooks();
         renderFavourites();
+        renderWaitingWidget();
     }
     if (name === "list") renderYearGoalProgress();
     if (name === "stats") renderStats();
@@ -57,6 +58,7 @@ function renderAll() {
     renderRecentBooks();
     renderFavourites();
     renderYearGoalProgress();
+    renderWaitingWidget();
     updateCoversCount();
     if (document.querySelector('.tab.active')?.dataset.tab === "options") renderShelfManager();
 }
@@ -112,6 +114,7 @@ document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", (
 document.getElementById("addBook").addEventListener("click", () => openEditModal());
 document.getElementById("searchInput").addEventListener("input", renderTable);
 document.getElementById("shelfFilter").addEventListener("change", renderTable);
+document.getElementById("refreshWaitingBtn").addEventListener("click", renderWaitingWidget);
 document.querySelectorAll("th[data-col]").forEach(th => th.addEventListener("click", () => {
     if (sortState.column === th.dataset.col) {
         sortState.direction *= -1;
