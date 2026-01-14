@@ -107,6 +107,41 @@
 </div>
 </section>
 
+    <section id="tab-timeline" class="tab-content">
+    <div id="timelineContainer"></div>
+</section>
+
+<section id="tab-profile" class="tab-content">
+    <div id="profileContainer" style="max-width:800px; margin:auto;">
+        <div style="display:flex; gap:16px; align-items:center; margin-bottom:16px;">
+            <div>
+                <img id="profilePic" src="https://placehold.co/100x100?text=?" alt="Profile Picture" style="width:100px;height:100px;object-fit:cover;border:2px solid #555; cursor:pointer; border-radius:50%;">
+                <input type="file" id="profilePicInput" accept="image/*" style="display:none;">
+            </div>
+            <div style="flex:1;">
+                <input type="text" id="profileNick" placeholder="Nickname" style="width:100%; margin-bottom:8px;">
+                <textarea id="profileBio" placeholder="Bio" style="width:100%; height:80px; resize:vertical;"></textarea>
+            </div>
+        </div>
+        <div id="profileStats"></div>
+        <div class="profile-recent-section">
+            <h3>Recent Activity</h3>
+            <div id="recentBooksContainer" class="card-container"></div>
+        </div>
+        <div class="profile-recent-section">
+            <h3>Favourites</h3>
+            <div id="favouritesContainer" class="card-container"></div>
+        </div>
+    </div>
+    <div class="profile-recent-section">
+    <h3>Still waiting for you...</h3>
+    <div id="waitingWidget" style="text-align:center; padding:16px; background:#1a1a1a; border:1px solid #333; border-radius:8px;">
+        <p>Click Profile tab to discover a random to-read book!</p>
+    </div>
+    <button id="refreshWaitingBtn" style="margin-top:8px;">New random book</button>
+</div>
+</section>
+
 <section id="tab-challenges" class="tab-content">
     <h3>Yearly Goals</h3>
     <div id="goalsSection">
