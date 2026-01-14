@@ -79,23 +79,37 @@ function calculatePerYear() {
         if (!b.reads) return;
         b.reads.forEach(read => {
             if (!read.finished) return;
-            // Normalize timestamp: handle number or string safely
             let timestamp = read.finished;
             if (typeof timestamp === 'string') {
+                // Try standard ISO first
                 timestamp = Date.parse(timestamp);
-            }
-            if (isNaN(timestamp)) {
-                console.warn("Invalid finished timestamp skipped:", read.finished, "in book:", b.title);
+                if (isNaN(timestamp)) {
+                    // Fallback: try replacing common formats (e.g., "21 Dec 2023" or "December 21, 2023")
+                    const cleaned = timestamp.trim().replace(/(\d+)(st|nd|rd|th)/, '$1'); // remove ordinals
+                    timestamp = Date.parse(cleaned);
+                }
+                if (isNaN(timestamp)) {
+                    console.warn("Could not parse finished date – skipping:", read.finished, "in book:", b.title || "unknown");
+                    return;
+                }
+            } else if (typeof timestamp === 'number') {
+                // Already good
+            } else {
+                console.warn("Unexpected finished type – skipping:", typeof timestamp, read.finished, "in book:", b.title);
                 return;
             }
             const dt = new Date(timestamp);
             const y = dt.getFullYear();
-            if (isNaN(y)) return; // extra safety
+            if (isNaN(y)) {
+                console.warn("Invalid year after parsing – skipping:", read.finished);
+                return;
+            }
             perYear[y] = perYear[y] || { books: 0, pages: 0 };
             perYear[y].books++;
             perYear[y].pages += b.pages || 0;
         });
     });
+    console.log("Final perYear data:", perYear); // Debug – check console on Stats tab
     return perYear;
 }
 function calculateDistributions() {
