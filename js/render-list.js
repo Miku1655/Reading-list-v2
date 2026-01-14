@@ -136,7 +136,7 @@ function renderTable() {
         const lastReadTs = getLatestFinished(book);
         const lastReadDisplay = lastReadTs > 0 ? new Date(lastReadTs).toLocaleDateString() : "-";
         const bookEmojis = book.emojis || [];
-        const emojisHtml = bookEmojis.length ? `<span style="font-size:1.4em; margin-left:8px;">${bookEmojis.join(" ")}</span>` : "";
+        const emojisHtml = bookEmojis.length ? `<span style="font-size:1.4em; margin-left:8px;" title="${bookEmojis.map(e => `${e.emoji} ${e.page ? `(page ${e.page})` : ""}`).join(", ")}">${bookEmojis.map(e => e.emoji).join(" ")}</span>` : "";
         tr.innerHTML = `
             <td>${showNumbers ? (idx + 1) + ". " : ""}${book.title || ""}${book.notes ? ' <span class="noteIcon" style="cursor:help;color:#888;">📝</span>' : ''}${emojisHtml}</td>
             <td>${book.rating || "-"}</td>
