@@ -71,8 +71,6 @@ function renderStats() {
     if (speeds.fastest) html += `<strong>Fastest:</strong> ${speeds.fastest.book.title} (${speeds.fastest.speed.toFixed(1)} p/d over ${speeds.fastest.days.toFixed(1)} days)<br>`;
     if (speeds.slowest) html += `<strong>Slowest:</strong> ${speeds.slowest.book.title} (${speeds.slowest.speed.toFixed(1)} p/d over ${speeds.slowest.days.toFixed(1)} days)<br>`;
     html += '</div></div>';
-
-    // Distribution blocks unchanged...
     html += '<div class="stats-block"><h2>Book Status</h2><div class="stats-list">';
     statusData.labels.forEach((label, i) => {
         const count = statusData.values[i];
@@ -81,7 +79,6 @@ function renderStats() {
     });
     html += `Total books: ${dist.totalBooks}`;
     html += '</div></div>';
-
     html += '<div class="stats-block"><h2>Languages</h2><div class="stats-list">';
     if (dist.readCount === 0) {
         html += 'No books marked as read yet.';
@@ -93,7 +90,6 @@ function renderStats() {
         html += `<br><small>Among ${dist.readCount} read books</small>`;
     }
     html += '</div></div>';
-
     html += '<div class="stats-block"><h2>Countries</h2><div class="stats-list">';
     if (dist.readCount === 0) {
         html += 'No books marked as read yet.';
@@ -105,7 +101,6 @@ function renderStats() {
         html += `<br><small>Among ${dist.readCount} read books</small>`;
     }
     html += '</div></div>';
-
     html += '<div class="stats-block"><h2>Genres</h2><div class="stats-list">';
     if (dist.readCount === 0) {
         html += 'No books marked as read yet.';
@@ -117,7 +112,6 @@ function renderStats() {
         html += `<br><small>Among ${dist.readCount} read books</small>`;
     }
     html += '</div></div>';
-
     html += '</div>'; // close stats-upper
     html += '<div class="stats-year-block"><h2>By Year</h2><div class="stats-list">';
     if (Object.keys(perYear).length === 0) {
@@ -129,7 +123,7 @@ function renderStats() {
     }
     html += '</div></div>';
     container.innerHTML = html;
-    
+
     // Yearly bar chart
     const labels = Object.keys(perYear).sort((a,b) => a - b);
     if (labels.length > 0) {
@@ -153,7 +147,7 @@ function renderStats() {
         });
     }
 
-    // Doughnut charts
+    // Doughnut charts (unchanged)
     const pieColors = [
         'rgba(255, 99, 132, 0.8)',
         'rgba(54, 162, 235, 0.8)',
@@ -166,12 +160,11 @@ function renderStats() {
         'rgba(83, 192, 192, 0.8)',
         'rgba(156, 102, 255, 0.8)'
     ];
-
     function createDoughnut(id, data, titleText) {
         const ctxPie = document.getElementById(id).getContext("2d");
         if (window[id + "Chart"]) window[id + "Chart"].destroy();
         const total = data.values.reduce((a, b) => a + b, 0);
-        if (total === 0) return; // skip empty charts
+        if (total === 0) return;
         const bg = pieColors.slice(0, data.labels.length);
         window[id + "Chart"] = new Chart(ctxPie, {
             type: 'doughnut',
@@ -197,9 +190,79 @@ function renderStats() {
             }
         });
     }
-
     createDoughnut("statusChart", statusData, "Status Distribution");
     createDoughnut("languageChart", languageData, "Language Distribution" + (dist.readCount > 0 ? ` (${dist.readCount} read books)` : ""));
     createDoughnut("countryChart", countryData, "Country Distribution" + (dist.readCount > 0 ? ` (${dist.readCount} read books)` : ""));
     createDoughnut("genreChart", genreData, "Genre Distribution" + (dist.readCount > 0 ? ` (${dist.readCount} read books)` : ""));
+
+    // New: Cumulative line chart
+    if (labels.length > 0) {
+        const ctxLine = document.getElementById("cumulativeChart").getContext("2d");
+        if (window.cumulativeChart) window.cumulativeChart.destroy();
+
+        let cumBooks = 0;
+        let cumPages = 0;
+        const cumBooksData = [];
+        const cumPagesData = [];
+
+        labels.forEach(y => {
+            cumBooks += perYear[y].books;
+            cumPages += perYear[y].pages;
+            cumBooksData.push(cumBooks);
+            cumPagesData.push(cumPages);
+        });
+
+        window.cumulativeChart = new Chart(ctxLine, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Cumulative Books',
+                        data: cumBooksData,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Cumulative Pages',
+                        data: cumPagesData,
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    y: { beginAtZero: true, position: 'left', ticks: { color: '#eee' }, grid: { color: '#333' } },
+                    y1: { beginAtZero: true, position: 'right', ticks: { color: '#eee' }, grid: { drawOnChartArea: false } },
+                    x: { ticks: { color: '#eee' }, grid: { color: '#333' } }
+                },
+                plugins: {
+                    legend: { labels: { color: '#eee' } },
+                    title: {
+                        display: true,
+                        text: 'Cumulative Reading Progress Over Time',
+                        color: '#eee',
+                        font: { size: 16 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
 }
