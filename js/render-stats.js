@@ -8,11 +8,6 @@ function renderStats() {
     const readBooks = books.filter(b => b.exclusiveShelf === "read");
     const dnfBooks = books.filter(b => b.exclusiveShelf === "dnf");
     const pagesRead = readBooks.reduce((s, b) => s + (b.pages || 0) * getReadCount(b), 0);
-    const selectedYear = Number(document.getElementById("goalYear").value) || new Date().getFullYear();
-    const currentPages = perYear[selectedYear]?.pages || 0;
-    const currentBooks = perYear[selectedYear]?.books || 0;
-    const pagesGoal = goals[selectedYear]?.pages || 0;
-    const booksGoal = goals[selectedYear]?.books || 0;
     const authorStats = {};
     readBooks.forEach(b => {
         const auth = b.author || "Unknown";
@@ -51,13 +46,6 @@ function renderStats() {
     const genreData = prepareChartData(dist.genre);
     let html = '<div class="stats-upper">';
     html += '<div class="stats-block"><h2>Overall Stats</h2>';
-    if (pagesGoal || booksGoal) {
-        html += `<div style="background:#222; padding:12px; margin-bottom:12px; border-radius:6px;">
-            <strong>${selectedYear} Goals</strong><br>
-            ${booksGoal ? `Books: ${currentBooks} / ${booksGoal}<br>` : ""}
-            ${pagesGoal ? `Pages: ${currentPages} / ${pagesGoal}` : ""}
-        </div>`;
-    }
     html += '<div class="stats-grid">';
     html += `<div>Total books</div><div>${books.length || 0}</div>`;
     html += `<div>Read</div><div>${readBooks.length}</div>`;
@@ -84,7 +72,7 @@ function renderStats() {
     if (speeds.slowest) html += `<strong>Slowest:</strong> ${speeds.slowest.book.title} (${speeds.slowest.speed.toFixed(1)} p/d over ${speeds.slowest.days.toFixed(1)} days)<br>`;
     html += '</div></div>';
 
-    // New distribution blocks
+    // Distribution blocks unchanged...
     html += '<div class="stats-block"><h2>Book Status</h2><div class="stats-list">';
     statusData.labels.forEach((label, i) => {
         const count = statusData.values[i];
@@ -141,7 +129,7 @@ function renderStats() {
     }
     html += '</div></div>';
     container.innerHTML = html;
-
+    
     // Yearly bar chart
     const labels = Object.keys(perYear).sort((a,b) => a - b);
     if (labels.length > 0) {
