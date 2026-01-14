@@ -35,7 +35,7 @@
     padding: 10px;
     border-radius: 6px;
     max-width: 100%;
-    margin: 0 auto;
+    margin: 0 auto 30px auto;
 }
 #statsChart {
     width: 100%;
@@ -47,13 +47,14 @@
 }
 #yearGoalProgressContainer { margin: 16px 0; }
 
-/* New styles for pie charts */
+/* Pie charts */
 .pie-charts-container {
     background: #1a1a1a;
     border: 1px solid #333;
     padding: 16px;
     border-radius: 6px;
     margin-top: 30px;
+    margin-bottom: 30px;
 }
 .charts-grid {
     display: grid;
@@ -69,6 +70,7 @@
     height: 300px !important;
 }
 
+/* Progress bars (from previous phase) */
 .progress-bar-container {
     background: #222;
     height: 24px;
@@ -86,4 +88,18 @@
 }
 .pages-fill {
     background: linear-gradient(to right, #2196f3, #42a5f5);
+}
+
+/* New: Cumulative line chart container */
+#cumulativeChartContainer {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    padding: 10px;
+    border-radius: 6px;
+    max-width: 100%;
+    margin: 0 auto;
+}
+#cumulativeChart {
+    width: 100%;
+    height: 500px;
 }
