@@ -272,14 +272,6 @@ function renderStats() {
             }
         });
     } else {
-        // Improved fallback – only show if truly no data
-        const currentYear = getCurrentYear();
-        const currentStats = perYear[currentYear] || { books: 0, pages: 0 };
-        if (currentStats.books > 0 || currentStats.pages > 0) {
-            cumulativeContainer.innerHTML = '<p style="text-align:center; color:#ff6; padding:120px 20px;">Temporary data glitch detected – try refreshing the page!</p><canvas id="cumulativeChart" style="display:none;"></canvas>';
-            console.warn("perYear has current year data but no labels – possible timestamp issue", perYear);
-        } else {
-            cumulativeContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px; font-size:1.1em;">No finished reads yet!<br><br>Mark some books as finished to see your cumulative progress.</p><canvas id="cumulativeChart" style="display:none;"></canvas>';
-        }
+        cumulativeContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px; font-size:1.1em;">No finished reads yet!<br><br>Mark some books as finished to see your cumulative progress.</p><canvas id="cumulativeChart" style="display:none;"></canvas>';
     }
 }
