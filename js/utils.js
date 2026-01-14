@@ -15,10 +15,14 @@ function getCurrentReadStart(book) {
 }
 
 function getSortTimestamp(book) {
-    let ts = getLatestFinished(book);
-    if (ts <= 0) ts = getCurrentReadStart(book);
-    if (ts <= 0) ts = book.dateAdded ?? 0;
-    return ts;
+   
+    const latestFinished = getLatestFinished(book);
+    if (latestFinished > 0) return latestFinished;
+
+    const currentStart = getCurrentReadStart(book);
+    if (currentStart > 0) return currentStart;
+
+    return book.dateAdded || 0;
 }
 
 function compare(a, b, col) {
