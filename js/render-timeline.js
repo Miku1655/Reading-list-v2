@@ -1,8 +1,15 @@
 function renderTimeline() {
-    const container = document.getElementById("timelineContainer");
+    let container = document.getElementById("timelineContainer");
     if (!container) {
-        console.error("Timeline container not found in DOM!");
-        return;
+        console.warn("Timeline container missing – creating dynamically");
+        const section = document.getElementById("tab-timeline");
+        if (!section) {
+            console.error("Timeline tab section not found!");
+            return;
+        }
+        container = document.createElement("div");
+        container.id = "timelineContainer";
+        section.appendChild(container);
     }
     container.innerHTML = "";
     const entries = [];
@@ -10,7 +17,10 @@ function renderTimeline() {
         if (b.reads) {
             b.reads.forEach(read => {
                 if (read.finished) {
-                    entries.push({ book: b, date: new Date(read.finished) });
+                    const dt = new Date(read.finished);
+                    if (!isNaN(dt.getTime())) {
+                        entries.push({ book: b, date: dt });
+                    }
                 }
             });
         }
