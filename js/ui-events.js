@@ -328,6 +328,9 @@ document.addEventListener("DOMContentLoaded", () => {
     initApp(); // From ui-core.js
     document.getElementById("goalYear").value = new Date().getFullYear();
     loadGoalsForYear();
+    if (localStorage.getItem(TAB_KEY) === "constellation") {
+        setTimeout(initConstellation, 100); // give time for canvas to exist
+    }
 });
 
 document.getElementById("addChallenge")?.addEventListener("click", addChallenge);
