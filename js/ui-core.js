@@ -37,60 +37,40 @@ function moveNotePopup(e) {
 // Dynamic tab loading
 // ────────────────────────────────────────────────
 
-async function loadTabContent(tabId) {
-    const container = document.getElementById('tab-content-container');
-    if (!container) {
-        console.error("Container #tab-content-container not found");
-        return;
+setTimeout(() => {
+    if (tabId === 'profile') {
+        renderProfileStats?.();
+        renderRecentBooks?.();
+        renderFavourites?.();
+        renderWaitingWidget?.();
+        renderOnThisDay?.();
+        renderQuoteOfTheDay?.();
+        renderRediscoverWidget?.();
+    }
+    if (tabId === 'list') {
+        renderTable?.();
+        renderYearGoalProgress?.();
+        // add populateShelfFilter?.() if needed
+    }
+    if (tabId === 'options') {
+        renderShelfManager?.();
+        updateCoversCount?.();
+    }
+    if (tabId === 'world-map') renderMap?.();
+    if (tabId === 'quotes') renderQuotes?.();
+    if (tabId === 'timeline') renderTimeline?.();
+    if (tabId === 'stats') renderStats?.();
+    if (tabId === 'challenges') {
+        loadGoalsForYear?.();
+        renderChallengesTab?.();
+        // renderChallengesList?.(); if it exists
     }
 
-    container.innerHTML = '<p>Loading...</p>';
-
-    let url = `partials/tab-${tabId}.html`;
-    let containerId = 'tab-content-container';
-
-    if (tabId === 'editModal') {
-        url = 'partials/modal-edit-book.html';
-        containerId = 'editModalContainer';
+    // Show modal after loading
+    if (tabId === 'editModal' || tabId === 'yearReview') {
+        target.style.display = 'flex';
     }
-    if (tabId === 'yearReview') {
-        url = 'partials/modal-year-review.html';
-        containerId = 'yearReviewModalContainer';
-    }
-
-    const target = document.getElementById(containerId);
-    if (!target) {
-        console.error(`Target container #${containerId} not found`);
-        return;
-    }
-
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to load ${url} – ${response.status}`);
-        const html = await response.text();
-        target.innerHTML = html;
-
-        // Re-render tab-specific content
-        if (tabId === 'list')        renderList();
-        if (tabId === 'profile')     renderProfile();
-        if (tabId === 'stats')       renderStats?.();
-        if (tabId === 'timeline')    renderTimeline?.();
-        if (tabId === 'challenges')  { loadGoalsForYear(); renderChallengesTab?.(); renderChallengesList?.(); }
-        if (tabId === 'world-map')   renderMap?.();
-        if (tabId === 'quotes')      renderQuotes?.();
-        if (tabId === 'options')     { renderShelfManager?.(); updateCoversCount?.(); }
-
-        // Special case: modals need to be shown after load
-        if (tabId === 'editModal' || tabId === 'yearReview') {
-            target.style.display = 'flex';
-        }
-
-    } catch (err) {
-        console.error("Tab load error:", err);
-        target.innerHTML = `<p style="color:red; padding:20px;">Error loading content: ${err.message}</p>`;
-    }
-}
-
+}, 100);  // increased delay slightly for safety
 // ────────────────────────────────────────────────
 // Tab switching
 // ────────────────────────────────────────────────
