@@ -26,6 +26,7 @@
     <button class="tab" data-tab="stats">Stats</button>
     <button class="tab" data-tab="timeline">Timeline</button>
     <button class="tab" data-tab="challenges">Challenges</button>
+    <button class="tab" data-tab="quotes">Quotes</button>
     <button class="tab" data-tab="options">Options</button>
 </div>
 
@@ -144,6 +145,12 @@
     <p style="margin-top:30px; color:#aaa;">Custom challenges (e.g. read by tag, author, etc.) coming in future updates!</p>
 </section>
 
+<section id="tab-quotes" class="tab-content">
+    <h2>Quotes & Highlights</h2>
+    <p>Collected memorable quotes from your books.</p>
+    <div id="quotesContainer"></div> <!-- We'll render here -->
+</section>
+ 
 <section id="tab-options" class="tab-content">
     <h3>Import / Export</h3>
     <label>Import list: <input type="file" id="fileInput" accept=".csv,.json"></label>
@@ -184,7 +191,7 @@
     <h3>Manage Shelves</h3>
     <div id="shelfManager"></div>
     <hr style="border:1px solid #333; margin:16px 0;">
-    Version 1.11 – new profile features! Rediscover + favourite series update
+    Version 1.12! – new quotes tab and features! new custom challanges feature! new world map tab and tracking! Big additions all around!
 </section>
 
 <div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); justify-content:center; align-items:center; z-index:1000;">
@@ -251,11 +258,21 @@
             🙂 😐 😞 😭 😂 😢 😡 🤔 🔥 ❄️ 🧠 🖤 ✨ ❤️ 🎯 🌫️ ☕️
         </div>
         <p>Current: <span id="currentEmojis" style="font-size:1.6em;"></span></p>
-    </div>
-            <label style="display:block; margin-top:8px;">
+     <label style="display:block; margin-top:8px;">
     📍 Page for next emoji: <input type="number" id="emojiPageInput" min="1" placeholder="e.g. 150" style="width:120px;">
     <small style="display:block; margin-top:4px; color:#666;">Click emoji to remove • Or enter page before clicking to add with page</small>
-</label>
+     </label>
+    </div> 
+         <div class="edit-section">
+    <h4 onclick="this.parentElement.classList.toggle('collapsed')">Quotes & Highlights ▼</h4>
+    <div class="edit-section-content">
+        <div id="quotesList"></div>
+        <button id="addQuoteBtn">+ Add Quote</button>
+        <p style="font-size:0.85em; color:#aaa; margin-top:8px;">
+            Add memorable passages, thoughts, or highlights. Optional page/date/favorite.
+        </p>
+    </div>
+</div>
 </div>
         <div class="modal-footer">
             <button id="removeBook" class="danger">Remove</button>
