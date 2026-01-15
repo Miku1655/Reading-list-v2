@@ -93,8 +93,8 @@ function prepareConstellationData() {
 }
 
 function getStarSize(pages) {
-    if (!pages || pages < 1) return 5;
-    return 4 + Math.sqrt(pages / 30) * 2; // ~4–18 px range
+    if (!pages || pages < 1) return 2;
+    return 2 + Math.log(pages / 10) * 3.5; // 50p=~3px, 100p=~5px, 500p=~12px, 1200=~18px, 5000=~25px
 }
 
 function getStarColor(rating) {
@@ -143,39 +143,78 @@ function drawConnection(ctx, x1, y1, x2, y2, isSeries = false) {
 function calculatePositions(mode) {
     const w = constellationCanvas.width / devicePixelRatio;
     const h = constellationCanvas.height / devicePixelRatio;
-    const positions = new Array(constellationBooks.length);
+    let positions = constellationBooks.map(() => ({x: Math.random() * w, y: Math.random() * h})); // Start random
 
     if (mode === 'timeline') {
-        if (constellationBooks.length === 0) return positions;
-        const minTime = Math.min(...constellationBooks.map(b => b.lastFinished));
-        const maxTime = Math.max(...constellationBooks.map(b => b.lastFinished));
+        const minTime = Math.min(...constellationBooks.map(b => b.lastFinished || 0));
+        const maxTime = Math.max(...constellationBooks.map(b => b.lastFinished || 0));
         const timeRange = maxTime - minTime || 1;
-        constellationBooks.forEach((book, i) => {
-            const x = 40 + ((book.lastFinished - minTime) / timeRange) * (w - 80);
-            const y = h * 0.2 + Math.sin(i * 0.7) * 60 + (book.rating || 2.5) * 30;
-            positions[i] = {x, y};
+        positions = constellationBooks.map((book, i) => {
+            const baseX = 40 + ((book.lastFinished - minTime) / timeRange) * (w - 80);
+            const jitterX = (Math.sin(i * 0.3) * 40) + (Math.random() - 0.5) * 20;
+            const baseY = h / 2 + (book.rating || 2.5) * (h / 10);
+            const jitterY = (Math.cos(i * 0.5) * 60) + (Math.random() - 0.5) * 40;
+            return {x: baseX + jitterX, y: baseY + jitterY};
         });
     } else if (mode === 'rating-pages') {
         const maxPages = Math.max(...constellationBooks.map(b => b.pages || 100), 100);
-        constellationBooks.forEach((book, i) => {
-            const x = 40 + ((book.pages || 100) / maxPages) * (w - 80);
-            const y = h - 40 - ((book.rating || 0) / 5) * (h - 80);
-            positions[i] = {x, y};
+        positions = constellationBooks.map(book => {
+            const baseX = 40 + ((book.pages || 100) / maxPages) * (w - 80);
+            const jitterX = (Math.random() - 0.5) * 60;
+            const baseY = h - 40 - ((book.rating || 0) / 5) * (h - 80);
+            const jitterY = (Math.random() - 0.5) * 80;
+            return {x: baseX + jitterX, y: baseY + jitterY};
         });
-    } else { // random constellation
-        const placed = [];
-        constellationBooks.forEach((book, i) => {
-            let attempts = 0;
-            let x, y;
-            do {
-                x = Math.random() * (w - 80) + 40;
-                y = Math.random() * (h - 80) + 40;
-                attempts++;
-            } while (placed.some(p => Math.hypot(p.x - x, p.y - y) < 45) && attempts < 80);
+    } else { // Clustered constellation with forces
+        // Group by author/series for attraction
+        const groups = {};
+        constellationBooks.forEach((b, i) => {
+            const key = (b.series || '') + '|' + (b.author || '');
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(i);
+        });
 
-            placed.push({x, y});
-            positions[i] = {x, y};
-        });
+        // Simple force sim: 15 iterations
+        for (let iter = 0; iter < 15; iter++) {
+            constellationBooks.forEach((book, i) => {
+                let fx = 0, fy = 0;
+                const p = positions[i];
+                const mass = getStarSize(book.pages) / 10; // Bigger stars attract more
+
+                // Repel all others
+                for (let j = 0; j < constellationBooks.length; j++) {
+                    if (i === j) continue;
+                    const p2 = positions[j];
+                    const dx = p.x - p2.x;
+                    const dy = p.y - p2.y;
+                    const dist = Math.hypot(dx, dy) + 0.1;
+                    const repel = (100 / dist) * (1 / dist); // Stronger close repel
+                    fx += dx * repel;
+                    fy += dy * repel;
+                }
+
+                // Attract within group (author/series)
+                const group = Object.values(groups).find(g => g.includes(i));
+                if (group) {
+                    group.forEach(j => {
+                        if (i === j) continue;
+                        const p2 = positions[j];
+                        const dx = p2.x - p.x;
+                        const dy = p2.y - p.y;
+                        const dist = Math.hypot(dx, dy) + 0.1;
+                        const attract = (dist / 200) * mass; // Pull closer, big mass stronger
+                        fx += dx * attract;
+                        fy += dy * attract;
+                    });
+                }
+
+                // Apply forces, dampen, bound
+                p.x += fx * 0.05;
+                p.y += fy * 0.05;
+                p.x = Math.max(40, Math.min(w - 40, p.x));
+                p.y = Math.max(40, Math.min(h - 40, p.y));
+            });
+        }
     }
 
     return positions;
@@ -193,12 +232,13 @@ function renderConstellation(force = false) {
 
     // Tiny background stars
     constellationCtx.fillStyle = '#ffffff';
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 200; i++) { // More but softer
         const x = Math.random() * w;
         const y = Math.random() * h;
-        constellationCtx.globalAlpha = Math.random() * 0.5 + 0.3;
-        constellationCtx.fillRect(x, y, 1, 1);
-    }
+        const size = Math.random() * 1.5 + 0.5;
+        ctx.globalAlpha = Math.random() * 0.4 + 0.2;
+        ctx.fillRect(x, y, size, size);
+}
     constellationCtx.globalAlpha = 1;
 
     if (constellationBooks.length === 0) {
