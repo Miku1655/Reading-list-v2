@@ -42,6 +42,7 @@ function switchTab(name) {
         renderRecentBooks();
         renderFavourites();
         renderWaitingWidget();
+        renderOnThisDay()
     }
     if (name === "list") renderYearGoalProgress();
 
