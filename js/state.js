@@ -26,6 +26,7 @@ let showCoversInTimeline = false;
 let challenges = [];
 let showYearGoalProgress = true;
 let notePopup = null;
+let settings = {};
 
 function loadLocalData() {
     const savedBooks = localStorage.getItem(STORAGE_KEY);
