@@ -125,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', () => {
     switchTab('list');
 });
-}
 
 // Central render function — use this only when you really need to refresh almost everything
 // (e.g. after save, import, cloud load, etc.)
