@@ -80,6 +80,48 @@ function switchTab(name) {
         loadGoalsForYear();
         renderChallengesTab?.();
     }
+    async function loadTabContent(tabId) {
+    const container = document.getElementById('tab-content-container');
+    container.innerHTML = '<p>Loading...</p>'; // placeholder
+
+    let url = `partials/tab-${tabId}.html`;
+    if (tabId === 'editModal') url = 'partials/modal-edit-book.html';
+    if (tabId === 'yearReview') url = 'partials/modal-year-review.html';
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to load ${url}`);
+        const html = await response.text();
+        container.innerHTML = html;
+
+        // Re-attach event listeners or re-render after load
+        if (tabId === 'list') renderList();
+        if (tabId === 'profile') renderProfile();
+        if (tabId === 'stats') renderStats();
+        if (tabId === 'timeline') renderTimeline();
+        if (tabId === 'challenges') renderChallenges();
+        if (tabId === 'world-map') renderMap();
+        if (tabId === 'quotes') renderQuotes();
+        if (tabId === 'options') renderOptions(); // if you have such function
+
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = `<p style="color:red;">Error loading tab: ${err.message}</p>`;
+    }
+}
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+
+    document.getElementById('tab-content-container').className = 'tab-content active';
+    loadTabContent(tabId);
+}
+
+// Initial load (default tab)
+document.addEventListener('DOMContentLoaded', () => {
+    switchTab('list');
+});
 }
 
 // Central render function — use this only when you really need to refresh almost everything
