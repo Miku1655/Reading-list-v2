@@ -1,5 +1,3 @@
-let notePopup = null;
-
 function createNotePopup() {
     notePopup = document.createElement("div");
     notePopup.style.position = "absolute";
