@@ -1,9 +1,9 @@
-let tempCoverDataUrls = {}; // Temporary in-memory cache
+let tempCoverDataUrls = {};
 
 async function preloadAndConvertCovers(booksNeedingCovers) {
     const promises = booksNeedingCovers.map(async (book) => {
         if (!book.coverUrl || book.coverUrl.startsWith("data:")) {
-            tempCoverDataUrls[book.importOrder] = book.coverUrl; // Already good or none
+            tempCoverDataUrls[book.importOrder] = book.coverUrl;
             return;
         }
         try {
@@ -22,7 +22,7 @@ async function preloadAndConvertCovers(booksNeedingCovers) {
             });
         } catch (e) {
             console.warn(`Failed to proxy cover for ${book.title}:`, e);
-            tempCoverDataUrls[book.importOrder] = book.coverUrl; // Fallback to original (on-screen may show)
+            tempCoverDataUrls[book.importOrder] = book.coverUrl; // Rare fallback
         }
     });
     await Promise.all(promises);
@@ -96,20 +96,16 @@ async function generateYearReview(year) {
 
     const finishedBooks = Array.from(finishedThisYear);
 
-    // Load covers via proxy -> data URL
     tempCoverDataUrls = {};
     await preloadAndConvertCovers(allBooksThisYear);
 
-    // New Favourites
     let newFavourites = finishedBooks.filter(b => profile.favourites.includes(b.importOrder));
     newFavourites.sort((a, b) => (b.rating || 0) - (a.rating || 0));
     newFavourites = newFavourites.slice(0, 10);
 
-    // Most re-read
     rereadThisYear.sort((a, b) => b.count - a.count);
     const topReread = rereadThisYear.slice(0, 5);
 
-    // Top authors
     const topAuthors = Object.entries(authorCount)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 3);
@@ -168,45 +164,73 @@ async function generateYearReview(year) {
     content.innerHTML = html;
 }
 
-async function exportReviewAsPNG() {
+async function captureCleanPanel() {
     const panel = document.getElementById("yearReviewPanel");
+    const header = document.getElementById("reviewHeader");
+    const footer = document.getElementById("reviewFooter");
+
+    // Hide UI controls for clean export
+    const originalHeaderDisplay = header.style.display;
+    const originalFooterDisplay = footer.style.display;
+    header.style.display = "none";
+    footer.style.display = "none";
+
+    // Small delay to ensure DOM updates
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const canvas = await html2canvas(panel, {
+        scale: 1.5, // Balanced quality/size (2 can be too large for PDF in some browsers)
+        backgroundColor: "#ffffff",
+        logging: false
+    });
+
+    // Restore UI
+    header.style.display = originalHeaderDisplay;
+    footer.style.display = originalFooterDisplay;
+
+    return canvas;
+}
+
+async function exportReviewAsPNG() {
     try {
-        const canvas = await html2canvas(panel, { scale: 2, backgroundColor: "#ffffff" });
+        const canvas = await captureCleanPanel();
         const link = document.createElement("a");
         link.download = `Year-in-Review-${document.getElementById("reviewYearSelect").value}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
     } catch (e) {
-        alert("PNG export failed. If covers are still loading, wait a moment and try again.");
+        alert("PNG export failed — content may be too large. Try again or reduce window size.");
     }
 }
 
 async function exportReviewAsPDF() {
-    const panel = document.getElementById("yearReviewPanel");
     try {
-        const canvas = await html2canvas(panel, { scale: 2, backgroundColor: "#ffffff" });
+        const canvas = await captureCleanPanel();
         const imgData = canvas.toDataURL("image/png");
         const pdf = new jsPDF.jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
+
         const imgWidth = canvas.width;
         const imgHeight = canvas.height;
         const ratio = imgWidth / pdfWidth;
-        let heightLeft = imgHeight / ratio;
+        const imgScaledHeight = imgHeight / ratio;
+
+        let heightLeft = imgScaledHeight;
         let position = 0;
 
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight / ratio);
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgScaledHeight);
         heightLeft -= pdfHeight;
 
-        while (heightLeft >= 0) {
+        while (heightLeft > 0) {
+            position = heightLeft - imgScaledHeight;
             pdf.addPage();
-            position = heightLeft - imgHeight / ratio;
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight / ratio);
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgScaledHeight);
             heightLeft -= pdfHeight;
         }
 
         pdf.save(`Year-in-Review-${document.getElementById("reviewYearSelect").value}.pdf`);
     } catch (e) {
-        alert("PDF export failed. If covers are still loading, wait a moment and try again.");
+        alert("PDF export failed — content may be too tall for your browser. PNG works as a great alternative!");
     }
 }
