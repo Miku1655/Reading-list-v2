@@ -9,12 +9,12 @@ let constellationBooks = [];
 let hoveredBook = null;
 
 const ratingColors = [
-    '#555555',     // 0 / unrated
-    '#ff4d4d',     // 1
-    '#ff8533',     // 2
-    '#ffff66',     // 3
-    '#99ff99',     // 4
-    '#ffffff'      // 5
+    '#a0a0a0',     // 0 / unrated - dim grayish white
+    '#87ceeb',     // 1 - sky blue (cool, dim)
+    '#add8e6',     // 2 - light blue
+    '#f0f8ff',     // 3 - alice blue (neutral white)
+    '#fffacd',     // 4 - lemon chiffon (warm light yellow)
+    '#ffd700'      // 5 - gold (bright warm)
 ];
 
 function initConstellation() {
@@ -103,35 +103,27 @@ function getStarColor(rating) {
 }
 
 function drawStar(ctx, cx, cy, size, color, glow = false) {
-    const spikes = 5;
-    const outerRadius = size;
-    const innerRadius = size / 2.5;
-
     ctx.save();
     ctx.beginPath();
-    for (let i = 0; i < spikes * 2; i++) {
-        const radius = i % 2 === 0 ? outerRadius : innerRadius;
-        const angle = (Math.PI / spikes) * i - Math.PI / 2;
-        const x = cx + Math.cos(angle) * radius;
-        const y = cy + Math.sin(angle) * radius;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-    }
+    ctx.arc(cx, cy, size, 0, Math.PI * 2);
     ctx.closePath();
 
+    // Base subtle glow for all stars (twinkle effect)
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 4;
+
     if (glow) {
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 15;
+        // Stronger glow for favorites
+        ctx.shadowColor = '#ffd700'; // Goldish for visibility
+        ctx.shadowBlur = 20; // More pronounced
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
     }
 
     ctx.fillStyle = color;
     ctx.fill();
 
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-
+    ctx.shadowBlur = 0; // Reset
     ctx.restore();
 }
 
@@ -139,10 +131,10 @@ function drawConnection(ctx, x1, y1, x2, y2, isSeries = false) {
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
-    ctx.strokeStyle = isSeries ? '#6666ff' : '#ffaa00';
-    ctx.lineWidth = 0.8;
-    ctx.setLineDash(isSeries ? [3, 5] : []);
-    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = isSeries ? '#66a3ff' : '#cccccc'; // Blueish for series, gray for author
+    ctx.lineWidth = isSeries ? 1.2 : 0.6; // Thicker for series
+    ctx.setLineDash(isSeries ? [4, 6] : []); // Dashed only for series
+    ctx.globalAlpha = 0.35; // Softer to avoid clutter
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
@@ -221,23 +213,32 @@ function renderConstellation(force = false) {
     const tooltip = document.getElementById(CONSTELLATION_TOOLTIP_ID);
 
     // Draw connections first (behind stars)
-    if (settings.constellation.showSeriesLines || settings.constellation.showAuthorLines) {
-        for (let i = 0; i < constellationBooks.length; i++) {
-            for (let j = i + 1; j < constellationBooks.length; j++) {
-                const b1 = constellationBooks[i];
-                const b2 = constellationBooks[j];
-                const p1 = positions[i];
-                const p2 = positions[j];
-
-                if (settings.constellation.showSeriesLines && b1.series && b1.series === b2.series) {
-                    drawConnection(constellationCtx, p1.x, p1.y, p2.x, p2.y, true);
-                }
-                if (settings.constellation.showAuthorLines && b1.author && b1.author === b2.author) {
-                    drawConnection(constellationCtx, p1.x, p1.y, p2.x, p2.y, false);
-                }
+    if (settings.constellation.showAuthorLines) {
+    for (let i = 0; i < constellationBooks.length; i++) {
+        for (let j = i + 1; j < constellationBooks.length; j++) {
+            const b1 = constellationBooks[i];
+            const b2 = constellationBooks[j];
+            const p1 = positions[i];
+            const p2 = positions[j];
+            if (b1.author && b1.author === b2.author) {
+                drawConnection(constellationCtx, p1.x, p1.y, p2.x, p2.y, false);
             }
         }
     }
+}
+if (settings.constellation.showSeriesLines) {
+    for (let i = 0; i < constellationBooks.length; i++) {
+        for (let j = i + 1; j < constellationBooks.length; j++) {
+            const b1 = constellationBooks[i];
+            const b2 = constellationBooks[j];
+            const p1 = positions[i];
+            const p2 = positions[j];
+            if (b1.series && b1.series === b2.series) {
+                drawConnection(constellationCtx, p1.x, p1.y, p2.x, p2.y, true);
+            }
+        }
+    }
+}
 
     // Draw stars
     constellationBooks.forEach((book, i) => {
