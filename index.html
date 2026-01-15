@@ -27,6 +27,7 @@
     <button class="tab" data-tab="timeline">Timeline</button>
     <button class="tab" data-tab="challenges">Challenges</button>
     <button class="tab" data-tab="world-map">World Map</button>
+    <button class="tab" data-tab="constellation">Constellation</button>
     <button class="tab" data-tab="quotes">Quotes</button>
     <button class="tab" data-tab="options">Options</button>
 </div>
@@ -578,6 +579,26 @@
         <div id="mapTooltip" style="position:absolute; background:#222; color:#eee; padding:8px; border:1px solid #555; border-radius:4px; pointer-events:none; display:none; max-width:300px; font-size:0.9em; z-index:10;"></div>
     </div>
 </section>
+
+<section id="tab-constellation" class="tab-content">
+    <div class="constellation-controls" style="margin: 16px 0; display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+        <label>Layout:
+            <select id="constellationMode">
+                <option value="timeline">Timeline</option>
+                <option value="rating-pages">Rating vs Pages</option>
+                <option value="random">Random Constellation</option>
+            </select>
+        </label>
+        <label><input type="checkbox" id="showSeriesLines" checked> Series connections</label>
+        <label><input type="checkbox" id="showAuthorLines" checked> Author connections</label>
+        <label><input type="checkbox" id="showFavoritesGlow" checked> Favorites glow</label>
+        <button id="redrawConstellation">Redraw</button>
+    </div>
+    <div style="position: relative;">
+        <canvas id="constellationCanvas" width="1200" height="800" style="width:100%; height:70vh; background:#000;"></canvas>
+        <div id="constellationTooltip" style="position:absolute; display:none; background:rgba(0,0,0,0.85); color:#eee; padding:8px 12px; border-radius:6px; border:1px solid #444; pointer-events:none; max-width:280px; font-size:0.9em; box-shadow:0 2px 10px rgba(0,0,0,0.7);"></div>
+    </div>
+</section>
  
 <section id="tab-quotes" class="tab-content">
     <h2>Quotes & Highlights</h2>
@@ -625,7 +646,7 @@
     <h3>Manage Shelves</h3>
     <div id="shelfManager"></div>
     <hr style="border:1px solid #333; margin:16px 0;">
-    Version 1.12! – new quotes tab and features! new custom challanges feature! new world map tab and tracking! Big additions all around!
+    Version 1.13 – reading constellations
 </section>
 
 <div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); justify-content:center; align-items:center; z-index:1000;">
@@ -755,6 +776,7 @@
 <script src="js/ui-core.js"></script>
 <script src="js/ui-events.js"></script>
 <script src="js/ui-year-review.js"></script>
-
+<script src="js/constellation.js"></script>
+ 
 </body>
 </html>
