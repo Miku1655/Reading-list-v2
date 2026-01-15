@@ -28,25 +28,38 @@ async function preloadAndConvertCovers(booksNeedingCovers) {
     await Promise.all(promises);
 }
 
-function openYearReview() {
-    const modal = document.getElementById("yearReviewModal");
-    modal.style.display = "flex";
-    tempCoverDataUrls = {};
+async function openYearReview() {
+    // 1. Load the Year in Review modal partial first (await fetch + insert)
+    await loadTabContent('yearReview');
 
+    // 2. Now the modal markup exists → get the container and show it
+    const modalContainer = document.getElementById('yearReviewModalContainer');
+    if (!modalContainer) {
+        console.error("Year Review modal container not found after loading");
+        return;
+    }
+
+    // 3. Your original logic — now safe because elements exist
+    tempCoverDataUrls = {};
     const perYear = calculatePerYear();
     const years = Object.keys(perYear).map(Number).sort((a, b) => b - a);
+
     if (years.length === 0) {
-        document.getElementById("yearReviewContent").innerHTML = '<p class="review-no-data">No finished reads yet — come back when you have some!</p>';
+        document.getElementById("yearReviewContent").innerHTML = 
+            '<p class="review-no-data">No finished reads yet — come back when you have some!</p>';
         document.getElementById("reviewYearSelect").innerHTML = "";
+        modalContainer.style.display = 'flex';
         return;
     }
 
     const select = document.getElementById("reviewYearSelect");
     select.innerHTML = "";
+
     let defaultYear = new Date().getFullYear();
     if (!perYear[defaultYear] || perYear[defaultYear].books === 0) {
         defaultYear = years[0];
     }
+
     years.forEach(y => {
         const opt = document.createElement("option");
         opt.value = y;
@@ -55,7 +68,11 @@ function openYearReview() {
         select.appendChild(opt);
     });
 
+    // 4. Generate the review for the default (or selected) year
     generateYearReview(defaultYear);
+
+    // 5. Finally show the modal
+    modalContainer.style.display = 'flex';
 }
 
 async function generateYearReview(year) {
