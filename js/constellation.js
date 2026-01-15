@@ -188,56 +188,91 @@ function calculatePositions(mode) {
             return {x: baseX + jitterX, y: baseY + jitterY};
         });
     } else {  // Constellation mode: natural clusters
-        const groups = {};
-        constellationBooks.forEach((b, i) => {
-            const key = (b.series || '') + '|' + (b.author || '') + '|' + (b.genre || '') + '|' + (b.country || '');
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(i);
-        });
+    const groups = {};
+    constellationBooks.forEach((b, i) => {
+        const key = (b.series || '') + '|' + (b.author || '') + '|' + (b.genre || '') + '|' + (b.country || '');
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(i);
+    });
 
-        for (let iter = 0; iter < 20; iter++) {  // More iterations for smoothness
-            constellationBooks.forEach((book, i) => {
-                let fx = 0, fy = 0;
-                const p = positions[i];
-                const mass = getStarSize(book.pages) / 5;  // Amplified mass influence
+    // ←←← REPLACE EVERYTHING FROM HERE TO THE END OF THE ELSE BLOCK ↓↓↓
 
-                // Stronger repulsion with randomness
-                for (let j = 0; j < constellationBooks.length; j++) {
-                    if (i === j) continue;
+    // Start more uniformly across the canvas (prevents extreme corner bias)
+    let positions = constellationBooks.map(() => ({
+        x: 40 + Math.random() * (w - 80),
+        y: 40 + Math.random() * (h - 80)
+    }));
+
+    const centerX = w / 2;
+    const centerY = h / 2;
+
+    for (let iter = 0; iter < 25; iter++) {  // Slightly more iterations for convergence
+        constellationBooks.forEach((book, i) => {
+            let fx = 0, fy = 0;
+            const p = positions[i];
+            const mass = getStarSize(book.pages) / 5;
+
+            // 1. Repulsion from all others (stronger when close)
+            for (let j = 0; j < constellationBooks.length; j++) {
+                if (i === j) continue;
+                const p2 = positions[j];
+                const dx = p.x - p2.x;
+                const dy = p.y - p2.y;
+                let dist = Math.hypot(dx, dy);
+                if (dist < 1) dist = 1;  // prevent division explosion
+                const repel = 220 / (dist * dist);  // 1/dist² – classic gravity-like
+                fx += dx * repel;
+                fy += dy * repel;
+            }
+
+            // 2. Attraction within group
+            const group = Object.values(groups).find(g => g.includes(i));
+            if (group) {
+                group.forEach(j => {
+                    if (i === j) return;
                     const p2 = positions[j];
-                    const dx = p.x - p2.x;
-                    const dy = p.y - p2.y;
-                    const dist = Math.hypot(dx, dy) + 0.01;
-                    const repel = (180 / dist) * (1 / dist) * (1 + Math.random() * 0.5);  // Varied, stronger
-                    fx += dx * repel;
-                    fy += dy * repel;
-                }
+                    const dx = p2.x - p.x;
+                    const dy = p2.y - p.y;
+                    const dist = Math.hypot(dx, dy) || 1;
+                    const strength = (book.series === constellationBooks[j].series) ? 0.9 : 0.45;
+                    const attract = (dist / 180) * mass * strength;
+                    fx += dx * attract;
+                    fy += dy * attract;
+                });
+            }
 
-                // Attraction: tighter for series, looser for author/genre
-                const group = Object.values(groups).find(g => g.includes(i));
-                if (group) {
-                    group.forEach(j => {
-                        if (i === j) return;
-                        const p2 = positions[j];
-                        const dx = p2.x - p.x;
-                        const dy = p2.y - p.y;
-                        const dist = Math.hypot(dx, dy) + 0.01;
-                        const attractStrength = constellationBooks[i].series === constellationBooks[j].series ? 0.8 : 0.4;  // Tighter series
-                        const attract = (dist / 150) * mass * attractStrength * (1 + Math.random() * 0.3);  // Varied pull
-                        fx += dx * attract;
-                        fy += dy * attract;
-                    });
-                }
+            // 3. Gentle global pull toward center (prevents corner orphans)
+            const toCenterX = centerX - p.x;
+            const toCenterY = centerY - p.y;
+            const centerDist = Math.hypot(toCenterX, toCenterY) || 1;
+            const centerPull = 0.0008 * centerDist;  // very gentle, scales with distance
+            fx += toCenterX * centerPull;
+            fy += toCenterY * centerPull;
 
-                // Apply with damping + slight random drift for organic feel
-                p.x += fx * 0.03 + (Math.random() - 0.5) * 2;
-                p.y += fy * 0.03 + (Math.random() - 0.5) * 2;
-                p.x = Math.max(20, Math.min(w - 20, p.x));
-                p.y = Math.max(20, Math.min(h - 20, p.y));
-            });
-        }
+            // Apply movement (damped)
+            p.x += fx * 0.025;
+            p.y += fy * 0.025;
+
+            // Weak boundary during simulation (allow some overshoot)
+            if (iter > 10) {  // only start clamping after some settling
+                p.x = Math.max(30, Math.min(w - 30, p.x));
+                p.y = Math.max(30, Math.min(h - 30, p.y));
+            }
+
+            // Tiny random drift every few steps → more organic, prevents stuck positions
+            if (iter % 5 === 0) {
+                p.x += (Math.random() - 0.5) * 4;
+                p.y += (Math.random() - 0.5) * 4;
+            }
+        });
     }
 
+    // Final hard clamp to keep everything inside
+    positions.forEach(p => {
+        p.x = Math.max(20, Math.min(w - 20, p.x));
+        p.y = Math.max(20, Math.min(h - 20, p.y));
+    });
+}
     return positions;
 }
 
@@ -334,7 +369,7 @@ function renderConstellation(force = false) {
             tooltip.style.display = 'block';
             const tooltipWidth = tooltip.offsetWidth || 200;
             tooltip.style.left = (e.clientX - tooltipWidth / 2) + 'px';
-            tooltip.style.top = (e.clientY - 250) + 'px';
+            tooltip.style.top = (e.clientY - 200) + 'px';
             tooltip.innerHTML = `
                 <strong>${hoveredBook.title}</strong><br>
                 ${hoveredBook.author}<br>
