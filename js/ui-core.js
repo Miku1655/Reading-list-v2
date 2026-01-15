@@ -55,6 +55,7 @@ function renderAll() {
     if (document.querySelector('.tab.active')?.dataset.tab === "options") renderShelfManager();
     const activeTab = document.querySelector('.tab.active')?.dataset.tab;
     if (activeTab === "stats") renderStats();
+    if (activeTab === "quotes" renderQuotes();
     if (activeTab === "timeline") renderTimeline();
     if (activeTab === "challenges") {
         loadGoalsForYear();
