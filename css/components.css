@@ -430,8 +430,16 @@ tr:hover { background: #1f1f1f; }
     cursor: pointer;
 }
 
+#worldMapSVG g.read path,
 #worldMapSVG path.read {
     fill: #4CAF50 !important;
+}
+
+#worldMapSVG g path {
+    stroke: #222;
+    stroke-width: 0.8;
+    transition: fill 0.3s;
+    cursor: pointer;
 }
 
 #worldMapSVG path:not(.read) {
