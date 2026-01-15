@@ -23,6 +23,7 @@ let profile = { favourites: [], favouriteSeries: [] };
 let draggedElement = null;
 let minAuthorBooks = 2;
 let showCoversInTimeline = false;
+let challenges = [];
 let showYearGoalProgress = true;
 let notePopup = null;
 
@@ -47,6 +48,13 @@ books.forEach(b => {
     if (!Array.isArray(b.quotes)) {
         b.quotes = [];
     }
+    const savedChallenges = localStorage.getItem(CHALLENGES_KEY);
+challenges = savedChallenges ? JSON.parse(savedChallenges) : [];
+
+// Migration: ensure id exists for old ones (if any)
+challenges.forEach(c => {
+    if (!c.id) c.id = Date.now() + Math.random(); // simple unique
+});
 });
     nextImportOrder = maxOrder + 1;
 
@@ -92,4 +100,8 @@ function updateCoversCount() {
     const total = books.length;
     coversCountP.textContent =
         `${count} of ${total} books have covers (remote URLs – no disk space used by the app)`;
+}
+
+function saveChallengesToLocal() {
+    localStorage.setItem(CHALLENGES_KEY, JSON.stringify(challenges));
 }
