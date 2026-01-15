@@ -74,7 +74,20 @@ challenges.forEach(c => {
     showCoversTimelineCheckbox.checked = showCoversInTimeline;
     showYearGoalProgress = JSON.parse(localStorage.getItem(SHOW_YEAR_GOAL_PROGRESS_KEY) || "true");
     showYearGoalProgressCheckbox.checked = showYearGoalProgress;
-
+    // Constellation settings
+const savedSettings = localStorage.getItem('settings');
+if (savedSettings) {
+    settings = JSON.parse(savedSettings);
+} else {
+    settings = {
+        constellation: {
+            mode: 'timeline',
+            showSeriesLines: true,
+            showAuthorLines: true,
+            showFavoritesGlow: true
+        }
+    };
+}
     // Profile
     profileNickInput.value = profile.nick || "";
     profileBioTextarea.value = profile.bio || "";
@@ -105,4 +118,8 @@ function updateCoversCount() {
 
 function saveChallengesToLocal() {
     localStorage.setItem(CHALLENGES_KEY, JSON.stringify(challenges));
+}
+
+function saveSettingsToLocal() {
+    localStorage.setItem('settings', JSON.stringify(settings));
 }
