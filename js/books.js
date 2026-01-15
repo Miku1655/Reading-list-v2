@@ -383,7 +383,7 @@ document.getElementById("addQuoteBtn").onclick = () => {
     });
 
     document.getElementById("editModal").style.display = "flex";
-}
+
 
 function closeEditModal() {
     editingBook = null;
