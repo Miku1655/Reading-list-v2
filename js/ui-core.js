@@ -36,10 +36,10 @@ function switchTab(name) {
         c.classList.toggle("active", c.id === `tab-${name}`);
     });
 
-    // Remember last tab
-    localStorage.setItem("lastTab", name);  // assuming TAB_KEY is "lastTab" or similar
+    // Save the current tab
+    localStorage.setItem(TAB_KEY, name);
 
-    // Render tab-specific content
+    // Tab-specific renders
     if (name === "options") {
         renderShelfManager();
         updateCoversCount();
@@ -51,12 +51,13 @@ function switchTab(name) {
         renderFavourites();
         renderWaitingWidget();
         renderOnThisDay();
-        renderQuoteOfTheDay();       // quotes widget
-        renderRediscoverWidget();    // if you want it on profile
+        renderQuoteOfTheDay();
+        renderRediscoverWidget();
     }
     
     if (name === "list") {
         renderYearGoalProgress();
+        renderTable(); // table is main content on list tab
     }
     
     if (name === "quotes") {
@@ -68,17 +69,12 @@ function switchTab(name) {
     }
     
     if (name === "stats") {
-        renderStats();               // assuming this exists
+        renderStats?.(); // optional chaining if function might not exist yet
     }
     
     if (name === "challenges") {
         loadGoalsForYear();
-        renderChallengesTab();       // assuming this exists
-    }
-
-    // Always render the table when switching to list (optional safety)
-    if (name === "list") {
-        renderTable();
+        renderChallengesTab?.();
     }
 }
 
