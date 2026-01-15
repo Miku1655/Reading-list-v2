@@ -92,19 +92,15 @@ function renderWaitingWidget() {
         <p>Added ${daysSince} day${daysSince === 1 ? '' : 's'} ago... still waiting for you!</p>
     `;
 }
-
 function renderOnThisDay() {
     const container = document.getElementById("onThisDayContainer");
     const emptyMsg = document.getElementById("onThisDayEmpty");
     container.innerHTML = "";
-
     const today = new Date();
     const todayMonth = today.getMonth();
     const todayDay = today.getDate();
     const currentYear = today.getFullYear();
-
     const anniversaries = [];
-
     books.forEach(book => {
         book.reads.forEach(read => {
             if (read.finished) {
@@ -116,17 +112,12 @@ function renderOnThisDay() {
             }
         });
     });
-
     if (anniversaries.length === 0) {
         emptyMsg.style.display = "block";
         return;
     }
-
     emptyMsg.style.display = "none";
-
-    // Sort by most recent anniversary first
     anniversaries.sort((a, b) => b.finishedYear - a.finishedYear);
-
     anniversaries.forEach(ann => {
         const card = createBookCard(ann.book);
         const note = document.createElement("small");
@@ -136,4 +127,74 @@ function renderOnThisDay() {
         card.appendChild(note);
         container.appendChild(card);
     });
+}
+
+function renderRediscoverWidget() {
+    const widget = document.getElementById("rediscoverWidget");
+    const currentYear = new Date().getFullYear();
+    const cutoffYear = currentYear - 2;
+
+    // Find qualifying books: finished, latest finish <= cutoffYear
+    const qualifying = books.filter(b => {
+        if (b.exclusiveShelf !== "read") return false;
+        const latest = getLatestFinished(b);
+        if (!latest) return false;
+        return new Date(latest).getFullYear() <= cutoffYear;
+    });
+
+    if (qualifying.length === 0) {
+        widget.innerHTML = "<p>No older finished books yet — keep reading to unlock rediscoveries!</p>";
+        return;
+    }
+
+    // Random selection
+    const book = qualifying[Math.floor(Math.random() * qualifying.length)];
+
+    // Latest read entry
+    const latestRead = book.reads.reduce((latest, read) => {
+        if (read.finished && (!latest || read.finished > latest.finished)) return read;
+        return latest;
+    }, null);
+
+    // Duration calc
+    let durationText = "";
+    if (latestRead && latestRead.started && latestRead.finished) {
+        const start = new Date(latestRead.started);
+        const end = new Date(latestRead.finished);
+        const days = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1; // inclusive
+        durationText = `${start.toLocaleDateString()} – ${end.toLocaleDateString()} (${days} day${days > 1 ? "s" : ""} read)`;
+    } else if (latestRead && latestRead.finished) {
+        durationText = `Finished ${new Date(latestRead.finished).toLocaleDateString()}`;
+    }
+
+    // Years ago
+    const yearsAgo = currentYear - new Date(latestRead.finished).getFullYear();
+
+    // Rating stars
+    let ratingHtml = "";
+    if (book.rating > 0) {
+        ratingHtml = `<div style="margin:8px 0;">Rating: ${"★".repeat(book.rating)}${"☆".repeat(5 - book.rating)}</div>`;
+    }
+
+    // Notes truncated
+    let notesHtml = "";
+    if (book.notes) {
+        const truncated = book.notes.length > 200 ? book.notes.slice(0, 200) + "..." : book.notes;
+        notesHtml = `<div class="rediscover-notes">${truncated}</div>`;
+    }
+
+    const coverHtml = book.coverUrl
+        ? `<img src="${book.coverUrl}">`
+        : `<div class="no-cover">No cover</div>`;
+
+    widget.innerHTML = `
+        ${coverHtml}
+        <p style="margin:12px 0;"><strong>${book.title}</strong> by ${book.author || "Unknown"}</p>
+        <div class="rediscover-details">
+            Finished ${yearsAgo} year${yearsAgo > 1 ? "s" : ""} ago<br>
+            ${durationText}
+            ${ratingHtml}
+        </div>
+        ${notesHtml}
+    `;
 }
