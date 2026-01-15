@@ -72,6 +72,11 @@ function switchTab(name) {
         renderMap();
     }
     
+    if (name === "constellation") {
+    if (!constellationCanvas) initConstellation();
+    renderConstellation();
+}
+    
     if (name === "stats") {
         renderStats?.(); // optional chaining if function might not exist yet
     }
@@ -117,6 +122,10 @@ function renderAll() {
     if (activeTab === "stats") renderStats?.();
     if (activeTab === "timeline") renderTimeline?.();
     if (activeTab === "quotes") renderQuotes?.();
+    if (document.getElementById("tab-constellation")?.classList.contains("active")) {
+    prepareConstellationData();
+    renderConstellation();
+}
     if (activeTab === "challenges") {
     loadGoalsForYear();
     renderChallengesTab();
@@ -270,4 +279,7 @@ function initApp() {
     renderAll();
     document.getElementById("goalYear").value = new Date().getFullYear();
     loadGoalsForYear();
+if (savedTab === "constellation") {
+    initConstellation();
+}
 }
