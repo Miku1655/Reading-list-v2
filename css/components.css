@@ -330,3 +330,64 @@ tr:hover { background: #1f1f1f; }
     color: #8bc34a;
     font-weight: bold;
 }
+
+/* Collapsible series in favourites */
+.series-card {
+    position: relative;
+}
+
+.series-toggle-icon {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #888;
+    pointer-events: none;
+}
+
+.series-details {
+    margin-top: 12px;
+    padding: 10px;
+    background: #1a1a1a;
+    border-radius: 6px;
+    border: 1px solid #333;
+    transition: all 0.25s ease;
+}
+
+.series-details.collapsed {
+    display: none;
+}
+
+.series-details ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.series-details li {
+    padding: 6px 0;
+    border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9em;
+}
+
+.series-details li:last-child {
+    border-bottom: none;
+}
+
+.series-book-status {
+    min-width: 70px;
+    font-weight: bold;
+    color: #aaa;
+}
+
+.series-book-thumb {
+    width: 36px;
+    height: 54px;
+    object-fit: cover;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
