@@ -465,3 +465,7 @@ function getCountriesRead() {
     console.log("Detected read countries:", countryCount); // Debug: Check console for what was found
     return countryCount;
 }
+function getCountryProgress() {
+    const read = Object.keys(getCountriesRead()).length;
+    return { read, total: 195 }; // approx sovereign countries
+}
