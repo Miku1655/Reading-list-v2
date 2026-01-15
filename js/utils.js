@@ -432,7 +432,20 @@ const countryToIso = {
 function normalizeCountryName(name) {
     if (!name) return null;
     name = name.trim();
-    return countryToIso[name] || name.toUpperCase().slice(0,2); // fallback
+    
+    // Direct lookup (case-sensitive, but most entries are Title Case)
+    if (countryToIso[name]) return countryToIso[name];
+    
+    // Try case-insensitive
+    const lowerName = name.toLowerCase();
+    for (const key in countryToIso) {
+        if (key.toLowerCase() === lowerName) {
+            return countryToIso[key];
+        }
+    }
+    
+    // Last resort fallback (not great, but better than nothing)
+    return name.toUpperCase().slice(0, 2).toLowerCase();
 }
 
 function getCountriesRead() {
