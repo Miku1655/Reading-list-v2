@@ -1,13 +1,15 @@
-let tempCoverDataUrls = {}; // Temporary in-memory cache, cleared on close/change
+let tempCoverDataUrls = {}; // Temporary in-memory cache
 
 async function preloadAndConvertCovers(booksNeedingCovers) {
     const promises = booksNeedingCovers.map(async (book) => {
         if (!book.coverUrl || book.coverUrl.startsWith("data:")) {
-            return; // Skip if no URL or already data URL
+            tempCoverDataUrls[book.importOrder] = book.coverUrl; // Already good or none
+            return;
         }
         try {
-            const response = await fetch(book.coverUrl, { mode: 'cors' }); // Best effort CORS
-            if (!response.ok) throw new Error("Failed");
+            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(book.coverUrl);
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error("Proxy failed");
             const blob = await response.blob();
             const reader = new FileReader();
             await new Promise((resolve, reject) => {
@@ -19,9 +21,8 @@ async function preloadAndConvertCovers(booksNeedingCovers) {
                 reader.readAsDataURL(blob);
             });
         } catch (e) {
-            console.warn(`Failed to fetch cover for ${book.title}:`, e);
-            // Fallback: keep original URL (rare, but html2canvas might still capture it)
-            tempCoverDataUrls[book.importOrder] = book.coverUrl;
+            console.warn(`Failed to proxy cover for ${book.title}:`, e);
+            tempCoverDataUrls[book.importOrder] = book.coverUrl; // Fallback to original (on-screen may show)
         }
     });
     await Promise.all(promises);
@@ -30,7 +31,7 @@ async function preloadAndConvertCovers(booksNeedingCovers) {
 function openYearReview() {
     const modal = document.getElementById("yearReviewModal");
     modal.style.display = "flex";
-    tempCoverDataUrls = {}; // Clear any old temp data
+    tempCoverDataUrls = {};
 
     const perYear = calculatePerYear();
     const years = Object.keys(perYear).map(Number).sort((a, b) => b - a);
@@ -59,7 +60,7 @@ function openYearReview() {
 
 async function generateYearReview(year) {
     const content = document.getElementById("yearReviewContent");
-    content.innerHTML = '<p style="text-align:center; padding:60px; color:#777;"><strong>Loading covers for perfect display & export...</strong><br><span style="display:inline-block; margin-top:20px; width:40px; height:40px; border:4px solid #eee; border-top:4px solid #333; border-radius:50%; animation:spin 1s linear infinite;"></span></p><style>@keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }</style>';
+    content.innerHTML = '<p style="text-align:center; padding:80px; color:#777;"><strong>Loading covers for perfect display & export...</strong><br><span style="display:inline-block; margin-top:20px; width:40px; height:40px; border:5px solid #f0f0f0; border-top:5px solid #555; border-radius:50%; animation:spin 1s linear infinite;"></span></p><style>@keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }</style>';
 
     const perYear = calculatePerYear();
     const yearData = perYear[year] || { books: 0, pages: 0 };
@@ -72,8 +73,7 @@ async function generateYearReview(year) {
     const finishedThisYear = new Set();
     const rereadThisYear = [];
     const authorCount = {};
-
-    const allBooksThisYear = []; // For cover fetching
+    const allBooksThisYear = [];
 
     books.forEach(book => {
         let finishesInYear = 0;
@@ -96,11 +96,11 @@ async function generateYearReview(year) {
 
     const finishedBooks = Array.from(finishedThisYear);
 
-    // Preload/convert covers
-    tempCoverDataUrls = {}; // Reset for this year
+    // Load covers via proxy -> data URL
+    tempCoverDataUrls = {};
     await preloadAndConvertCovers(allBooksThisYear);
 
-    // New Favourites of the Year
+    // New Favourites
     let newFavourites = finishedBooks.filter(b => profile.favourites.includes(b.importOrder));
     newFavourites.sort((a, b) => (b.rating || 0) - (a.rating || 0));
     newFavourites = newFavourites.slice(0, 10);
@@ -128,7 +128,7 @@ async function generateYearReview(year) {
     if (newFavourites.length > 0) {
         html += '<h3 style="text-align:center; margin:40px 0 20px;">New Favourites of the Year</h3><div class="review-top-list">';
         newFavourites.forEach(b => {
-            const coverUrl = tempCoverDataUrls[b.importOrder] || b.coverUrl || "https://via.placeholder.com/300x450?text=No+Cover";
+            const coverUrl = tempCoverDataUrls[b.importOrder] || "https://via.placeholder.com/300x450?text=No+Cover";
             const ratingText = b.rating > 0 ? `<div>Rating: ${b.rating}/5</div>` : `<div>Unrated</div>`;
             html += `<div class="review-book-card"><img src="${coverUrl}" alt="Cover"><div class="review-book-info"><strong>${b.title}</strong><small>by ${b.author || "Unknown"}</small>${ratingText}</div></div>`;
         });
@@ -141,7 +141,7 @@ async function generateYearReview(year) {
         html += '<h3 style="text-align:center; margin:40px 0 20px;">Most Re-read</h3><div class="review-top-list">';
         topReread.forEach(item => {
             const b = item.book;
-            const coverUrl = tempCoverDataUrls[b.importOrder] || b.coverUrl || "https://via.placeholder.com/300x450?text=No+Cover";
+            const coverUrl = tempCoverDataUrls[b.importOrder] || "https://via.placeholder.com/300x450?text=No+Cover";
             html += `<div class="review-book-card"><img src="${coverUrl}" alt="Cover"><div class="review-book-info"><strong>${b.title}</strong><small>by ${b.author || "Unknown"}</small><div>Read ${item.count} times this year</div></div></div>`;
         });
         html += '</div>';
@@ -160,7 +160,7 @@ async function generateYearReview(year) {
     html += '<h3 style="text-align:center; margin:40px 0 20px;">Cover Collage</h3>';
     html += '<div class="review-collage">';
     finishedBooks.forEach(b => {
-        const coverUrl = tempCoverDataUrls[b.importOrder] || b.coverUrl || "https://via.placeholder.com/300x450?text=No+Cover";
+        const coverUrl = tempCoverDataUrls[b.importOrder] || "https://via.placeholder.com/300x450?text=No+Cover";
         html += `<img src="${coverUrl}" alt="${b.title}">`;
     });
     html += '</div>';
@@ -168,21 +168,16 @@ async function generateYearReview(year) {
     content.innerHTML = html;
 }
 
-// Export functions (no preload needed now — data URLs are inline)
 async function exportReviewAsPNG() {
     const panel = document.getElementById("yearReviewPanel");
     try {
-        const canvas = await html2canvas(panel, {
-            scale: 2,
-            backgroundColor: "#ffffff",
-            logging: false
-        });
+        const canvas = await html2canvas(panel, { scale: 2, backgroundColor: "#ffffff" });
         const link = document.createElement("a");
         link.download = `Year-in-Review-${document.getElementById("reviewYearSelect").value}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
     } catch (e) {
-        alert("PNG export failed — try again after covers finish loading.");
+        alert("PNG export failed. If covers are still loading, wait a moment and try again.");
     }
 }
 
@@ -205,13 +200,13 @@ async function exportReviewAsPDF() {
 
         while (heightLeft >= 0) {
             pdf.addPage();
-            position -= pdfHeight;
+            position = heightLeft - imgHeight / ratio;
             pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight / ratio);
             heightLeft -= pdfHeight;
         }
 
         pdf.save(`Year-in-Review-${document.getElementById("reviewYearSelect").value}.pdf`);
     } catch (e) {
-        alert("PDF export failed — try again after covers finish loading.");
+        alert("PDF export failed. If covers are still loading, wait a moment and try again.");
     }
 }
