@@ -184,7 +184,7 @@ function getSeriesProgress(seriesName) {
 }
 
 // Country name normalization to ISO alpha-2 (lowercase for SVG path ids)
-// Expand with more variants as you see mismatches in your data
+// Includes common variants; add more from your book data if needed (e.g., if a book has "U.S.A.", add "U.S.A.": "us")
 const countryToIso = {
     "Afghanistan": "af",
     "Albania": "al",
@@ -212,7 +212,7 @@ const countryToIso = {
     "Bermuda": "bm",
     "Bhutan": "bt",
     "Bolivia": "bo",
-    "Bosnia and Herzegovina": "ba",  // fixed spelling
+    "Bosnia and Herzegovina": "ba",
     "Botswana": "bw",
     "Brazil": "br",
     "British Virgin Islands": "vg",
@@ -239,7 +239,7 @@ const countryToIso = {
     "Cuba": "cu",
     "Cyprus": "cy",
     "Czech Republic": "cz",
-    "Czechia": "cz",                    // common alternative
+    "Czechia": "cz",
     "Democratic Republic of the Congo": "cd",
     "Denmark": "dk",
     "Djibouti": "dj",
@@ -251,7 +251,7 @@ const countryToIso = {
     "Equatorial Guinea": "gq",
     "Eritrea": "er",
     "Estonia": "ee",
-    "Eswatini": "sz",                   // formerly Swaziland
+    "Eswatini": "sz",
     "Ethiopia": "et",
     "Falkland Islands": "fk",
     "Faroe Islands": "fo",
@@ -297,7 +297,7 @@ const countryToIso = {
     "Kazakhstan": "kz",
     "Kenya": "ke",
     "Kiribati": "ki",
-    "Kosovo": "xk",                     // not always in maps, but common
+    "Kosovo": "xk",
     "Kuwait": "kw",
     "Kyrgyzstan": "kg",
     "Laos": "la",
@@ -340,7 +340,7 @@ const countryToIso = {
     "Nigeria": "ng",
     "Niue": "nu",
     "North Korea": "kp",
-    "North Macedonia": "mk",            // formerly Macedonia
+    "North Macedonia": "mk",
     "Northern Mariana Islands": "mp",
     "Norway": "no",
     "Oman": "om",
@@ -405,47 +405,46 @@ const countryToIso = {
     "Vatican City": "va",
     "Venezuela": "ve",
     "Vietnam": "vn",
-    "Virgin Islands": "vi",             // US Virgin Islands
+    "Virgin Islands": "vi",
     "Western Sahara": "eh",
     "Yemen": "ye",
     "Zambia": "zm",
     "Zimbabwe": "zw",
-
-    // Common variants / abbreviations (add more as you notice mismatches)
+    // Variants (add more if your books use them)
+    "Burma": "mm",
+    "Czech": "cz",
+    "England": "gb",
+    "Great Britain": "gb",
+    "Ivory Coast": "ci",
+    "Korea": "kr",
+    "Macedonia": "mk",
+    "Persia": "ir",
+    "Scotland": "gb",
+    "Swaziland": "sz",
+    "U.S.": "us",
+    "U.S.A.": "us",
+    "UK": "gb",
     "USA": "us",
     "United States of America": "us",
-    "UK": "gb",
-    "England": "gb",
-    "Scotland": "gb",
     "Wales": "gb",
-    "Great Britain": "gb",
-    "Korea": "kr",                      // defaults to South
-    "South Korea": "kr",
-    "North Korea": "kp",
-    "Czech": "cz",
-    "Czechoslovakia": "cz",             // historical, but sometimes used
-    "Swaziland": "sz",                  // old name for Eswatini
-    "Burma": "mm",                      // old name for Myanmar
-    "Persia": "ir",                     // historical for Iran
+    "West Sahara": "eh"
 };
 
 function normalizeCountryName(name) {
     if (!name) return null;
     name = name.trim();
-    
-    // Direct lookup (case-sensitive, but most entries are Title Case)
+    // Direct lookup
     if (countryToIso[name]) return countryToIso[name];
-    
-    // Try case-insensitive
+    // Case-insensitive lookup
     const lowerName = name.toLowerCase();
     for (const key in countryToIso) {
         if (key.toLowerCase() === lowerName) {
             return countryToIso[key];
         }
     }
-    
-    // Last resort fallback (not great, but better than nothing)
-    return name.toUpperCase().slice(0, 2).toLowerCase();
+    // No fallback - return null to avoid bad matches; add the exact name to countryToIso instead
+    console.warn(`No country code match for "${name}" - add to countryToIso`);
+    return null;
 }
 
 function getCountriesRead() {
@@ -463,10 +462,6 @@ function getCountriesRead() {
             }
         }
     });
+    console.log("Detected read countries:", countryCount); // Debug: Check console for what was found
     return countryCount;
-}
-
-function getCountryProgress() {
-    const read = Object.keys(getCountriesRead()).length;
-    return { read, total: 195 }; // approx sovereign countries
 }
