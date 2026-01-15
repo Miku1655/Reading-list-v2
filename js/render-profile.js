@@ -45,17 +45,27 @@ function renderFavourites() {
     container.innerHTML = "";
     let hasContent = false;
     if (profile.favouriteSeries.length) {
-        const section = document.createElement("div");
-        section.innerHTML = "<h4>Favourite Series</h4><div class=\"card-container\"></div>";
-        container.appendChild(section);
-        profile.favouriteSeries.sort().forEach(series => {
-            const card = createSeriesCard(series);
-            if (card) {
-                hasContent = true;
-                section.querySelector(".card-container").appendChild(card);
-            }
-        });
-    }
+    const section = document.createElement("div");
+    section.innerHTML = "<h4>Favourite Series</h4><div class=\"card-container\"></div>";
+    container.appendChild(section);
+    const favSeriesContainer = section.querySelector(".card-container");
+    // Sort by progress % desc, then name asc
+    const sortedSeries = profile.favouriteSeries.slice().sort((a, b) => {
+        const pa = getSeriesProgress(a);
+        const pb = getSeriesProgress(b);
+        if (!pa) return 1;
+        if (!pb) return -1;
+        if (pa.percent !== pb.percent) return pb.percent - pa.percent;
+        return a.localeCompare(b);
+    });
+    sortedSeries.forEach(series => {
+        const card = createSeriesCard(series);
+        if (card) {
+            hasContent = true;
+            favSeriesContainer.appendChild(card);
+        }
+    });
+}
     if (profile.favourites.length) {
         const favBooks = profile.favourites.map(id => books.find(b => b.importOrder === id)).filter(Boolean);
         if (favBooks.length) {
