@@ -1,3 +1,21 @@
+async function preloadImages() {
+    const images = document.querySelectorAll("#yearReviewPanel img");
+    const promises = [];
+    images.forEach(img => {
+        if (img.src && !img.complete) {
+            const promise = new Promise((resolve, reject) => {
+                const newImg = new Image();
+                newImg.crossOrigin = "anonymous";
+                newImg.onload = resolve;
+                newImg.onerror = resolve; // continue even if fails
+                newImg.src = img.src;
+            });
+            promises.push(promise);
+        }
+    });
+    await Promise.all(promises);
+}
+
 function openYearReview() {
     const modal = document.getElementById("yearReviewModal");
     modal.style.display = "flex";
@@ -38,7 +56,6 @@ function generateYearReview(year) {
     }
 
     const finishedThisYear = new Set();
-    const ratedThisYear = [];
     const rereadThisYear = [];
     const authorCount = {};
 
@@ -54,7 +71,6 @@ function generateYearReview(year) {
             }
         });
         if (finishesInYear > 0) {
-            if (book.rating > 0) ratedThisYear.push({ book, rating: book.rating });
             if (finishesInYear > 1) rereadThisYear.push({ book, count: finishesInYear });
             const auth = book.author || "Unknown";
             authorCount[auth] = (authorCount[auth] || 0) + finishesInYear;
@@ -63,16 +79,16 @@ function generateYearReview(year) {
 
     const finishedBooks = Array.from(finishedThisYear);
 
-    const avgRating = ratedThisYear.length
-        ? (ratedThisYear.reduce((s, r) => s + r.rating, 0) / ratedThisYear.length).toFixed(1)
-        : "-";
+    // New Favourites of the Year
+    let newFavourites = finishedBooks.filter(b => profile.favourites.includes(b.importOrder));
+    newFavourites.sort((a, b) => (b.rating || 0) - (a.rating || 0)); // highest rating first
+    newFavourites = newFavourites.slice(0, 10); // limit for layout
 
-    ratedThisYear.sort((a, b) => b.rating - a.rating);
-    const topRated = ratedThisYear.slice(0, 5);
-
+    // Most re-read
     rereadThisYear.sort((a, b) => b.count - a.count);
     const topReread = rereadThisYear.slice(0, 5);
 
+    // Top authors
     const topAuthors = Object.entries(authorCount)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 3);
@@ -85,20 +101,21 @@ function generateYearReview(year) {
     html += '<div class="review-stats-grid">';
     html += `<div class="review-stats-block"><div>Books Finished</div><strong>${yearData.books}</strong></div>`;
     html += `<div class="review-stats-block"><div>Pages Read</div><strong>${yearData.pages.toLocaleString()}</strong></div>`;
-    html += `<div class="review-stats-block"><div>Average Rating</div><strong>${avgRating}</strong></div>`;
     html += `<div class="review-stats-block"><div>Unique Titles</div><strong>${finishedBooks.length}</strong></div>`;
     html += '</div>';
 
-    if (topRated.length > 0) {
-        html += '<h3 style="text-align:center; margin:40px 0 20px;">Top Rated Books</h3><div class="review-top-list">';
-        topRated.forEach(item => {
-            const b = item.book;
+    if (newFavourites.length > 0) {
+        html += '<h3 style="text-align:center; margin:40px 0 20px;">New Favourites of the Year</h3><div class="review-top-list">';
+        newFavourites.forEach(b => {
             const cover = b.coverUrl 
                 ? `<img src="${b.coverUrl}" crossorigin="anonymous" alt="Cover">`
-                : `<div class="review-no-cover">${b.title.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,3)}</div>`;
-            html += `<div class="review-book-card">${cover}<div class="review-book-info"><strong>${b.title}</strong><small>by ${b.author || "Unknown"}</small><div>Rating: ${b.rating}/5</div></div></div>`;
+                : `<div class="review-no-cover">${b.title.split(' ').map(w => w[0]?.toUpperCase() || '').join('').slice(0,3)}</div>`;
+            const ratingText = b.rating > 0 ? `<div>Rating: ${b.rating}/5</div>` : `<div>Unrated</div>`;
+            html += `<div class="review-book-card">${cover}<div class="review-book-info"><strong>${b.title}</strong><small>by ${b.author || "Unknown"}</small>${ratingText}</div></div>`;
         });
         html += '</div>';
+    } else {
+        html += '<p style="text-align:center; color:#888; font-style:italic; margin:40px 0;">No new favourites this year.</p>';
     }
 
     if (topReread.length > 0) {
@@ -107,7 +124,7 @@ function generateYearReview(year) {
             const b = item.book;
             const cover = b.coverUrl 
                 ? `<img src="${b.coverUrl}" crossorigin="anonymous" alt="Cover">`
-                : `<div class="review-no-cover">${b.title.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,3)}</div>`;
+                : `<div class="review-no-cover">${b.title.split(' ').map(w => w[0]?.toUpperCase() || '').join('').slice(0,3)}</div>`;
             html += `<div class="review-book-card">${cover}<div class="review-book-info"><strong>${b.title}</strong><small>by ${b.author || "Unknown"}</small><div>Read ${item.count} times this year</div></div></div>`;
         });
         html += '</div>';
@@ -129,7 +146,7 @@ function generateYearReview(year) {
         if (b.coverUrl) {
             html += `<img src="${b.coverUrl}" crossorigin="anonymous" alt="${b.title}">`;
         } else {
-            html += `<div class="review-no-cover">${b.title.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,3)}</div>`;
+            html += `<div class="review-no-cover">${b.title.split(' ').map(w => w[0]?.toUpperCase() || '').join('').slice(0,3)}</div>`;
         }
     });
     html += '</div>';
@@ -138,6 +155,7 @@ function generateYearReview(year) {
 }
 
 async function exportReviewAsPNG() {
+    await preloadImages();
     const panel = document.getElementById("yearReviewPanel");
     try {
         const canvas = await html2canvas(panel, {
@@ -152,11 +170,12 @@ async function exportReviewAsPNG() {
         link.href = canvas.toDataURL("image/png");
         link.click();
     } catch (e) {
-        alert("PNG export failed (likely due to some external covers). Try again or check console.");
+        alert("PNG export failed. Some covers may not have loaded in time.");
     }
 }
 
 async function exportReviewAsPDF() {
+    await preloadImages();
     const panel = document.getElementById("yearReviewPanel");
     try {
         const canvas = await html2canvas(panel, {
@@ -169,26 +188,24 @@ async function exportReviewAsPDF() {
         const pdf = new jsPDF.jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = canvas.width;
-        const imgHeight = canvas.height;
+        const imgWidth = canvas.width / 2; // account for scale
+        const imgHeight = canvas.height / 2;
         const ratio = imgWidth / pdfWidth;
-        const imgScaledHeight = imgHeight / ratio;
-
-        let heightLeft = imgScaledHeight;
+        let heightLeft = imgHeight / ratio;
         let position = 0;
 
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgScaledHeight);
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight / ratio);
         heightLeft -= pdfHeight;
 
-        while (heightLeft > 0) {
-            position = -pdfHeight * pdf.internal.getCurrentPageInfo().pageNumber; // better positioning
+        while (heightLeft >= 0) {
             pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgScaledHeight);
+            position = heightLeft - imgHeight / ratio;
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight / ratio);
             heightLeft -= pdfHeight;
         }
 
         pdf.save(`Year-in-Review-${document.getElementById("reviewYearSelect").value}.pdf`);
     } catch (e) {
-        alert("PDF export failed (likely due to some external covers). Try again or check console.");
+        alert("PDF export failed. Some covers may not have loaded in time.");
     }
 }
