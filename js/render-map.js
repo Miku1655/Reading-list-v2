@@ -18,8 +18,8 @@ function renderMap() {
         if (data && data.count > 0) {
             path.classList.add("read");
             // Optional: shade by count (e.g. darker for more books)
-            const intensity = Math.min(255, 80 + data.count * 30);
-            path.style.fill = `rgb(76, ${intensity}, 80)`;
+            // const intensity = Math.min(255, 80 + data.count * 30);
+           // path.style.fill = `rgb(76, ${intensity}, 80)`;
 
             path.addEventListener("mouseenter", e => {
                 let html = `<strong>${code}</strong>: ${data.count} book${data.count > 1 ? 's' : ''}<br>`;
