@@ -5,6 +5,7 @@ document.getElementById("searchInput").addEventListener("input", renderTable);
 document.getElementById("shelfFilter").addEventListener("change", renderTable);
 document.getElementById("refreshWaitingBtn").addEventListener("click", renderWaitingWidget);
 document.getElementById("refreshRediscoverBtn").addEventListener("click", renderRediscoverWidget);
+document.getElementById("refreshQuoteBtn")?.addEventListener("click", renderQuoteOfTheDay);
 document.querySelectorAll("th[data-col]").forEach(th => th.addEventListener("click", () => {
     if (sortState.column === th.dataset.col) {
         sortState.direction *= -1;
@@ -322,3 +323,4 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("goalYear").value = new Date().getFullYear();
     loadGoalsForYear();
 });
+
