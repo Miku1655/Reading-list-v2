@@ -37,7 +37,6 @@ function generateYearReview(year) {
         return;
     }
 
-    // Collect books finished this year (unique books with at least one finish in year)
     const finishedThisYear = new Set();
     const ratedThisYear = [];
     const rereadThisYear = [];
@@ -55,12 +54,8 @@ function generateYearReview(year) {
             }
         });
         if (finishesInYear > 0) {
-            if (book.rating > 0) {
-                ratedThisYear.push({ book, rating: book.rating });
-            }
-            if (finishesInYear > 1 || getReadCount(book) > 1) {
-                rereadThisYear.push({ book, count: finishesInYear });
-            }
+            if (book.rating > 0) ratedThisYear.push({ book, rating: book.rating });
+            if (finishesInYear > 1) rereadThisYear.push({ book, count: finishesInYear });
             const auth = book.author || "Unknown";
             authorCount[auth] = (authorCount[auth] || 0) + finishesInYear;
         }
@@ -68,108 +63,132 @@ function generateYearReview(year) {
 
     const finishedBooks = Array.from(finishedThisYear);
 
-    // Avg rating
     const avgRating = ratedThisYear.length
         ? (ratedThisYear.reduce((s, r) => s + r.rating, 0) / ratedThisYear.length).toFixed(1)
         : "-";
 
-    // Top rated
     ratedThisYear.sort((a, b) => b.rating - a.rating);
     const topRated = ratedThisYear.slice(0, 5);
 
-    // Top re-read
     rereadThisYear.sort((a, b) => b.count - a.count);
     const topReread = rereadThisYear.slice(0, 5);
 
-    // Top author
     const topAuthors = Object.entries(authorCount)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 3);
 
-    let html = `<h3 style="text-align:center; border-bottom:2px solid #333; padding-bottom:12px;">${year}</h3>`;
+    let html = `<div class="review-header">
+        <div class="review-nick">${profile.nick ? profile.nick + "'s" : "My"} Reading</div>
+        <h2>Year in Review ${year}</h2>
+    </div>`;
+
     html += '<div class="review-stats-grid">';
-    html += `<div class="review-stats-block"><div>Books finished</div><strong>${yearData.books}</strong></div>`;
-    html += `<div class="review-stats-block"><div>Pages read</div><strong>${yearData.pages.toLocaleString()}</strong></div>`;
-    html += `<div class="review-stats-block"><div>Average rating</div><strong>${avgRating}</strong></div>`;
-    html += `<div class="review-stats-block"><div>Unique titles</div><strong>${finishedBooks.length}</strong></div>`;
+    html += `<div class="review-stats-block"><div>Books Finished</div><strong>${yearData.books}</strong></div>`;
+    html += `<div class="review-stats-block"><div>Pages Read</div><strong>${yearData.pages.toLocaleString()}</strong></div>`;
+    html += `<div class="review-stats-block"><div>Average Rating</div><strong>${avgRating}</strong></div>`;
+    html += `<div class="review-stats-block"><div>Unique Titles</div><strong>${finishedBooks.length}</strong></div>`;
     html += '</div>';
 
     if (topRated.length > 0) {
-        html += '<h3>Top Rated Books</h3><div class="review-top-list">';
+        html += '<h3 style="text-align:center; margin:40px 0 20px;">Top Rated Books</h3><div class="review-top-list">';
         topRated.forEach(item => {
             const b = item.book;
-            const cover = b.coverUrl ? `<img src="${b.coverUrl}" alt="Cover">` : '<div style="width:80px;height:120px;background:#ddd;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#999;font-size:0.9em;">No cover</div>';
-            html += `<div class="review-book-card">${cover}<div class="review-book-info"><strong>${b.title}</strong><small>by ${b.author || "Unknown"}</small><br><strong>Rating: ${b.rating}/5</strong></div></div>`;
+            const cover = b.coverUrl 
+                ? `<img src="${b.coverUrl}" crossorigin="anonymous" alt="Cover">`
+                : `<div class="review-no-cover">${b.title.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,3)}</div>`;
+            html += `<div class="review-book-card">${cover}<div class="review-book-info"><strong>${b.title}</strong><small>by ${b.author || "Unknown"}</small><div>Rating: ${b.rating}/5</div></div></div>`;
         });
         html += '</div>';
     }
 
     if (topReread.length > 0) {
-        html += '<h3>Most Re-read</h3><div class="review-top-list">';
+        html += '<h3 style="text-align:center; margin:40px 0 20px;">Most Re-read</h3><div class="review-top-list">';
         topReread.forEach(item => {
             const b = item.book;
-            const cover = b.coverUrl ? `<img src="${b.coverUrl}" alt="Cover">` : '<div style="width:80px;height:120px;background:#ddd;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#999;font-size:0.9em;">No cover</div>';
-            html += `<div class="review-book-card">${cover}<div class="review-book-info"><strong>${b.title}</strong><small>by ${b.author || "Unknown"}</small><br><strong>Read ${item.count} time${item.count > 1 ? "s" : ""} this year</strong></div></div>`;
+            const cover = b.coverUrl 
+                ? `<img src="${b.coverUrl}" crossorigin="anonymous" alt="Cover">`
+                : `<div class="review-no-cover">${b.title.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,3)}</div>`;
+            html += `<div class="review-book-card">${cover}<div class="review-book-info"><strong>${b.title}</strong><small>by ${b.author || "Unknown"}</small><div>Read ${item.count} times this year</div></div></div>`;
         });
         html += '</div>';
     }
 
     if (topAuthors.length > 0) {
-        html += '<h3>Most Read Author' + (topAuthors.length > 1 && topAuthors[0][1] === topAuthors[1][1] ? "s" : "") + '</h3>';
-        html += '<p style="font-size:1.2em; text-align:center;">';
+        html += '<h3 style="text-align:center; margin:40px 0 20px;">Most Read Author' + (topAuthors.length > 1 && topAuthors[0][1] === topAuthors[1][1] ? "s" : "") + '</h3>';
+        html += '<p style="font-size:1.4em; text-align:center; font-weight:500;">';
         topAuthors.forEach(([auth, count], i) => {
             if (i > 0) html += i === topAuthors.length - 1 ? " and " : ", ";
-            html += `<strong>${auth}</strong> (${count} ${count === 1 ? "book" : "books"})`;
+            html += `<strong>${auth}</strong> (${count} ${count > 1 ? "books" : "book"})`;
         });
         html += '</p>';
     }
 
-    html += '<h3>Cover Collage</h3>';
+    html += '<h3 style="text-align:center; margin:40px 0 20px;">Cover Collage</h3>';
     html += '<div class="review-collage">';
     finishedBooks.forEach(b => {
-        const src = b.coverUrl || "https://via.placeholder.com/300x450?text=No+Cover";
-        html += `<img src="${src}" alt="${b.title}">`;
+        if (b.coverUrl) {
+            html += `<img src="${b.coverUrl}" crossorigin="anonymous" alt="${b.title}">`;
+        } else {
+            html += `<div class="review-no-cover">${b.title.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,3)}</div>`;
+        }
     });
     html += '</div>';
 
     content.innerHTML = html;
 }
 
-// Export functions
 async function exportReviewAsPNG() {
     const panel = document.getElementById("yearReviewPanel");
-    const canvas = await html2canvas(panel, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-    const link = document.createElement("a");
-    link.download = `Year-in-Review-${document.getElementById("reviewYearSelect").value}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    try {
+        const canvas = await html2canvas(panel, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: false,
+            backgroundColor: "#ffffff",
+            logging: false
+        });
+        const link = document.createElement("a");
+        link.download = `Year-in-Review-${document.getElementById("reviewYearSelect").value}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    } catch (e) {
+        alert("PNG export failed (likely due to some external covers). Try again or check console.");
+    }
 }
 
 async function exportReviewAsPDF() {
     const panel = document.getElementById("yearReviewPanel");
-    const canvas = await html2canvas(panel, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF.jsPDF({
-        orientation: "portrait",
-        unit: "px",
-        format: [canvas.width, canvas.height]
-    });
-    const width = pdf.internal.pageSize.getWidth();
-    const height = pdf.internal.pageSize.getHeight();
+    try {
+        const canvas = await html2canvas(panel, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: false,
+            backgroundColor: "#ffffff"
+        });
+        const imgData = canvas.toDataURL("image/png");
+        const pdf = new jsPDF.jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        const ratio = imgWidth / pdfWidth;
+        const imgScaledHeight = imgHeight / ratio;
 
-    pdf.addImage(imgData, "PNG", 0, 0, width, height);
-
-    if (canvas.height > height) {
-        // Simple multi-page if needed (split vertically)
+        let heightLeft = imgScaledHeight;
         let position = 0;
-        while (position < canvas.height) {
-            position += height;
-            if (position < canvas.height) {
-                pdf.addPage();
-                pdf.addImage(imgData, "PNG", 0, -position, width, canvas.height);
-            }
-        }
-    }
 
-    pdf.save(`Year-in-Review-${document.getElementById("reviewYearSelect").value}.pdf`);
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgScaledHeight);
+        heightLeft -= pdfHeight;
+
+        while (heightLeft > 0) {
+            position = -pdfHeight * pdf.internal.getCurrentPageInfo().pageNumber; // better positioning
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgScaledHeight);
+            heightLeft -= pdfHeight;
+        }
+
+        pdf.save(`Year-in-Review-${document.getElementById("reviewYearSelect").value}.pdf`);
+    } catch (e) {
+        alert("PDF export failed (likely due to some external covers). Try again or check console.");
+    }
 }
