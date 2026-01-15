@@ -2,7 +2,7 @@ function renderMap() {
     const svg = document.getElementById("worldMapSVG");
     if (!svg) return;
 
-    const countriesRead = getCountriesRead();
+    const countriesRead = getCountriesRead(); // keys now uppercase like "CZ"
     const { read, total } = getCountryProgress();
 
     document.getElementById("mapProgress").innerHTML = 
@@ -11,14 +11,25 @@ function renderMap() {
     const tooltip = document.getElementById("mapTooltip");
 
     svg.querySelectorAll("path").forEach(path => {
-        const code = path.getAttribute("id");
-        if (!code || code.length !== 2) return; // Skip non-ISO like "_somaliland"
+        let code = path.getAttribute("id");
+        if (!code || code.length !== 2) return;
 
-        const data = countriesRead[code]; // code is lowercase, matches countriesRead keys
+        code = code.toUpperCase(); // ensure consistency, though ids are likely already upper
+
+        const data = countriesRead[code];
         if (data && data.count > 0) {
             path.classList.add("read");
+
             path.addEventListener("mouseenter", e => {
-                let html = `<strong>${code.toUpperCase()}</strong>: ${data.count} book${data.count > 1 ? 's' : ''}<br>`;
+                // Full name in tooltip instead of code
+                let fullName = code; // fallback
+                for (const [name, iso] of Object.entries(countryToIso)) {
+                    if (iso === code) {
+                        fullName = name;
+                        break;
+                    }
+                }
+                let html = `<strong>${fullName}</strong> (${code}): ${data.count} book${data.count > 1 ? 's' : ''}<br>`;
                 if (data.titles.length <= 5) {
                     html += data.titles.map(t => `• ${t}`).join("<br>");
                 } else {
@@ -29,6 +40,7 @@ function renderMap() {
                 tooltip.style.left = (e.clientX + 15) + "px";
                 tooltip.style.top = (e.clientY + 15) + "px";
             });
+
             path.addEventListener("mouseleave", () => {
                 tooltip.style.display = "none";
             });
