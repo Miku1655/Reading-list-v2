@@ -447,7 +447,7 @@ function normalizeCountryName(name) {
     return null;
 }
 
-function getCountryProgress() {
+function getCountriesRead() {
     const readBooks = books.filter(b => b.exclusiveShelf === "read" && b.country);
     const countryCount = {};
     readBooks.forEach(b => {
