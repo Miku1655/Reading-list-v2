@@ -30,23 +30,36 @@ function createBookCard(book) {
 function createSeriesCard(series) {
     const progress = getSeriesProgress(series);
     if (!progress) return null; // No books in series
+
     const { completed, total, percent } = progress;
     const isComplete = completed === total;
+
+    // Get all books in this series, sorted by seriesNumber
     let seriesBooks = books.filter(b => b.series === series);
     seriesBooks = seriesBooks.sort((a, b) => (a.seriesNumber ?? Infinity) - (b.seriesNumber ?? Infinity));
+
     const firstCoverBook = seriesBooks.find(b => b.coverUrl);
-    const author = seriesBooks[0].author || "Various";
+    const author = seriesBooks[0]?.author || "Various";
     const count = seriesBooks.length;
+
     let coverHtml = `<div class="no-cover">Series</div>`;
     if (firstCoverBook) {
         coverHtml = `<img src="${firstCoverBook.coverUrl}" alt="Cover" onerror="this.style.display='none'">`;
     }
+
     const div = document.createElement("div");
-    div.className = "book-card";
-    const progressText = isComplete 
+    div.className = "book-card series-card"; // added series-card class for easier targeting
+    div.style.cursor = "pointer"; // visual hint it's clickable
+
+    const progressText = isComplete
         ? `<span class="series-progress-text series-progress-complete">${total} / ${total} completed ✓</span>`
         : `<span class="series-progress-text">${completed} / ${total} completed</span>`;
+
     const progressBar = `<div class="series-progress-bar"><div class="series-progress-fill" style="width:${percent}%;"></div></div>`;
+
+    // Toggle icon (will be updated by JS when clicked)
+    const toggleIcon = `<span class="series-toggle-icon">+</span>`;
+
     div.innerHTML = `
         ${coverHtml}
         <strong class="profile-book-title">${series}</strong>
@@ -54,73 +67,63 @@ function createSeriesCard(series) {
         <small>${count} book${count > 1 ? 's' : ''}</small>
         ${progressText}
         ${progressBar}
+        ${toggleIcon}
     `;
-    div.title = `${series} (${completed}/${total} completed)`;
+
+    div.title = `${series} (${completed}/${total} completed) – click to ${total > 1 ? 'expand' : 'show'} details`;
+
+    // === COLLAPSE / EXPAND LOGIC ===
+    const detailsContainer = document.createElement("div");
+    detailsContainer.className = "series-details collapsed";
+    
+    // Build mini list of books in series
+    if (seriesBooks.length > 0) {
+        const ul = document.createElement("ul");
+        seriesBooks.forEach(book => {
+            const status = book.exclusiveShelf === "read" ? "✓ read" :
+                          book.exclusiveShelf === "currently-reading" ? "→ reading" :
+                          book.exclusiveShelf === "dnf" ? "✗ DNF" : "to-read";
+            
+            const li = document.createElement("li");
+            li.innerHTML = `
+                <span class="series-book-status">${status}</span>
+                ${book.seriesNumber != null ? `<small>#${book.seriesNumber}</small> ` : ''}
+                <strong>${book.title}</strong>
+            `;
+            
+            // Optional: tiny cover thumbnail
+            if (book.coverUrl) {
+                const thumb = document.createElement("img");
+                thumb.src = book.coverUrl;
+                thumb.className = "series-book-thumb";
+                thumb.alt = "";
+                thumb.onerror = () => thumb.style.display = "none";
+                li.prepend(thumb);
+            }
+            
+            ul.appendChild(li);
+        });
+        detailsContainer.appendChild(ul);
+    } else {
+        detailsContainer.innerHTML = "<p style='color:#888; font-style:italic; padding:8px;'>No books found in this series.</p>";
+    }
+
+    // Insert details right after the main card content
+    div.appendChild(detailsContainer);
+
+    // Click handler – toggle collapse
+    div.addEventListener("click", (e) => {
+        // Prevent opening edit modal when clicking series card
+        e.stopPropagation();
+        
+        const isCollapsed = detailsContainer.classList.toggle("collapsed");
+        const icon = div.querySelector(".series-toggle-icon");
+        if (icon) {
+            icon.textContent = isCollapsed ? "+" : "−";
+        }
+    });
+
     return div;
-}
-function makeFavouritesDraggable(container) {
-    container.addEventListener("dragstart", e => {
-        const card = e.target.closest(".book-card");
-        if (card) {
-            draggedElement = card;
-            card.classList.add("dragging");
-            e.dataTransfer.effectAllowed = "move";
-        }
-    });
-    container.addEventListener("dragover", e => {
-        e.preventDefault();
-        const card = e.target.closest(".book-card");
-        if (card && card !== draggedElement) {
-            const rect = card.getBoundingClientRect();
-            const next = (e.clientY - rect.top) > (rect.height / 2);
-            if (next && card.nextSibling !== draggedElement) {
-                container.insertBefore(draggedElement, card.nextSibling);
-            } else if (!next && card !== draggedElement.nextSibling) {
-                container.insertBefore(draggedElement, card);
-            }
-        }
-    });
-    container.addEventListener("dragend", () => {
-        if (draggedElement) {
-            draggedElement.classList.remove("dragging");
-            profile.favourites = Array.from(container.querySelectorAll(".book-card")).map(c => Number(c.dataset.bookId));
-            localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-            draggedElement = null;
-        }
-    });
-    container.addEventListener("drop", e => e.preventDefault());
-    container.addEventListener("touchstart", e => {
-        if (e.touches.length === 1) {
-            const card = e.target.closest(".book-card");
-            if (card) {
-                draggedElement = card;
-                card.classList.add("dragging");
-            }
-        }
-    }, {passive: true});
-    container.addEventListener("touchmove", e => {
-        if (!draggedElement) return;
-        e.preventDefault();
-        const touch = e.touches[0];
-        const overElem = document.elementFromPoint(touch.clientX, touch.clientY);
-        const card = overElem ? overElem.closest(".book-card") : null;
-        if (card && card !== draggedElement) {
-            const rect = card.getBoundingClientRect();
-            if (touch.clientY > rect.top + rect.height / 2) {
-                card.after(draggedElement);
-            } else {
-                card.before(draggedElement);
-            }
-        }
-    }, {passive: false});
-    container.addEventListener("touchend", () => {
-        if (draggedElement) {
-            draggedElement.classList.remove("dragging");
-            profile.favourites = Array.from(container.querySelectorAll(".book-card")).map(c => Number(c.dataset.bookId));
-            localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-            draggedElement = null;
-        }
-    });
 }
 
 function openEditModal(book = null) {
