@@ -408,7 +408,7 @@ document.getElementById("saveEdit").addEventListener("click", () => {
     const now = Date.now();
     const daStr = document.getElementById("editDateAdded").value;
     const dateAdded = daStr ? new Date(daStr).getTime() : (editingBook.dateAdded || now);
-
+renderChallengesList();
     const data = {
         title: document.getElementById("editTitle").value.trim(),
         author: document.getElementById("editAuthor").value.trim(),
