@@ -2,6 +2,7 @@
 
 const CONSTELLATION_CANVAS_ID = 'constellationCanvas';
 const CONSTELLATION_TOOLTIP_ID = 'constellationTooltip';
+const ctx = constellationCtx;
 
 let constellationCanvas = null;
 let constellationCtx = null;
@@ -102,42 +103,42 @@ function getStarColor(rating) {
     return ratingColors[Math.min(idx, 5)];
 }
 
-function drawStar(ctx, cx, cy, size, color, glow = false) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, size, 0, Math.PI * 2);
-    ctx.closePath();
+function drawStar(constellationCtx, cx, cy, size, color, glow = false) {
+    constellationCtx.save();
+    constellationCtx.beginPath();
+    constellationCtx.arc(cx, cy, size, 0, Math.PI * 2);
+    constellationCtx.closePath();
 
     // Base subtle glow for all stars (twinkle effect)
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 4;
+    constellationCtx.shadowColor = '#ffffff';
+    constellationCtx.shadowBlur = 4;
 
     if (glow) {
         // Stronger glow for favorites
-        ctx.shadowColor = '#ffd700'; // Goldish for visibility
-        ctx.shadowBlur = 20; // More pronounced
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
+        constellationCtx.shadowColor = '#ffd700'; // Goldish for visibility
+        constellationCtx.shadowBlur = 20; // More pronounced
+        constellationCtx.shadowOffsetX = 0;
+        constellationCtx.shadowOffsetY = 0;
     }
 
-    ctx.fillStyle = color;
-    ctx.fill();
+    constellationCtx.fillStyle = color;
+    constellationCtx.fill();
 
     ctx.shadowBlur = 0; // Reset
     ctx.restore();
 }
 
 function drawConnection(ctx, x1, y1, x2, y2, isSeries = false) {
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.strokeStyle = isSeries ? '#66a3ff' : '#cccccc'; // Blueish for series, gray for author
-    ctx.lineWidth = isSeries ? 1.2 : 0.6; // Thicker for series
-    ctx.setLineDash(isSeries ? [4, 6] : []); // Dashed only for series
-    ctx.globalAlpha = 0.35; // Softer to avoid clutter
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
+    constellationCtx.beginPath();
+    constellationCtx.moveTo(x1, y1);
+    constellationCtx.lineTo(x2, y2);
+    constellationCtx.strokeStyle = isSeries ? '#66a3ff' : '#cccccc'; // Blueish for series, gray for author
+    constellationCtx.lineWidth = isSeries ? 1.2 : 0.6; // Thicker for series
+    constellationCtx.setLineDash(isSeries ? [4, 6] : []); // Dashed only for series
+    constellationCtx.globalAlpha = 0.35; // Softer to avoid clutter
+    constellationCtx.stroke();
+    constellationCtx.setLineDash([]);
+    constellationCtx.globalAlpha = 1;
 }
 
 function calculatePositions(mode) {
@@ -236,8 +237,8 @@ function renderConstellation(force = false) {
         const x = Math.random() * w;
         const y = Math.random() * h;
         const size = Math.random() * 1.5 + 0.5;
-        ctx.globalAlpha = Math.random() * 0.4 + 0.2;
-        ctx.fillRect(x, y, size, size);
+        constellationCtx.globalAlpha = Math.random() * 0.4 + 0.2;
+        constellationCtx.fillRect(x, y, size, size);
 }
     constellationCtx.globalAlpha = 1;
 
