@@ -48,6 +48,7 @@ document.getElementById("saveCloudBtn").addEventListener("click", () => {
         books: books,
         profile: profile,
         goals: goals,
+        challenges: challenges,
         shelfColors: shelfColors,
         settings: {
             showNumbers: document.getElementById("showNumbers").checked,
@@ -71,6 +72,10 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             profile = data.profile || { favourites: [], favouriteSeries: [] };
             goals = data.goals || {};
             shelfColors = data.shelfColors || {};
+            challenges = data.challenges || [];
+            challenges.forEach(c => {
+                if (!c.id) c.id = Date.now() + Math.random(); // ensure unique ID
+            });
             const settings = data.settings || {};
             document.getElementById("showNumbers").checked = settings.showNumbers ?? true;
             minAuthorBooks = settings.minAuthorBooks ?? 2;
@@ -87,6 +92,7 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
             localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
             localStorage.setItem(SHELF_COLORS_KEY, JSON.stringify(shelfColors));
+            saveChallengesToLocal();
             renderAll();
             alert("Loaded from cloud successfully!");
         })
