@@ -4,6 +4,7 @@ document.getElementById("addBook").addEventListener("click", () => openEditModal
 document.getElementById("searchInput").addEventListener("input", renderTable);
 document.getElementById("shelfFilter").addEventListener("change", renderTable);
 document.getElementById("refreshWaitingBtn").addEventListener("click", renderWaitingWidget);
+document.getElementById("refreshRediscoverBtn").addEventListener("click", renderRediscoverWidget);
 document.querySelectorAll("th[data-col]").forEach(th => th.addEventListener("click", () => {
     if (sortState.column === th.dataset.col) {
         sortState.direction *= -1;
