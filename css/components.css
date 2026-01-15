@@ -449,3 +449,21 @@ tr:hover { background: #1f1f1f; }
 #mapTooltip {
     box-shadow: 0 2px 8px rgba(0,0,0,0.6);
 }
+
+.constellation-controls label {
+    color: #ccc;
+    user-select: none;
+}
+
+.constellation-controls select,
+.constellation-controls button {
+    background: #222;
+    border: 1px solid #444;
+    color: #eee;
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+.constellation-controls button:hover {
+    background: #2a2a2a;
+}
