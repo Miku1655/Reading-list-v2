@@ -330,3 +330,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadGoalsForYear();
 });
 
+document.getElementById("addChallenge")?.addEventListener("click", addChallenge);
+document.getElementById("challengeYearly")?.addEventListener("change", e => {
+    document.getElementById("challengeYearLabel").style.display = e.target.checked ? "inline" : "none";
+});
