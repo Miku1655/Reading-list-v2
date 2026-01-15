@@ -2,51 +2,47 @@ function renderMap() {
     const svg = document.getElementById("worldMapSVG");
     if (!svg) return;
 
-    const countriesRead = getCountriesRead(); // keys are uppercase, e.g. "CZ", "JP"
+    const countriesRead = getCountriesRead();
+    console.log("Detected read countries (keys should be CZ, JP, GB, FR, US):", Object.keys(countriesRead));
 
     const { read, total } = getCountryProgress();
-
     document.getElementById("mapProgress").innerHTML = 
         `Progress: <strong>${read} / ${total}</strong> countries (${Math.round(read/total*100)}%)`;
 
     const tooltip = document.getElementById("mapTooltip");
 
-    svg.querySelectorAll("path").forEach(path => {
-        let code = path.getAttribute("id");
-        if (!code || code.length !== 2) return;
+    // Debug: log some path ids to understand the SVG structure
+    const allPaths = svg.querySelectorAll("path");
+    console.log(`Total <path> elements found: ${allPaths.length}`);
 
-        // Normalize the SVG id to lowercase and look up in uppercase keys
-        const normalizedCode = code.toLowerCase();
-        const upperCode = normalizedCode.toUpperCase(); // "cz" → "CZ"
+    // Log first 5 and last 5 ids (to sample)
+    const sampleIds = [];
+    allPaths.forEach((p, i) => {
+        if (i < 5 || i >= allPaths.length - 5) {
+            const id = p.getAttribute("id") || "(no id)";
+            sampleIds.push(`#${i}: id="${id}"`);
+        }
+    });
+    console.log("Sample path ids:", sampleIds.join(" | "));
 
-        const data = countriesRead[upperCode];
+    // Specifically search for expected countries (case insensitive)
+    ["cz", "jp", "gb", "fr", "us", "CZ", "JP", "GB", "FR", "US"].forEach(expected => {
+        const found = svg.querySelector(`path[id="${expected}"]`) || svg.querySelector(`path[id="${expected.toUpperCase()}"]`);
+        console.log(`Looking for ${expected.toUpperCase()}: ${found ? "FOUND" : "NOT FOUND"}`);
+    });
+
+    // Normal rendering loop (with normalization attempt)
+    allPaths.forEach(path => {
+        let id = path.getAttribute("id");
+        if (!id || id.length !== 2) return;
+
+        const upperId = id.toUpperCase();
+        const data = countriesRead[upperId];
+
         if (data && data.count > 0) {
+            console.log(`Coloring ${upperId} (title: ${data.titles[0] || "?"})`);
             path.classList.add("read");
-
-            path.addEventListener("mouseenter", e => {
-                // Full name lookup
-                let fullName = upperCode;
-                for (const [name, iso] of Object.entries(countryToIso)) {
-                    if (iso === upperCode) {
-                        fullName = name;
-                        break;
-                    }
-                }
-                let html = `<strong>${fullName}</strong> (${upperCode}): ${data.count} book${data.count > 1 ? 's' : ''}<br>`;
-                if (data.titles.length <= 5) {
-                    html += data.titles.map(t => `• ${t}`).join("<br>");
-                } else {
-                    html += data.titles.slice(0,5).map(t => `• ${t}`).join("<br>") + `<br>+ ${data.titles.length - 5} more`;
-                }
-                tooltip.innerHTML = html;
-                tooltip.style.display = "block";
-                tooltip.style.left = (e.clientX + 15) + "px";
-                tooltip.style.top = (e.clientY + 15) + "px";
-            });
-
-            path.addEventListener("mouseleave", () => {
-                tooltip.style.display = "none";
-            });
+            // ... rest of your mouseenter/leave code ...
         } else {
             path.classList.remove("read");
         }
