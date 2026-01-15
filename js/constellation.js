@@ -97,7 +97,7 @@ function getStarSize(pages) {
     if (pages < 200) return 1.2 + Math.random() * 0.8;
     if (pages < 500) return 2.0 + Math.random() * 1.2;
     if (pages < 1000) return 3.5 + Math.random() * 2;
-    if (pages < 5000) return 5 + Math.random() * 4;
+    if (pages < 1500) return 5 + Math.random() * 4;
     return 10 + Math.random() * 8;   // only the real epics are noticeably bigger
 }
 
