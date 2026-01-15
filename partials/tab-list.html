@@ -1,0 +1,53 @@
+<section id="tab-list" class="tab-content active">
+
+    <label>Filter by shelf: <select id="shelfFilter"></select></label>
+
+    <button id="sortRecent" style="margin-left: 12px;">Sort by recent <span id="recentSortIndicator">▼</span></button>
+
+    <button id="addBook" style="margin-top:12px;">Add New Book</button>
+
+    <label style="margin-left:15px">
+
+        Search: <input type="text" id="searchInput" style="width:300px" placeholder="Search title, author, series or use filters">
+
+        <span id="filterInfo">?</span>
+
+    </label>
+
+    <div id="yearGoalProgressContainer" style="margin:16px 0;"></div>
+
+    <table>
+
+        <thead>
+
+            <tr>
+
+                <th data-col="title">Title <span class="sort"></span></th>
+
+                <th data-col="rating">Rating <span class="sort"></span></th>
+
+                <th data-col="author">Author <span class="sort"></span></th>
+
+                <th>Cover</th>
+
+                <th data-col="shelves">Shelves <span class="sort"></span></th>
+
+                <th data-col="pages">Pages <span class="sort"></span></th>
+
+                <th data-col="year">Year <span class="sort"></span></th>
+
+                <th data-col="lastRead">Last Read <span class="sort"></span></th>
+
+                <th data-col="readCount">Reads <span class="sort"></span></th>
+
+                <th>Edit</th>
+
+            </tr>
+
+        </thead>
+
+        <tbody id="tableBody"></tbody>
+
+    </table>
+
+</section>
