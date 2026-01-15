@@ -334,7 +334,7 @@ function renderConstellation(force = false) {
             tooltip.style.display = 'block';
             const tooltipWidth = tooltip.offsetWidth || 200;
             tooltip.style.left = (e.clientX - tooltipWidth / 2) + 'px';
-            tooltip.style.top = (e.clientY) + 'px';
+            tooltip.style.top = (e.clientY + 50) + 'px';
             tooltip.innerHTML = `
                 <strong>${hoveredBook.title}</strong><br>
                 ${hoveredBook.author}<br>
