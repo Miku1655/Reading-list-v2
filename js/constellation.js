@@ -5,6 +5,7 @@ let constellationCanvas = null;
 let constellationCtx = null;
 let constellationBooks = [];
 let hoveredBook = null;
+let cachedPositions = {};
 
 function initConstellation() {
     constellationCanvas = document.getElementById(CONSTELLATION_CANVAS_ID);
@@ -52,6 +53,7 @@ function initConstellation() {
 }
 
 function updateConstellationSettings() {
+    const oldMode = settings.constellation.mode;
     settings.constellation = {
         mode: document.getElementById('constellationMode').value,
         showSeriesLines: document.getElementById('showSeriesLines').checked,
@@ -59,7 +61,10 @@ function updateConstellationSettings() {
         showFavoritesGlow: document.getElementById('showFavoritesGlow').checked
     };
     localStorage.setItem('settings', JSON.stringify(settings));
-    renderConstellation();
+    if (oldMode !== settings.constellation.mode) {
+        delete cachedPositions[oldMode];  // Invalidate old
+    }
+    renderConstellation(oldMode !== settings.constellation.mode);  // force only if mode changed
 }
 
 function resizeConstellationCanvas() {
@@ -143,11 +148,10 @@ function drawConnection(x1, y1, x2, y2, isSeries = false) {
 
     constellationCtx.strokeStyle = isSeries ? '#66a3ff' : '#cccccc';
     constellationCtx.lineWidth = isSeries ? 0.9 : 0.5;
-    constellationCtx.setLineDash(isSeries ? [3, 7] : []);
-    constellationCtx.globalAlpha = 0.25 + Math.random() * 0.1;  // Faint, varied
+    constellationCtx.setLineDash(isSeries ? [3, 7] : [])
     constellationCtx.stroke();
     constellationCtx.setLineDash([]);
-    constellationCtx.globalAlpha = 0.12 + Math.random() * 0.08;
+    constellationCtx.globalAlpha = 0.15 + Math.random() * 0.05;
 }
 
 function calculatePositions(mode) {
@@ -156,10 +160,13 @@ function calculatePositions(mode) {
     const h = constellationCanvas.height / devicePixelRatio;
 
     // === NEW: Start positions in a very loose, natural cloud ===
-    let positions = constellationBooks.map(() => ({
-        x: w * (0.2 + Math.random() * 0.6),           // mostly middle 60%, not corners
-        y: h * (0.15 + Math.random() * 0.7)
-    }));
+   let positions;
+if (force || !cachedPositions[settings.constellation.mode]) {
+    positions = calculatePositions(settings.constellation.mode);
+    cachedPositions[settings.constellation.mode] = positions;
+} else {
+    positions = cachedPositions[settings.constellation.mode];
+}
 
     if (mode === 'timeline') {
         const minTime = Math.min(...constellationBooks.map(b => b.lastFinished || 0));
@@ -183,79 +190,114 @@ function calculatePositions(mode) {
             const jitterY = (Math.random() - 0.5) * 120;
             return {x: baseX + jitterX, y: baseY + jitterY};
         });
-    } else {  // Constellation mode: natural clusters
+    } else {  // Constellation mode: solar system-like
     const groups = {};
-        constellationBooks.forEach((b, i) => {
-            const key = (b.series || '') + '|' + (b.author || '');
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(i);
-        });
+    constellationBooks.forEach((b, i) => {
+        const key = (b.series || '') + '|' + (b.author || '');
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(i);
+    });
 
-        const centerX = w / 2;
-        const centerY = h / 2;
-
-        // === Gentle multi-step relaxation (not full physics sim) ===
-        for (let iter = 0; iter < 12; iter++) {   // fewer iterations = less clumping
-            constellationBooks.forEach((book, i) => {
-                let fx = 0, fy = 0;
-                const p = positions[i];
-                const mass = Math.sqrt(getStarSize(book.pages));  // sqrt so big books still stand out, but don't dominate
-
-                // 1. Very gentle repulsion (only when too close)
-                for (let j = 0; j < constellationBooks.length; j++) {
-                    if (i === j) continue;
-                    const p2 = positions[j];
-                    const dx = p.x - p2.x;
-                    const dy = p.y - p2.y;
-                    const dist = Math.hypot(dx, dy);
-                    if (dist > 0 && dist < 120) {   // only repel when fairly close
-                        const repel = (120 - dist) / 120 * 0.8;
-                        fx += dx * repel;
-                        fy += dy * repel;
-                    }
-                }
-
-                // 2. Soft attraction only for meaningful groups (series > author)
-                const group = groups[Object.keys(groups).find(k => {
-                    const ids = groups[k];
-                    return ids.includes(i);
-                })];
-                if (group && group.length > 1) {
-                    group.forEach(j => {
-                        if (i === j) return;
-                        const p2 = positions[j];
-                        const dx = p2.x - p.x;
-                        const dy = p2.y - p.y;
-                        const dist = Math.hypot(dx, dy);
-                        if (dist > 200) return;   // don't pull from too far
-                        const strength = constellationBooks[i].series === constellationBooks[j].series ? 0.7 : 0.35;
-                        const attract = (dist < 80 ? 0 : (dist - 80) / 300) * strength;
-                        fx += dx * attract;
-                        fy += dy * attract;
-                    });
-                }
-
-                // 3. Very gentle drift toward center (prevents corners)
-                const toCenterX = centerX - p.x;
-                const toCenterY = centerY - p.y;
-                const centerDist = Math.hypot(toCenterX, toCenterY);
-                if (centerDist > 100) {
-                    fx += toCenterX * 0.0008;
-                    fy += toCenterY * 0.0008;
-                }
-
-                // Apply movement + tiny organic jitter
-                p.x += fx * 0.8 + (Math.random() - 0.5) * 1.5;
-                p.y += fy * 0.8 + (Math.random() - 0.5) * 1.5;
-            });
+    // Find sun (max pages)
+    let sunIndex = 0;
+    let maxPages = 0;
+    constellationBooks.forEach((b, i) => {
+        if (b.pages > maxPages) {
+            maxPages = b.pages;
+            sunIndex = i;
         }
+    });
 
-        // Final soft clamp – allow some to be near edge, but not stuck in corner
-        positions.forEach(p => {
-            p.x = Math.max(60, Math.min(w - 60, p.x));
-            p.y = Math.max(60, Math.min(h - 60, p.y));
+    // Planets = top 20% longest (min 2, max 10)
+    const sortedByPages = [...constellationBooks].sort((a, b) => b.pages - a.pages);
+    const planetCount = Math.max(2, Math.min(10, Math.round(constellationBooks.length * 0.2)));
+    const planetIndices = sortedByPages.slice(0, planetCount).map(b => constellationBooks.findIndex(bb => bb.importOrder === b.importOrder));
+
+    // Initial positions: sun at center, planets near sun, sparkles scattered
+    positions = constellationBooks.map((_, i) => {
+        if (i === sunIndex) return {x: w / 2, y: h / 2};
+        if (planetIndices.includes(i)) {
+            const angle = Math.random() * Math.PI * 2;
+            return {x: w / 2 + Math.cos(angle) * (100 + Math.random() * 150), y: h / 2 + Math.sin(angle) * (100 + Math.random() * 150)};
+        }
+        return {x: w * (0.3 + Math.random() * 0.4), y: h * (0.2 + Math.random() * 0.6)};
+    });
+
+    for (let iter = 0; iter < 18; iter++) {
+        constellationBooks.forEach((book, i) => {
+            if (i === sunIndex) return;  // Sun fixed
+            let fx = 0, fy = 0;
+            const p = positions[i];
+            const mass = getStarSize(book.pages) / 8;
+
+            // Repulsion: gentle, only close
+            for (let j = 0; j < constellationBooks.length; j++) {
+                if (i === j) continue;
+                const p2 = positions[j];
+                const dx = p.x - p2.x;
+                const dy = p.y - p2.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist < 150) {
+                    const repel = (150 - dist) / 150 * 1.2;
+                    fx += dx * repel;
+                    fy += dy * repel;
+                }
+            }
+
+            // Attraction to sun (stronger for planets)
+            const sunP = positions[sunIndex];
+            const toSunX = sunP.x - p.x;
+            const toSunY = sunP.y - p.y;
+            const sunDist = Math.hypot(toSunX, toSunY);
+            const sunStrength = planetIndices.includes(i) ? 0.6 : 0.2;
+            const sunAttract = (sunDist / 250) * sunStrength * mass;
+            fx += toSunX * sunAttract;
+            fy += toSunY * sunAttract;
+
+            // Extra: planets attract sparkles weakly
+            if (!planetIndices.includes(i)) {
+                planetIndices.forEach(j => {
+                    if (i === j) return;
+                    const p2 = positions[j];
+                    const dx = p2.x - p.x;
+                    const dy = p2.y - p.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > 300) return;
+                    const attract = (300 - dist) / 300 * 0.15 * mass;
+                    fx += dx * attract;
+                    fy += dy * attract;
+                });
+            }
+
+            // Group attraction (series/author) as before
+            const group = Object.values(groups).find(g => g.includes(i));
+            if (group && group.length > 1) {
+                group.forEach(j => {
+                    if (i === j) return;
+                    const p2 = positions[j];
+                    const dx = p2.x - p.x;
+                    const dy = p2.y - p.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > 180) return;
+                    const strength = book.series === constellationBooks[j].series ? 0.5 : 0.25;
+                    const attract = (dist < 60 ? 0 : (dist - 60) / 240) * strength;
+                    fx += dx * attract;
+                    fy += dy * attract;
+                });
+            }
+
+            // Apply + jitter
+            p.x += fx * 0.6 + (Math.random() - 0.5) * 2;
+            p.y += fy * 0.6 + (Math.random() - 0.5) * 2;
         });
     }
+
+    // Final clamp
+    positions.forEach(p => {
+        p.x = Math.max(40, Math.min(w - 40, p.x));
+        p.y = Math.max(40, Math.min(h - 40, p.y));
+    });
+}
 
     return positions;
 }
@@ -264,6 +306,7 @@ function renderConstellation(force = false) {
     if (!constellationCtx || !constellationCanvas) return;
 
     const w = constellationCanvas.width / devicePixelRatio;
+    constellationCtx.clearRect(0, 0, w, h);
     const h = constellationCanvas.height / devicePixelRatio;
 
     // Background: subtle milky way gradient + stars
@@ -275,14 +318,13 @@ function renderConstellation(force = false) {
 
     // Background stars: clustered in "bands"
     constellationCtx.fillStyle = '#ffffff';
-    for (let i = 0; i < 400; i++) {  // More for density
-        const clusterX = w / 2 + (Math.random() - 0.5) * w / 2;  // Bias to center band
-        const x = clusterX + (Math.random() - 0.5) * 100;
-        const y = Math.random() * h;
-        const size = Math.random() * 2 + 0.5;
-        constellationCtx.globalAlpha = Math.random() * 0.5 + 0.3;
-        constellationCtx.fillRect(x, y, size, size);
-    }
+    for (let i = 0; i < 600; i++) {
+    const x = Math.random() * w;
+    const y = Math.random() * h;
+    const size = Math.random() * 1.2 + 0.3;
+    constellationCtx.globalAlpha = Math.random() * 0.3 + 0.2;
+    constellationCtx.fillRect(x, y, size, size);
+}
     constellationCtx.globalAlpha = 1;
 
     if (constellationBooks.length === 0) {
