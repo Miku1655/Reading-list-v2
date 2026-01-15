@@ -1,0 +1,9 @@
+<section id="tab-quotes" class="tab-content">
+
+    <h2>Quotes & Highlights</h2>
+
+    <p>Collected memorable quotes from your books.</p>
+
+    <div id="quotesContainer"></div> <!-- We'll render here -->
+
+</section>
