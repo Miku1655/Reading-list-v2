@@ -12,7 +12,7 @@ function getCurrentReadStart(book) {
     return current ? current.started || 0 : 0;
 }
 function getSortTimestamp(book) {
-  
+ 
     const latestFinished = getLatestFinished(book);
     if (latestFinished > 0) return latestFinished;
     const currentStart = getCurrentReadStart(book);
@@ -81,11 +81,9 @@ function calculatePerYear() {
             if (!read.finished) return;
             let timestamp = read.finished;
             if (typeof timestamp === 'string') {
-                // Try standard ISO first
                 timestamp = Date.parse(timestamp);
                 if (isNaN(timestamp)) {
-                    // Fallback: try replacing common formats (e.g., "21 Dec 2023" or "December 21, 2023")
-                    const cleaned = timestamp.trim().replace(/(\d+)(st|nd|rd|th)/, '$1'); // remove ordinals
+                    const cleaned = timestamp.trim().replace(/(\d+)(st|nd|rd|th)/, '$1');
                     timestamp = Date.parse(cleaned);
                 }
                 if (isNaN(timestamp)) {
@@ -93,7 +91,6 @@ function calculatePerYear() {
                     return;
                 }
             } else if (typeof timestamp === 'number') {
-                // Already good
             } else {
                 console.warn("Unexpected finished type – skipping:", typeof timestamp, read.finished, "in book:", b.title);
                 return;
@@ -109,7 +106,6 @@ function calculatePerYear() {
             perYear[y].pages += b.pages || 0;
         });
     });
-    console.log("Final perYear data:", perYear); // Debug – check console on Stats tab
     return perYear;
 }
 function calculateDistributions() {
@@ -166,7 +162,7 @@ function getDaysElapsed(year) {
     const now = new Date();
     const start = new Date(currentYear, 0, 1);
     const diffMs = now - start;
-    return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1; // inclusive of today
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
 }
 function calculateProjection(current, year) {
     const daysElapsed = getDaysElapsed(year);
@@ -176,4 +172,13 @@ function calculateProjection(current, year) {
 }
 function getYearStats(year) {
     return calculatePerYear()[year] || { books: 0, pages: 0 };
+}
+
+function getSeriesProgress(seriesName) {
+    const seriesBooks = books.filter(b => b.series === seriesName);
+    if (seriesBooks.length === 0) return null;
+    const total = seriesBooks.length;
+    const completed = seriesBooks.filter(b => b.exclusiveShelf === "read").length;
+    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { completed, total, percent };
 }
