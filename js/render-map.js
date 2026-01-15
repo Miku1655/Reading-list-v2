@@ -17,7 +17,8 @@ function renderMap() {
 
         // ← KEY CHANGE: force uppercase to match your countryToIso values
         code = code.toUpperCase();
-
+console.log("SVG path id:", path.getAttribute("id"));  // ← add this
+console.log("Looking up code:", code.toUpperCase());   // ← add this
         const data = countriesRead[code];
         if (data && data.count > 0) {
             path.classList.add("read");
