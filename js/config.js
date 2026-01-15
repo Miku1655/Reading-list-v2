@@ -23,3 +23,4 @@ const PROFILE_KEY = "reading_list_profile";
 const MIN_AUTHOR_BOOKS_KEY = "reading_min_author_books";
 const SHOW_COVERS_TIMELINE_KEY = "reading_show_covers_timeline";
 const SHOW_YEAR_GOAL_PROGRESS_KEY = "reading_show_year_goal_progress";
+const CHALLENGES_KEY = "reading_challenges";
