@@ -278,6 +278,44 @@ function openEditModal(book = null) {
     editingBook.emojis = editingBook.emojis || [];
     if (window.__updateEmojiDisplay) window.__updateEmojiDisplay();
 
+// Quotes list – similar to reads
+const quotesList = document.getElementById("quotesList");
+if (!quotesList) { // Create if not exist (we'll add HTML later)
+    // We'll add the HTML in index.html
+}
+quotesList.innerHTML = "";
+editingBook.quotes = editingBook.quotes || [];
+
+function rebuildQuotesList() {
+    quotesList.innerHTML = "";
+    editingBook.quotes.forEach((quote, idx) => {
+        const div = document.createElement("div");
+        div.className = "quote-entry";
+        div.innerHTML = `
+            <textarea class="quoteText" placeholder="Quote text">${quote.text || ""}</textarea>
+            <input type="number" class="quotePage" placeholder="Page" value="${quote.page ?? ''}">
+            <input type="date" class="quoteDate" value="${quote.date ? new Date(quote.date).toISOString().split('T')[0] : ''}">
+            <label>Favorite: <input type="checkbox" class="quoteFavorite" ${quote.favorite ? 'checked' : ''}></label>
+            <button type="button" class="removeQuote">Remove</button>
+        `;
+        div.querySelector(".removeQuote").onclick = () => {
+            editingBook.quotes.splice(idx, 1);
+            rebuildQuotesList();
+        };
+        div.querySelector(".quoteText").onchange = e => quote.text = e.target.value.trim();
+        div.querySelector(".quotePage").onchange = e => quote.page = e.target.value ? Number(e.target.value) : null;
+        div.querySelector(".quoteDate").onchange = e => quote.date = e.target.value ? new Date(e.target.value).getTime() : null;
+        div.querySelector(".quoteFavorite").onchange = e => quote.favorite = e.target.checked;
+        quotesList.appendChild(div);
+    });
+}
+rebuildQuotesList();
+
+document.getElementById("addQuoteBtn").onclick = () => {
+    editingBook.quotes.push({ text: "", page: null, date: null, favorite: false });
+    rebuildQuotesList();
+};
+    
     // Collapsed persistence (clean)
     const key = "reading_edit_collapsed_sections";
     const saved = JSON.parse(localStorage.getItem(key) || "[]");
@@ -389,6 +427,12 @@ document.getElementById("saveEdit").addEventListener("click", () => {
         coverUrl: document.getElementById("editCoverUrl").value.trim() || null,
         reads: editingBook.reads.map(r => ({ started: r.started, finished: r.finished })),
         emojis: editingBook.emojis || [],
+        quotes: editingBook.quotes.map(q => ({ 
+    text: q.text.trim(), 
+    page: q.page, 
+    date: q.date, 
+    favorite: !!q.favorite 
+})).filter(q => q.text.length > 0),
         dateAdded: dateAdded
     };
     
