@@ -197,12 +197,12 @@ function calculatePositions(mode) {
                 const group = Object.values(groups).find(g => g.includes(i));
                 if (group) {
                     group.forEach(j => {
-                        if (i === j) continue;
+                        if (i === j) return;  // just skip this iteration
                         const p2 = positions[j];
                         const dx = p2.x - p.x;
                         const dy = p2.y - p.y;
                         const dist = Math.hypot(dx, dy) + 0.1;
-                        const attract = (dist / 200) * mass; // Pull closer, big mass stronger
+                        const attract = (dist / 200) * mass;
                         fx += dx * attract;
                         fy += dy * attract;
                     });
@@ -314,8 +314,10 @@ if (settings.constellation.showSeriesLines) {
 
         if (hoveredBook) {
             tooltip.style.display = 'block';
-            tooltip.style.left = (e.clientX + 15) + 'px';
-            tooltip.style.top = (e.clientY + 15) + 'px';
+            const rect = constellationCanvas.getBoundingClientRect();
+            const tooltipWidth = tooltip.offsetWidth || 200;  // fallback if not yet rendered
+            tooltip.style.left = (e.clientX - tooltipWidth / 2) + 'px';           // center horizontally
+            tooltip.style.top = (e.clientY - 50) + 'px';                          // ~50px above cursor
             tooltip.innerHTML = `
                 <strong>${hoveredBook.title}</strong><br>
                 ${hoveredBook.author}<br>
