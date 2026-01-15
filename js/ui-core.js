@@ -12,187 +12,118 @@ function createNotePopup() {
     notePopup.style.pointerEvents = "none";
     document.body.appendChild(notePopup);
 }
-
-function showNotePopup(text) {
-    if (!notePopup) createNotePopup();
-    notePopup.textContent = text;
-    notePopup.style.display = "block";
+function showNotePopup(popup, text) {
+    popup.textContent = text;
+    popup.style.display = "block";
     document.addEventListener("mousemove", moveNotePopup);
 }
-
-function hideNotePopup() {
-    if (notePopup) {
-        notePopup.style.display = "none";
-        document.removeEventListener("mousemove", moveNotePopup);
-    }
+function hideNotePopup(popup) {
+    popup.style.display = "none";
+    document.removeEventListener("mousemove", moveNotePopup);
 }
-
 function moveNotePopup(e) {
-    if (!notePopup || notePopup.style.display === "none") return;
+    if (!notePopup) return;
     notePopup.style.left = (e.clientX + 15) + "px";
     notePopup.style.top = (e.clientY + 20) + "px";
 }
-
-// ────────────────────────────────────────────────
-// Dynamic tab loading – THIS IS THE FIXED FUNCTION
-// ────────────────────────────────────────────────
-
-async function loadTabContent(tabId) {
-    const container = document.getElementById('tab-content-container');
-    if (!container) {
-        console.error("No #tab-content-container found");
-        return;
-    }
-
-    container.innerHTML = '<p style="text-align:center; padding:40px;">Loading...</p>';
-
-    let url = `partials/tab-${tabId}.html`;
-    let targetId = 'tab-content-container';
-
-    if (tabId === 'editModal') {
-        url = 'partials/modal-edit-book.html';
-        targetId = 'editModalContainer';
-    }
-    if (tabId === 'yearReview') {
-        url = 'partials/modal-year-review.html';
-        targetId = 'yearReviewModalContainer';
-    }
-
-    const target = document.getElementById(targetId) || container;
-
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to load ${url} (HTTP ${response.status})`);
-        const html = await response.text();
-        target.innerHTML = html;
-
-        // Small delay for DOM to parse the new content
-        setTimeout(() => {
-            try {
-                // Profile tab – call all your real render functions
-                if (tabId === 'profile') {
-                    renderProfileStats?.();
-                    renderRecentBooks?.();
-                    renderFavourites?.();
-                    renderWaitingWidget?.();
-                    renderOnThisDay?.();
-                    renderQuoteOfTheDay?.();
-                    renderRediscoverWidget?.();
-                }
-
-                // List tab
-                if (tabId === 'list') {
-                    renderTable?.();
-                    renderYearGoalProgress?.();
-                    populateShelfFilter?.();  // if you have this
-                }
-
-                // Other tabs
-                if (tabId === 'options') {
-                    renderShelfManager?.();
-                    updateCoversCount?.();
-                }
-                if (tabId === 'world-map') renderMap?.();
-                if (tabId === 'quotes') renderQuotes?.();
-                if (tabId === 'timeline') renderTimeline?.();
-                if (tabId === 'stats') renderStats?.();
-                if (tabId === 'challenges') {
-                    loadGoalsForYear?.();
-                    renderChallengesTab?.();
-                    // renderChallengesList?.();  // uncomment if exists
-                }
-
-                // Show modals after content is ready
-                if (tabId === 'editModal' || tabId === 'yearReview') {
-                    target.style.display = 'flex';
-                }
-            } catch (renderErr) {
-                console.error(`Render error for ${tabId}:`, renderErr);
-                target.innerHTML += `<p style="color:orange; padding:10px;">Render failed: ${renderErr.message}</p>`;
-            }
-        }, 100);
-
-    } catch (err) {
-        console.error("Load error:", err);
-        target.innerHTML = `<p style="color:red; padding:40px; text-align:center;">Error loading tab: ${err.message}</p>`;
-    }
-}
-
-// ────────────────────────────────────────────────
-// Tab switching
-// ────────────────────────────────────────────────
-
-function switchTab(tabId) {
-    // Activate the tab button
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tabId);
+function switchTab(name) {
+    // Update active classes
+    document.querySelectorAll(".tab").forEach(t => {
+        t.classList.toggle("active", t.dataset.tab === name);
+    });
+    
+    document.querySelectorAll(".tab-content").forEach(c => {
+        c.classList.toggle("active", c.id === `tab-${name}`);
     });
 
-    // Load the content
-    loadTabContent(tabId);
+    // Save the current tab
+    localStorage.setItem(TAB_KEY, name);
 
-    // Save current tab
-    localStorage.setItem('currentTab', tabId);
+    // Tab-specific renders
+    if (name === "options") {
+        renderShelfManager();
+        updateCoversCount();
+    }
+    
+    if (name === "profile") {
+        renderProfileStats();
+        renderRecentBooks();
+        renderFavourites();
+        renderWaitingWidget();
+        renderOnThisDay();
+        renderQuoteOfTheDay();
+        renderRediscoverWidget();
+    }
+    
+    if (name === "list") {
+        renderYearGoalProgress();
+        renderTable(); // table is main content on list tab
+    }
+    
+    if (name === "quotes") {
+        renderQuotes();
+    }
+    
+    if (name === "timeline") {
+        renderTimeline();
+    }
+    
+    if (name === "world-map") {
+        renderMap();
+    }
+    
+    if (name === "stats") {
+        renderStats?.(); // optional chaining if function might not exist yet
+    }
+    
+    if (name === "challenges") {
+        loadGoalsForYear();
+        renderChallengesTab?.();
+    }
 }
 
-// ────────────────────────────────────────────────
-// Init – only one DOMContentLoaded
-// ────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => {
-    createNotePopup();
-
-    const savedTab = localStorage.getItem('currentTab') || 'list';
-    switchTab(savedTab);
-
-    // Optional: call renderAll for shared elements
-    renderAll?.();
-
-    // Set default goal year
-    const goalYearInput = document.getElementById("goalYear");
-    if (goalYearInput) {
-        goalYearInput.value = new Date().getFullYear();
-        loadGoalsForYear?.();
-    }
-});
-
-// ────────────────────────────────────────────────
-// Your other functions (unchanged)
-// ────────────────────────────────────────────────
-
+// Central render function — use this only when you really need to refresh almost everything
+// (e.g. after save, import, cloud load, etc.)
 function renderAll() {
-    populateShelfFilter?.();
+    // Core shared elements
+    populateShelfFilter?.();         // optional, with ?.
     updateCoversCount?.();
-    renderTable?.();
-
+    
+    // Always render table (it's fast and often needed)
+    renderTable();
+    
+    // Profile section (only if visible)
+    if (document.getElementById("tab-profile")?.classList.contains("active")) {
+        renderProfileStats();
+        renderRecentBooks();
+        renderFavourites();
+        renderWaitingWidget();
+        renderOnThisDay();
+        renderQuoteOfTheDay();
+        renderRediscoverWidget();
+    }
+    
+    if (document.getElementById("tab-world-map")?.classList.contains("active")) {
+    renderMap();
+}
+    // Goal progress (only if list tab active)
+    if (document.getElementById("tab-list")?.classList.contains("active")) {
+        renderYearGoalProgress();
+    }
+    
+    // Tab-specific heavy renders
     const activeTab = document.querySelector(".tab.active")?.dataset.tab;
-
-    if (document.getElementById("tab-profile")?.classList.contains("active") || activeTab === 'profile') {
-        renderProfileStats?.();
-        renderRecentBooks?.();
-        renderFavourites?.();
-        renderWaitingWidget?.();
-        renderOnThisDay?.();
-        renderQuoteOfTheDay?.();
-        renderRediscoverWidget?.();
-    }
-
-    if (document.getElementById("tab-world-map")?.classList.contains("active") || activeTab === 'world-map') {
-        renderMap?.();
-    }
-
-    if (document.getElementById("tab-list")?.classList.contains("active") || activeTab === 'list') {
-        renderYearGoalProgress?.();
-    }
-
+    
     if (activeTab === "stats") renderStats?.();
     if (activeTab === "timeline") renderTimeline?.();
     if (activeTab === "quotes") renderQuotes?.();
     if (activeTab === "challenges") {
-        loadGoalsForYear?.();
-        renderChallengesTab?.();
-        renderChallengesList?.();
-    }
+    loadGoalsForYear();
+    renderChallengesTab();
+    renderChallengesList();
+}
+    
+    // Options shelf manager
     if (activeTab === "options") renderShelfManager?.();
 }
 function renderShelfManager() {
