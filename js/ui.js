@@ -564,8 +564,14 @@ document.getElementById("yearReviewModal").addEventListener("click", e => {
         document.getElementById("yearReviewModal").style.display = "none";
     }
 });
-document.getElementById("reviewYearSelect").addEventListener("change", e => {
-    generateYearReview(Number(e.target.value));
+document.getElementById("reviewYearSelect").addEventListener("change", async e => {
+    tempCoverDataUrls = {}; // Clear old
+    await generateYearReview(Number(e.target.value));
+});
+
+document.getElementById("closeYearReview").addEventListener("click", () => {
+    document.getElementById("yearReviewModal").style.display = "none";
+    tempCoverDataUrls = {}; // Clear memory
 });
 document.getElementById("exportReviewPNG").addEventListener("click", exportReviewAsPNG);
 document.getElementById("exportReviewPDF").addEventListener("click", exportReviewAsPDF);
