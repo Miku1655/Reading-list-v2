@@ -126,6 +126,71 @@ function createSeriesCard(series) {
     return div;
 }
 
+function makeFavouritesDraggable(container) {
+    container.addEventListener("dragstart", e => {
+        const card = e.target.closest(".book-card");
+        if (card) {
+            draggedElement = card;
+            card.classList.add("dragging");
+            e.dataTransfer.effectAllowed = "move";
+        }
+    });
+    container.addEventListener("dragover", e => {
+        e.preventDefault();
+        const card = e.target.closest(".book-card");
+        if (card && card !== draggedElement) {
+            const rect = card.getBoundingClientRect();
+            const next = (e.clientY - rect.top) > (rect.height / 2);
+            if (next && card.nextSibling !== draggedElement) {
+                container.insertBefore(draggedElement, card.nextSibling);
+            } else if (!next && card !== draggedElement.nextSibling) {
+                container.insertBefore(draggedElement, card);
+            }
+        }
+    });
+    container.addEventListener("dragend", () => {
+        if (draggedElement) {
+            draggedElement.classList.remove("dragging");
+            profile.favourites = Array.from(container.querySelectorAll(".book-card")).map(c => Number(c.dataset.bookId));
+            localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+            draggedElement = null;
+        }
+    });
+    container.addEventListener("drop", e => e.preventDefault());
+    container.addEventListener("touchstart", e => {
+        if (e.touches.length === 1) {
+            const card = e.target.closest(".book-card");
+            if (card) {
+                draggedElement = card;
+                card.classList.add("dragging");
+            }
+        }
+    }, {passive: true});
+    container.addEventListener("touchmove", e => {
+        if (!draggedElement) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        const overElem = document.elementFromPoint(touch.clientX, touch.clientY);
+        const card = overElem ? overElem.closest(".book-card") : null;
+        if (card && card !== draggedElement) {
+            const rect = card.getBoundingClientRect();
+            if (touch.clientY > rect.top + rect.height / 2) {
+                card.after(draggedElement);
+            } else {
+                card.before(draggedElement);
+            }
+        }
+    }, {passive: false});
+    container.addEventListener("touchend", () => {
+        if (draggedElement) {
+            draggedElement.classList.remove("dragging");
+            profile.favourites = Array.from(container.querySelectorAll(".book-card")).map(c => Number(c.dataset.bookId));
+            localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+            draggedElement = null;
+        }
+    });
+}
+
 function openEditModal(book = null) {
     editingBook = book || { reads: [], tags: [], exclusiveShelf: "to-read", dateAdded: Date.now(), emojis: [] };
 
