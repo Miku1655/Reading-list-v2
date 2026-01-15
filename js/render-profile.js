@@ -13,7 +13,6 @@ function renderProfileStats() {
         </div>
     `;
 }
-
 function renderRecentBooks() {
     const container = document.getElementById("recentBooksContainer");
     container.innerHTML = "";
@@ -41,7 +40,6 @@ function renderRecentBooks() {
     }
     if (!container.innerHTML.trim()) container.innerHTML = "<p>No activity yet.</p>";
 }
-
 function renderFavourites() {
     const container = document.getElementById("favouritesContainer");
     container.innerHTML = "";
@@ -76,7 +74,6 @@ function renderFavourites() {
     }
     if (!hasContent) container.innerHTML = "<p>No favourites yet.</p>";
 }
-
 function renderWaitingWidget() {
     const widget = document.getElementById("waitingWidget");
     const toRead = books.filter(b => b.exclusiveShelf === "to-read");
@@ -86,13 +83,57 @@ function renderWaitingWidget() {
     }
     const randomBook = toRead[Math.floor(Math.random() * toRead.length)];
     const daysSince = randomBook.dateAdded ? Math.floor((Date.now() - randomBook.dateAdded) / (1000*60*60*24)) : "?";
-    const coverHtml = randomBook.coverUrl 
+    const coverHtml = randomBook.coverUrl
         ? `<img src="${randomBook.coverUrl}" style="max-height:200px; border:1px solid #444; border-radius:6px;">`
         : `<div class="no-cover" style="width:160px; height:200px; margin:auto;">No cover</div>`;
-
     widget.innerHTML = `
         ${coverHtml}
         <p style="margin:12px 0;"><strong>${randomBook.title}</strong> by ${randomBook.author || "Unknown"}</p>
         <p>Added ${daysSince} day${daysSince === 1 ? '' : 's'} ago... still waiting for you!</p>
     `;
+}
+
+function renderOnThisDay() {
+    const container = document.getElementById("onThisDayContainer");
+    const emptyMsg = document.getElementById("onThisDayEmpty");
+    container.innerHTML = "";
+
+    const today = new Date();
+    const todayMonth = today.getMonth();
+    const todayDay = today.getDate();
+    const currentYear = today.getFullYear();
+
+    const anniversaries = [];
+
+    books.forEach(book => {
+        book.reads.forEach(read => {
+            if (read.finished) {
+                const d = new Date(read.finished);
+                if (d.getMonth() === todayMonth && d.getDate() === todayDay) {
+                    const yearsAgo = currentYear - d.getFullYear();
+                    anniversaries.push({ book, yearsAgo, finishedYear: d.getFullYear() });
+                }
+            }
+        });
+    });
+
+    if (anniversaries.length === 0) {
+        emptyMsg.style.display = "block";
+        return;
+    }
+
+    emptyMsg.style.display = "none";
+
+    // Sort by most recent anniversary first
+    anniversaries.sort((a, b) => b.finishedYear - a.finishedYear);
+
+    anniversaries.forEach(ann => {
+        const card = createBookCard(ann.book);
+        const note = document.createElement("small");
+        note.className = "anniversary-note";
+        const agoText = ann.yearsAgo === 0 ? "today!" : `${ann.yearsAgo} year${ann.yearsAgo > 1 ? "s" : ""} ago on this day`;
+        note.textContent = `Finished ${agoText}`;
+        card.appendChild(note);
+        container.appendChild(card);
+    });
 }
