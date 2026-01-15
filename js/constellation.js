@@ -23,9 +23,9 @@ function initConstellation() {
     constellationCtx = constellationCanvas.getContext('2d');
 
     // Initial settings if not exist
-    if (!state.settings) state.settings = {};
-    if (!state.settings.constellation) {
-        state.settings.constellation = {
+    if (!settings) settings = {};
+    if (!settings.constellation) {
+        settings.constellation = {
             mode: 'timeline',
             showSeriesLines: true,
             showAuthorLines: true,
@@ -39,10 +39,10 @@ function initConstellation() {
     const authorChk = document.getElementById('showAuthorLines');
     const glowChk = document.getElementById('showFavoritesGlow');
 
-    if (modeSelect) modeSelect.value = state.settings.constellation.mode;
-    if (seriesChk) seriesChk.checked = state.settings.constellation.showSeriesLines;
-    if (authorChk) authorChk.checked = state.settings.constellation.showAuthorLines;
-    if (glowChk) glowChk.checked = state.settings.constellation.showFavoritesGlow;
+    if (modeSelect) modeSelect.value = settings.constellation.mode;
+    if (seriesChk) seriesChk.checked = settings.constellation.showSeriesLines;
+    if (authorChk) authorChk.checked = settings.constellation.showAuthorLines;
+    if (glowChk) glowChk.checked = settings.constellation.showFavoritesGlow;
 
     // Event listeners for controls
     document.getElementById('constellationMode')?.addEventListener('change', updateConstellationSettings);
@@ -60,13 +60,13 @@ function initConstellation() {
 }
 
 function updateConstellationSettings() {
-    state.settings.constellation = {
+    settings.constellation = {
         mode: document.getElementById('constellationMode').value,
         showSeriesLines: document.getElementById('showSeriesLines').checked,
         showAuthorLines: document.getElementById('showAuthorLines').checked,
         showFavoritesGlow: document.getElementById('showFavoritesGlow').checked
     };
-    localStorage.setItem('settings', JSON.stringify(state.settings)); // assuming you have SETTINGS_KEY or similar
+    localStorage.setItem('settings', JSON.stringify(settings)); // assuming you have SETTINGS_KEY or similar
     renderConstellation();
 }
 
@@ -217,11 +217,11 @@ function renderConstellation(force = false) {
         return;
     }
 
-    const positions = calculatePositions(state.settings.constellation.mode);
+    const positions = calculatePositions(settings.constellation.mode);
     const tooltip = document.getElementById(CONSTELLATION_TOOLTIP_ID);
 
     // Draw connections first (behind stars)
-    if (state.settings.constellation.showSeriesLines || state.settings.constellation.showAuthorLines) {
+    if (settings.constellation.showSeriesLines || settings.constellation.showAuthorLines) {
         for (let i = 0; i < constellationBooks.length; i++) {
             for (let j = i + 1; j < constellationBooks.length; j++) {
                 const b1 = constellationBooks[i];
@@ -229,10 +229,10 @@ function renderConstellation(force = false) {
                 const p1 = positions[i];
                 const p2 = positions[j];
 
-                if (state.settings.constellation.showSeriesLines && b1.series && b1.series === b2.series) {
+                if (settings.constellation.showSeriesLines && b1.series && b1.series === b2.series) {
                     drawConnection(constellationCtx, p1.x, p1.y, p2.x, p2.y, true);
                 }
-                if (state.settings.constellation.showAuthorLines && b1.author && b1.author === b2.author) {
+                if (settings.constellation.showAuthorLines && b1.author && b1.author === b2.author) {
                     drawConnection(constellationCtx, p1.x, p1.y, p2.x, p2.y, false);
                 }
             }
@@ -244,7 +244,7 @@ function renderConstellation(force = false) {
         const {x, y} = positions[i];
         const size = getStarSize(book.pages);
         const color = getStarColor(book.rating);
-        const glow = state.settings.constellation.showFavoritesGlow && book.isFavorite;
+        const glow = settings.constellation.showFavoritesGlow && book.isFavorite;
 
         drawStar(constellationCtx, x, y, size, color, glow);
 
