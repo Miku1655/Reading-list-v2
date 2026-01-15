@@ -275,8 +275,6 @@ function renderStats() {
                     }
                 }
             });
-        } else {
-            cumulativeContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px; font-size:1.1em;">No finished reads yet!<br><br>Mark some books as finished to see your cumulative progress.</p><canvas id="cumulativeChart" style="display:none;"></canvas>';
-        }
+        } 
     }, 100); // Small delay for DOM settle – reliable without noticeable lag
 }
