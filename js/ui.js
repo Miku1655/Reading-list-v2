@@ -554,7 +554,21 @@ document.getElementById("signUpBtn").addEventListener("click", () => {
 });
 document.getElementById("signOutBtn").addEventListener("click", () => auth.signOut());
 
-
+// Year in Review modal
+document.getElementById("openYearReview").addEventListener("click", openYearReview);
+document.getElementById("closeYearReview").addEventListener("click", () => {
+    document.getElementById("yearReviewModal").style.display = "none";
+});
+document.getElementById("yearReviewModal").addEventListener("click", e => {
+    if (e.target === document.getElementById("yearReviewModal")) {
+        document.getElementById("yearReviewModal").style.display = "none";
+    }
+});
+document.getElementById("reviewYearSelect").addEventListener("change", e => {
+    generateYearReview(Number(e.target.value));
+});
+document.getElementById("exportReviewPNG").addEventListener("click", exportReviewAsPNG);
+document.getElementById("exportReviewPDF").addEventListener("click", exportReviewAsPDF);
 // Initial setup
 document.getElementById("goalYear").value = new Date().getFullYear();
 loadGoalsForYear();
