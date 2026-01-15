@@ -1,5 +1,3 @@
-// js/constellation.js - Reading Constellation visualization
-
 const CONSTELLATION_CANVAS_ID = 'constellationCanvas';
 const CONSTELLATION_TOOLTIP_ID = 'constellationTooltip';
 
@@ -9,12 +7,12 @@ let constellationBooks = [];
 let hoveredBook = null;
 
 const ratingColors = [
-    '#a0a0a0',     // 0 / unrated - dim grayish white
-    '#87ceeb',     // 1 - sky blue (cool, dim)
-    '#add8e6',     // 2 - light blue
-    '#f0f8ff',     // 3 - alice blue (neutral white)
-    '#fffacd',     // 4 - lemon chiffon (warm light yellow)
-    '#ffd700'      // 5 - gold (bright warm)
+    '#a0a0a0',     // 0 / unrated
+    '#87ceeb',     // 1
+    '#add8e6',     // 2
+    '#f0f8ff',     // 3
+    '#fffacd',     // 4
+    '#ffd700'      // 5
 ];
 
 function initConstellation() {
@@ -29,18 +27,16 @@ function initConstellation() {
         return;
     }
 
-    // Initial settings if not exist
     if (!settings) settings = {};
     if (!settings.constellation) {
         settings.constellation = {
-            mode: 'timeline',
+            mode: 'constellation',  // Default to improved random
             showSeriesLines: true,
             showAuthorLines: true,
             showFavoritesGlow: true
         };
     }
 
-    // Sync controls with settings
     const modeSelect = document.getElementById('constellationMode');
     const seriesChk = document.getElementById('showSeriesLines');
     const authorChk = document.getElementById('showAuthorLines');
@@ -51,14 +47,12 @@ function initConstellation() {
     if (authorChk) authorChk.checked = settings.constellation.showAuthorLines;
     if (glowChk) glowChk.checked = settings.constellation.showFavoritesGlow;
 
-    // Event listeners for controls
     document.getElementById('constellationMode')?.addEventListener('change', updateConstellationSettings);
     document.getElementById('showSeriesLines')?.addEventListener('change', updateConstellationSettings);
     document.getElementById('showAuthorLines')?.addEventListener('change', updateConstellationSettings);
     document.getElementById('showFavoritesGlow')?.addEventListener('change', updateConstellationSettings);
     document.getElementById('redrawConstellation')?.addEventListener('click', () => renderConstellation(true));
 
-    // Resize handling
     window.addEventListener('resize', debounce(resizeConstellationCanvas, 200));
 
     resizeConstellationCanvas();
@@ -108,8 +102,8 @@ function prepareConstellationData() {
 }
 
 function getStarSize(pages) {
-    if (!pages || pages < 1) return 2;
-    return 2 + Math.log(pages / 10) * 3.5; // 50p≈3px, 100p≈5px, 500p≈12px, 1200p≈18px
+    if (!pages || pages < 1) return 1;  // Tiny specks
+    return 1 + Math.pow(pages / 50, 0.7) * 4;  // Aggressive: 50p≈1.5px, 500p≈10px, 1200p≈20px, 3000p≈30px
 }
 
 function getStarColor(rating) {
@@ -125,20 +119,19 @@ function drawStar(cx, cy, size, color, glow = false) {
     constellationCtx.arc(cx, cy, size, 0, Math.PI * 2);
     constellationCtx.closePath();
 
-    // Base subtle glow for all stars
     constellationCtx.shadowColor = '#ffffff';
-    constellationCtx.shadowBlur = 4;
+    constellationCtx.shadowBlur = 3 + size / 5;  // Scale glow with size for depth
 
     if (glow) {
         constellationCtx.shadowColor = '#ffd700';
-        constellationCtx.shadowBlur = 20;
-        constellationCtx.shadowOffsetX = 0;
-        constellationCtx.shadowOffsetY = 0;
+        constellationCtx.shadowBlur = 25 + size / 3;  // Stronger, size-scaled
     }
 
+    constellationCtx.globalAlpha = 0.8 + Math.random() * 0.2;  // Slight opacity jitter for twinkle
     constellationCtx.fillStyle = color;
     constellationCtx.fill();
 
+    constellationCtx.globalAlpha = 1;
     constellationCtx.shadowBlur = 0;
     constellationCtx.restore();
 }
@@ -148,11 +141,15 @@ function drawConnection(x1, y1, x2, y2, isSeries = false) {
 
     constellationCtx.beginPath();
     constellationCtx.moveTo(x1, y1);
-    constellationCtx.lineTo(x2, y2);
+    // Curved for natural flow: midpoint control point with offset
+    const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * 30;
+    const my = (y1 + y2) / 2 + (Math.random() - 0.5) * 30;
+    constellationCtx.quadraticCurveTo(mx, my, x2, y2);
+
     constellationCtx.strokeStyle = isSeries ? '#66a3ff' : '#cccccc';
-    constellationCtx.lineWidth = isSeries ? 1.2 : 0.6;
-    constellationCtx.setLineDash(isSeries ? [4, 6] : []);
-    constellationCtx.globalAlpha = 0.35;
+    constellationCtx.lineWidth = isSeries ? 1.4 : 0.7;
+    constellationCtx.setLineDash(isSeries ? [3, 7] : []);
+    constellationCtx.globalAlpha = 0.25 + Math.random() * 0.1;  // Faint, varied
     constellationCtx.stroke();
     constellationCtx.setLineDash([]);
     constellationCtx.globalAlpha = 1;
@@ -162,75 +159,81 @@ function calculatePositions(mode) {
     if (!constellationCanvas) return [];
     const w = constellationCanvas.width / devicePixelRatio;
     const h = constellationCanvas.height / devicePixelRatio;
-    let positions = constellationBooks.map(() => ({x: Math.random() * w, y: Math.random() * h}));
-if (mode === 'timeline') {
+    // Start in central cloud for better distribution
+    let positions = constellationBooks.map(() => ({
+        x: w / 2 + (Math.random() - 0.5) * w / 3,
+        y: h / 2 + (Math.random() - 0.5) * h / 3
+    }));
+
+    if (mode === 'timeline') {
         const minTime = Math.min(...constellationBooks.map(b => b.lastFinished || 0));
         const maxTime = Math.max(...constellationBooks.map(b => b.lastFinished || 0));
         const timeRange = maxTime - minTime || 1;
         positions = constellationBooks.map((book, i) => {
-            const baseX = 40 + ((book.lastFinished - minTime) / timeRange) * (w - 80);
-            const jitterX = (Math.sin(i * 0.3) * 40) + (Math.random() - 0.5) * 20;
-            const baseY = h / 2 + (book.rating || 2.5) * (h / 10);
-            const jitterY = (Math.cos(i * 0.5) * 60) + (Math.random() - 0.5) * 40;
+            const baseX = 20 + ((book.lastFinished - minTime) / timeRange) * (w - 40);
+            const jitterX = Math.sin(i * 0.4) * 60 + (Math.random() - 0.5) * 40;
+            const baseY = 20 + (book.rating || 2.5) / 5 * (h - 40);  // Full height spread
+            const jitterY = Math.cos(i * 0.6) * 100 + (Math.random() - 0.5) * 80;
             return {x: baseX + jitterX, y: baseY + jitterY};
         });
     } else if (mode === 'rating-pages') {
         const maxPages = Math.max(...constellationBooks.map(b => b.pages || 100), 100);
+        const logMax = Math.log(maxPages + 1);  // Log scale for spread
         positions = constellationBooks.map(book => {
-            const baseX = 40 + ((book.pages || 100) / maxPages) * (w - 80);
-            const jitterX = (Math.random() - 0.5) * 60;
-            const baseY = h - 40 - ((book.rating || 0) / 5) * (h - 80);
-            const jitterY = (Math.random() - 0.5) * 80;
+            const logPages = Math.log((book.pages || 100) + 1);
+            const baseX = 20 + (logPages / logMax) * (w - 40);  // Even spread for short/long
+            const jitterX = (Math.random() - 0.5) * 100;
+            const baseY = h - 20 - ((book.rating || 0) / 5) * (h - 40);
+            const jitterY = (Math.random() - 0.5) * 120;
             return {x: baseX + jitterX, y: baseY + jitterY};
         });
-    } else { // Clustered constellation with forces
-        // Group by author/series for attraction
+    } else {  // Constellation mode: natural clusters
         const groups = {};
         constellationBooks.forEach((b, i) => {
-            const key = (b.series || '') + '|' + (b.author || '');
+            const key = (b.series || '') + '|' + (b.author || '') + '|' + (b.genre || '') + '|' + (b.country || '');
             if (!groups[key]) groups[key] = [];
             groups[key].push(i);
         });
 
-        // Simple force sim: 15 iterations
-        for (let iter = 0; iter < 15; iter++) {
+        for (let iter = 0; iter < 20; iter++) {  // More iterations for smoothness
             constellationBooks.forEach((book, i) => {
                 let fx = 0, fy = 0;
                 const p = positions[i];
-                const mass = getStarSize(book.pages) / 10; // Bigger stars attract more
+                const mass = getStarSize(book.pages) / 5;  // Amplified mass influence
 
-                // Repel all others
+                // Stronger repulsion with randomness
                 for (let j = 0; j < constellationBooks.length; j++) {
                     if (i === j) continue;
                     const p2 = positions[j];
                     const dx = p.x - p2.x;
                     const dy = p.y - p2.y;
-                    const dist = Math.hypot(dx, dy) + 0.1;
-                    const repel = (100 / dist) * (1 / dist); // Stronger close repel
+                    const dist = Math.hypot(dx, dy) + 0.01;
+                    const repel = (180 / dist) * (1 / dist) * (1 + Math.random() * 0.5);  // Varied, stronger
                     fx += dx * repel;
                     fy += dy * repel;
                 }
 
-                // Attract within group (author/series)
+                // Attraction: tighter for series, looser for author/genre
                 const group = Object.values(groups).find(g => g.includes(i));
                 if (group) {
                     group.forEach(j => {
-                        if (i === j) return;  // just skip this iteration
+                        if (i === j) return;
                         const p2 = positions[j];
                         const dx = p2.x - p.x;
                         const dy = p2.y - p.y;
-                        const dist = Math.hypot(dx, dy) + 0.1;
-                        const attract = (dist / 200) * mass;
+                        const dist = Math.hypot(dx, dy) + 0.01;
+                        const attractStrength = constellationBooks[i].series === constellationBooks[j].series ? 0.8 : 0.4;  // Tighter series
+                        const attract = (dist / 150) * mass * attractStrength * (1 + Math.random() * 0.3);  // Varied pull
                         fx += dx * attract;
                         fy += dy * attract;
                     });
                 }
 
-                // Apply forces, dampen, bound
-                p.x += fx * 0.05;
-                p.y += fy * 0.05;
-                p.x = Math.max(40, Math.min(w - 40, p.x));
-                p.y = Math.max(40, Math.min(h - 40, p.y));
+                // Apply with damping + slight random drift for organic feel
+                p.x += fx * 0.03 + (Math.random() - 0.5) * 2;
+                p.y += fy * 0.03 + (Math.random() - 0.5) * 2;
+                p.x = Math.max(20, Math.min(w - 20, p.x));
+                p.y = Math.max(20, Math.min(h - 20, p.y));
             });
         }
     }
@@ -238,40 +241,43 @@ if (mode === 'timeline') {
     return positions;
 }
 
-
 function renderConstellation(force = false) {
     if (!constellationCtx || !constellationCanvas) return;
 
     const w = constellationCanvas.width / devicePixelRatio;
     const h = constellationCanvas.height / devicePixelRatio;
 
-    // Background - space
-    constellationCtx.fillStyle = '#000814';
+    // Background: subtle milky way gradient + stars
+    const gradient = constellationCtx.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w, h)/2);
+    gradient.addColorStop(0, '#001f3f');  // Deep navy center
+    gradient.addColorStop(1, '#000814');  // Darker edges
+    constellationCtx.fillStyle = gradient;
     constellationCtx.fillRect(0, 0, w, h);
 
-    // Tiny background stars
+    // Background stars: clustered in "bands"
     constellationCtx.fillStyle = '#ffffff';
-    for (let i = 0; i < 200; i++) {
-        const x = Math.random() * w;
+    for (let i = 0; i < 400; i++) {  // More for density
+        const clusterX = w / 2 + (Math.random() - 0.5) * w / 2;  // Bias to center band
+        const x = clusterX + (Math.random() - 0.5) * 100;
         const y = Math.random() * h;
-        const size = Math.random() * 1.5 + 0.5;
-        constellationCtx.globalAlpha = Math.random() * 0.4 + 0.2;
+        const size = Math.random() * 2 + 0.5;
+        constellationCtx.globalAlpha = Math.random() * 0.5 + 0.3;
         constellationCtx.fillRect(x, y, size, size);
     }
     constellationCtx.globalAlpha = 1;
 
     if (constellationBooks.length === 0) {
-        constellationCtx.fillStyle = '#666';
-        constellationCtx.font = '18px Roboto';
+        constellationCtx.fillStyle = '#888';
+        constellationCtx.font = '20px Roboto';
         constellationCtx.textAlign = 'center';
-        constellationCtx.fillText('No finished books yet...', w/2, h/2);
+        constellationCtx.fillText('No finished books yet... Add some to light up the sky!', w/2, h/2);
         return;
     }
 
     const positions = calculatePositions(settings.constellation.mode);
     const tooltip = document.getElementById(CONSTELLATION_TOOLTIP_ID);
 
-    // Draw connections (author first, series on top)
+    // Draw connections
     if (settings.constellation.showAuthorLines) {
         for (let i = 0; i < constellationBooks.length; i++) {
             for (let j = i + 1; j < constellationBooks.length; j++) {
@@ -302,13 +308,13 @@ function renderConstellation(force = false) {
     // Draw stars
     constellationBooks.forEach((book, i) => {
         const {x, y} = positions[i];
-        const size = getStarSize(book.pages);
+        const size = getStarSize(book.pages) * (0.9 + Math.random() * 0.2);  // Jitter for variety
         const color = getStarColor(book.rating);
         const glow = settings.constellation.showFavoritesGlow && book.isFavorite;
         drawStar(x, y, size, color, glow);
     });
 
-    // Hover & click handlers
+    // Hover & click
     constellationCanvas.onmousemove = (e) => {
         const rect = constellationCanvas.getBoundingClientRect();
         const mx = (e.clientX - rect.left) * (constellationCanvas.width / rect.width) / devicePixelRatio;
@@ -317,7 +323,7 @@ function renderConstellation(force = false) {
         hoveredBook = null;
         for (let i = 0; i < constellationBooks.length; i++) {
             const {x, y} = positions[i];
-            const size = getStarSize(constellationBooks[i].pages) + 8;
+            const size = getStarSize(constellationBooks[i].pages) + 10;
             if (Math.hypot(mx - x, my - y) < size) {
                 hoveredBook = constellationBooks[i];
                 break;
