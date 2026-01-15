@@ -467,3 +467,9 @@ tr:hover { background: #1f1f1f; }
 .constellation-controls button:hover {
     background: #2a2a2a;
 }
+
+#constellationTooltip {
+    background: rgba(10, 10, 20, 0.9);
+    border: 1px solid #333;
+    color: #ddd;
+}
