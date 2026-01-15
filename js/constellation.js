@@ -307,7 +307,6 @@ function renderConstellation(force = false) {
 
     const w = constellationCanvas.width / devicePixelRatio;
     const h = constellationCanvas.height / devicePixelRatio;
-    constellationCtx.clearRect(0, 0, w, h);
     
     // Background: subtle milky way gradient + stars
     const gradient = constellationCtx.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w, h)/2);
