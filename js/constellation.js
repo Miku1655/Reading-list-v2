@@ -306,9 +306,9 @@ function renderConstellation(force = false) {
     if (!constellationCtx || !constellationCanvas) return;
 
     const w = constellationCanvas.width / devicePixelRatio;
-    constellationCtx.clearRect(0, 0, w, h);
     const h = constellationCanvas.height / devicePixelRatio;
-
+    constellationCtx.clearRect(0, 0, w, h);
+    
     // Background: subtle milky way gradient + stars
     const gradient = constellationCtx.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w, h)/2);
     gradient.addColorStop(0, '#001f3f');  // Deep navy center
