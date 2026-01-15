@@ -35,20 +35,19 @@ function loadLocalData() {
     }
 
     let maxOrder = 0;
-    books.forEach(b => {
-        if (!b.importOrder) b.importOrder = nextImportOrder++;
-        maxOrder = Math.max(maxOrder, b.importOrder ?? 0);
-
-        if (!Array.isArray(b.reads)) {
-            b.reads = [];
-            // (migration code unchanged)
-        }
-        if (!Array.isArray(b.tags)) b.tags = [];
+books.forEach(b => {
+    if (!b.importOrder) b.importOrder = nextImportOrder++;
+    maxOrder = Math.max(maxOrder, b.importOrder ?? 0);
+    
+    if (!Array.isArray(b.reads)) {
+        b.reads = [];
+        // (migration code unchanged)
     }
-                 if (!Array.isArray(b.quotes)) {
-    b.quotes = [];
-}
-                 );
+    if (!Array.isArray(b.tags)) b.tags = [];
+    if (!Array.isArray(b.quotes)) {
+        b.quotes = [];
+    }
+});
     nextImportOrder = maxOrder + 1;
 
     const savedProfile = localStorage.getItem(PROFILE_KEY);
