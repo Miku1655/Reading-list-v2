@@ -68,6 +68,10 @@ function switchTab(name) {
         renderTimeline();
     }
     
+    if (name === "world-map") {
+        renderMap();
+    }
+    
     if (name === "stats") {
         renderStats?.(); // optional chaining if function might not exist yet
     }
@@ -99,6 +103,9 @@ function renderAll() {
         renderRediscoverWidget();
     }
     
+    if (document.getElementById("tab-world-map")?.classList.contains("active")) {
+    renderMap();
+}
     // Goal progress (only if list tab active)
     if (document.getElementById("tab-list")?.classList.contains("active")) {
         renderYearGoalProgress();
