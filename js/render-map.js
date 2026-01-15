@@ -2,7 +2,8 @@ function renderMap() {
     const svg = document.getElementById("worldMapSVG");
     if (!svg) return;
 
-    const countriesRead = getCountriesRead(); // keys now uppercase like "CZ"
+    const countriesRead = getCountriesRead();  // keys are uppercase: "JP", "GB", etc.
+
     const { read, total } = getCountryProgress();
 
     document.getElementById("mapProgress").innerHTML = 
@@ -14,15 +15,16 @@ function renderMap() {
         let code = path.getAttribute("id");
         if (!code || code.length !== 2) return;
 
-        code = code.toUpperCase(); // ensure consistency, though ids are likely already upper
+        // ← KEY CHANGE: force uppercase to match your countryToIso values
+        code = code.toUpperCase();
 
         const data = countriesRead[code];
         if (data && data.count > 0) {
             path.classList.add("read");
 
             path.addEventListener("mouseenter", e => {
-                // Full name in tooltip instead of code
-                let fullName = code; // fallback
+                // Full name lookup (already good from previous version)
+                let fullName = code;
                 for (const [name, iso] of Object.entries(countryToIso)) {
                     if (iso === code) {
                         fullName = name;
