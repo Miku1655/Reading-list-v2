@@ -111,9 +111,10 @@ function renderAll() {
     if (activeTab === "timeline") renderTimeline?.();
     if (activeTab === "quotes") renderQuotes?.();
     if (activeTab === "challenges") {
-        loadGoalsForYear();
-        renderChallengesTab?.();
-    }
+    loadGoalsForYear();
+    renderChallengesTab();
+    renderChallengesList();
+}
     
     // Options shelf manager
     if (activeTab === "options") renderShelfManager?.();
