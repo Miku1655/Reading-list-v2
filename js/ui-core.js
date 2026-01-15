@@ -50,6 +50,7 @@ function renderAll() {
     renderFavourites();
     renderYearGoalProgress();
     renderWaitingWidget();
+    renderRediscoverWidget();
     updateCoversCount();
     if (document.querySelector('.tab.active')?.dataset.tab === "options") renderShelfManager();
     const activeTab = document.querySelector('.tab.active')?.dataset.tab;
