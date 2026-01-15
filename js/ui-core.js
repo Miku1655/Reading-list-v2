@@ -27,42 +27,100 @@ function moveNotePopup(e) {
     notePopup.style.top = (e.clientY + 20) + "px";
 }
 function switchTab(name) {
-    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
-    document.querySelectorAll(".tab-content").forEach(c => c.classList.toggle("active", c.id === "tab-" + name));
-    localStorage.setItem(TAB_KEY, name);
-    if (name === "options") { renderShelfManager(); updateCoversCount(); }
+    // Update active classes
+    document.querySelectorAll(".tab").forEach(t => {
+        t.classList.toggle("active", t.dataset.tab === name);
+    });
+    
+    document.querySelectorAll(".tab-content").forEach(c => {
+        c.classList.toggle("active", c.id === `tab-${name}`);
+    });
+
+    // Remember last tab
+    localStorage.setItem("lastTab", name);  // assuming TAB_KEY is "lastTab" or similar
+
+    // Render tab-specific content
+    if (name === "options") {
+        renderShelfManager();
+        updateCoversCount();
+    }
+    
     if (name === "profile") {
         renderProfileStats();
         renderRecentBooks();
         renderFavourites();
         renderWaitingWidget();
         renderOnThisDay();
-        renderQuoteOfTheDay();
+        renderQuoteOfTheDay();       // quotes widget
+        renderRediscoverWidget();    // if you want it on profile
     }
-    if (name === "list") renderYearGoalProgress();
-    renderTable();
-    renderAll();
-    if (name === "quotes") renderQuotes();
+    
+    if (name === "list") {
+        renderYearGoalProgress();
+    }
+    
+    if (name === "quotes") {
+        renderQuotes();
+    }
+    
+    if (name === "timeline") {
+        renderTimeline();
+    }
+    
+    if (name === "stats") {
+        renderStats();               // assuming this exists
+    }
+    
+    if (name === "challenges") {
+        loadGoalsForYear();
+        renderChallengesTab();       // assuming this exists
+    }
+
+    // Always render the table when switching to list (optional safety)
+    if (name === "list") {
+        renderTable();
+    }
 }
+
+// Central render function — use this only when you really need to refresh almost everything
+// (e.g. after save, import, cloud load, etc.)
 function renderAll() {
-    populateShelfFilter();
+    // Core shared elements
+    populateShelfFilter?.();         // optional, with ?.
+    updateCoversCount?.();
+    
+    // Always render table (it's fast and often needed)
     renderTable();
-    renderProfileStats();
-    renderRecentBooks();
-    renderFavourites();
-    renderYearGoalProgress();
-    renderWaitingWidget();
-    renderRediscoverWidget();
-    updateCoversCount();
-    if (document.querySelector('.tab.active')?.dataset.tab === "options") renderShelfManager();
-    const activeTab = document.querySelector('.tab.active')?.dataset.tab;
-    if (activeTab === "stats") renderStats();
-    if (activeTab === "quotes" renderQuotes();
-    if (activeTab === "timeline") renderTimeline();
+    
+    // Profile section (only if visible)
+    if (document.getElementById("tab-profile")?.classList.contains("active")) {
+        renderProfileStats();
+        renderRecentBooks();
+        renderFavourites();
+        renderWaitingWidget();
+        renderOnThisDay();
+        renderQuoteOfTheDay();
+        renderRediscoverWidget();
+    }
+    
+    // Goal progress (only if list tab active)
+    if (document.getElementById("tab-list")?.classList.contains("active")) {
+        renderYearGoalProgress();
+    }
+    
+    // Tab-specific heavy renders
+    const activeTab = document.querySelector(".tab.active")?.dataset.tab;
+    
+    if (activeTab === "stats") renderStats?.();
+    if (activeTab === "timeline") renderTimeline?.();
+    if (activeTab === "quotes") renderQuotes?.();
     if (activeTab === "challenges") {
         loadGoalsForYear();
-        renderChallengesTab();
+        renderChallengesTab?.();
     }
+    
+    // Options shelf manager
+    if (activeTab === "options") renderShelfManager?.();
 }
 function renderShelfManager() {
     // (exact code from your ui.js — unchanged)
