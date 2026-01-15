@@ -12,17 +12,13 @@ function renderMap() {
 
     svg.querySelectorAll("path").forEach(path => {
         const code = path.getAttribute("id");
-        if (!code || code.length !== 2) return;
+        if (!code || code.length !== 2) return; // Skip non-ISO like "_somaliland"
 
-        const data = countriesRead[code.toUpperCase()];
+        const data = countriesRead[code]; // code is lowercase, matches countriesRead keys
         if (data && data.count > 0) {
             path.classList.add("read");
-            // Optional: shade by count (e.g. darker for more books)
-            // const intensity = Math.min(255, 80 + data.count * 30);
-           // path.style.fill = `rgb(76, ${intensity}, 80)`;
-
             path.addEventListener("mouseenter", e => {
-                let html = `<strong>${code}</strong>: ${data.count} book${data.count > 1 ? 's' : ''}<br>`;
+                let html = `<strong>${code.toUpperCase()}</strong>: ${data.count} book${data.count > 1 ? 's' : ''}<br>`;
                 if (data.titles.length <= 5) {
                     html += data.titles.map(t => `• ${t}`).join("<br>");
                 } else {
@@ -33,7 +29,6 @@ function renderMap() {
                 tooltip.style.left = (e.clientX + 15) + "px";
                 tooltip.style.top = (e.clientY + 15) + "px";
             });
-
             path.addEventListener("mouseleave", () => {
                 tooltip.style.display = "none";
             });
