@@ -34,11 +34,140 @@ function moveNotePopup(e) {
 }
 
 // ────────────────────────────────────────────────
-// Dynamic tab loading
+// Dynamic tab loading – THIS IS THE FIXED FUNCTION
 // ────────────────────────────────────────────────
 
-setTimeout(() => {
-    if (tabId === 'profile') {
+async function loadTabContent(tabId) {
+    const container = document.getElementById('tab-content-container');
+    if (!container) {
+        console.error("No #tab-content-container found");
+        return;
+    }
+
+    container.innerHTML = '<p style="text-align:center; padding:40px;">Loading...</p>';
+
+    let url = `partials/tab-${tabId}.html`;
+    let targetId = 'tab-content-container';
+
+    if (tabId === 'editModal') {
+        url = 'partials/modal-edit-book.html';
+        targetId = 'editModalContainer';
+    }
+    if (tabId === 'yearReview') {
+        url = 'partials/modal-year-review.html';
+        targetId = 'yearReviewModalContainer';
+    }
+
+    const target = document.getElementById(targetId) || container;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to load ${url} (HTTP ${response.status})`);
+        const html = await response.text();
+        target.innerHTML = html;
+
+        // Small delay for DOM to parse the new content
+        setTimeout(() => {
+            try {
+                // Profile tab – call all your real render functions
+                if (tabId === 'profile') {
+                    renderProfileStats?.();
+                    renderRecentBooks?.();
+                    renderFavourites?.();
+                    renderWaitingWidget?.();
+                    renderOnThisDay?.();
+                    renderQuoteOfTheDay?.();
+                    renderRediscoverWidget?.();
+                }
+
+                // List tab
+                if (tabId === 'list') {
+                    renderTable?.();
+                    renderYearGoalProgress?.();
+                    populateShelfFilter?.();  // if you have this
+                }
+
+                // Other tabs
+                if (tabId === 'options') {
+                    renderShelfManager?.();
+                    updateCoversCount?.();
+                }
+                if (tabId === 'world-map') renderMap?.();
+                if (tabId === 'quotes') renderQuotes?.();
+                if (tabId === 'timeline') renderTimeline?.();
+                if (tabId === 'stats') renderStats?.();
+                if (tabId === 'challenges') {
+                    loadGoalsForYear?.();
+                    renderChallengesTab?.();
+                    // renderChallengesList?.();  // uncomment if exists
+                }
+
+                // Show modals after content is ready
+                if (tabId === 'editModal' || tabId === 'yearReview') {
+                    target.style.display = 'flex';
+                }
+            } catch (renderErr) {
+                console.error(`Render error for ${tabId}:`, renderErr);
+                target.innerHTML += `<p style="color:orange; padding:10px;">Render failed: ${renderErr.message}</p>`;
+            }
+        }, 100);
+
+    } catch (err) {
+        console.error("Load error:", err);
+        target.innerHTML = `<p style="color:red; padding:40px; text-align:center;">Error loading tab: ${err.message}</p>`;
+    }
+}
+
+// ────────────────────────────────────────────────
+// Tab switching
+// ────────────────────────────────────────────────
+
+function switchTab(tabId) {
+    // Activate the tab button
+    document.querySelectorAll('.tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+    });
+
+    // Load the content
+    loadTabContent(tabId);
+
+    // Save current tab
+    localStorage.setItem('currentTab', tabId);
+}
+
+// ────────────────────────────────────────────────
+// Init – only one DOMContentLoaded
+// ────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+    createNotePopup();
+
+    const savedTab = localStorage.getItem('currentTab') || 'list';
+    switchTab(savedTab);
+
+    // Optional: call renderAll for shared elements
+    renderAll?.();
+
+    // Set default goal year
+    const goalYearInput = document.getElementById("goalYear");
+    if (goalYearInput) {
+        goalYearInput.value = new Date().getFullYear();
+        loadGoalsForYear?.();
+    }
+});
+
+// ────────────────────────────────────────────────
+// Your other functions (unchanged)
+// ────────────────────────────────────────────────
+
+function renderAll() {
+    populateShelfFilter?.();
+    updateCoversCount?.();
+    renderTable?.();
+
+    const activeTab = document.querySelector(".tab.active")?.dataset.tab;
+
+    if (document.getElementById("tab-profile")?.classList.contains("active") || activeTab === 'profile') {
         renderProfileStats?.();
         renderRecentBooks?.();
         renderFavourites?.();
@@ -47,105 +176,23 @@ setTimeout(() => {
         renderQuoteOfTheDay?.();
         renderRediscoverWidget?.();
     }
-    if (tabId === 'list') {
-        renderTable?.();
+
+    if (document.getElementById("tab-world-map")?.classList.contains("active") || activeTab === 'world-map') {
+        renderMap?.();
+    }
+
+    if (document.getElementById("tab-list")?.classList.contains("active") || activeTab === 'list') {
         renderYearGoalProgress?.();
-        // add populateShelfFilter?.() if needed
-    }
-    if (tabId === 'options') {
-        renderShelfManager?.();
-        updateCoversCount?.();
-    }
-    if (tabId === 'world-map') renderMap?.();
-    if (tabId === 'quotes') renderQuotes?.();
-    if (tabId === 'timeline') renderTimeline?.();
-    if (tabId === 'stats') renderStats?.();
-    if (tabId === 'challenges') {
-        loadGoalsForYear?.();
-        renderChallengesTab?.();
-        // renderChallengesList?.(); if it exists
     }
 
-    // Show modal after loading
-    if (tabId === 'editModal' || tabId === 'yearReview') {
-        target.style.display = 'flex';
-    }
-}, 100);  // increased delay slightly for safety
-// ────────────────────────────────────────────────
-// Tab switching
-// ────────────────────────────────────────────────
-
-function switchTab(tabId) {
-    // Activate button
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tabId);
-    });
-
-    // Load content (this replaces old direct ID toggle)
-    loadTabContent(tabId);
-
-    // Save preference
-    localStorage.setItem('currentTab', tabId);
-}
-
-// ────────────────────────────────────────────────
-// Init
-// ────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => {
-    const savedTab = localStorage.getItem('currentTab') || 'list';
-    switchTab(savedTab);
-    renderAll();           // still useful for shared elements
-    createNotePopup();     // create tooltip once
-});
-
-// Initial load (default tab)
-document.addEventListener('DOMContentLoaded', () => {
-    switchTab('list');
-});
-
-// Central render function — use this only when you really need to refresh almost everything
-// (e.g. after save, import, cloud load, etc.)
-function renderAll() {
-    // Core shared elements
-    populateShelfFilter?.();         // optional, with ?.
-    updateCoversCount?.();
-    
-    // Always render table (it's fast and often needed)
-    renderTable();
-    
-    // Profile section (only if visible)
-    if (document.getElementById("tab-profile")?.classList.contains("active")) {
-        renderProfileStats();
-        renderRecentBooks();
-        renderFavourites();
-        renderWaitingWidget();
-        renderOnThisDay();
-        renderQuoteOfTheDay();
-        renderRediscoverWidget();
-    }
-    
-    if (document.getElementById("tab-world-map")?.classList.contains("active")) {
-    renderMap();
-}
-    // Goal progress (only if list tab active)
-    if (document.getElementById("tab-list")?.classList.contains("active")) {
-        renderYearGoalProgress();
-    }
-    
-    // Tab-specific heavy renders
-    const activeTab = document.querySelector(".tab.active")?.dataset.tab;
-    
     if (activeTab === "stats") renderStats?.();
     if (activeTab === "timeline") renderTimeline?.();
     if (activeTab === "quotes") renderQuotes?.();
     if (activeTab === "challenges") {
-    loadGoalsForYear();
-    renderChallengesTab();
-    renderChallengesList();
-}
-    
-    // Options shelf manager
+        loadGoalsForYear?.();
+        renderChallengesTab?.();
+        renderChallengesList?.();
+    }
     if (activeTab === "options") renderShelfManager?.();
 }
 function renderShelfManager() {
