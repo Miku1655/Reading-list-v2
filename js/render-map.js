@@ -2,7 +2,7 @@ function renderMap() {
     const svg = document.getElementById("worldMapSVG");
     if (!svg) return;
 
-    const countriesRead = getCountriesRead();  // keys are uppercase: "JP", "GB", etc.
+    const countriesRead = getCountriesRead(); // keys are uppercase, e.g. "CZ", "JP"
 
     const { read, total } = getCountryProgress();
 
@@ -15,24 +15,24 @@ function renderMap() {
         let code = path.getAttribute("id");
         if (!code || code.length !== 2) return;
 
-        // ← KEY CHANGE: force uppercase to match your countryToIso values
-        code = code.toUpperCase();
-console.log("SVG path id:", path.getAttribute("id"));  // ← add this
-console.log("Looking up code:", code.toUpperCase());   // ← add this
-        const data = countriesRead[code];
+        // Normalize the SVG id to lowercase and look up in uppercase keys
+        const normalizedCode = code.toLowerCase();
+        const upperCode = normalizedCode.toUpperCase(); // "cz" → "CZ"
+
+        const data = countriesRead[upperCode];
         if (data && data.count > 0) {
             path.classList.add("read");
 
             path.addEventListener("mouseenter", e => {
-                // Full name lookup (already good from previous version)
-                let fullName = code;
+                // Full name lookup
+                let fullName = upperCode;
                 for (const [name, iso] of Object.entries(countryToIso)) {
-                    if (iso === code) {
+                    if (iso === upperCode) {
                         fullName = name;
                         break;
                     }
                 }
-                let html = `<strong>${fullName}</strong> (${code}): ${data.count} book${data.count > 1 ? 's' : ''}<br>`;
+                let html = `<strong>${fullName}</strong> (${upperCode}): ${data.count} book${data.count > 1 ? 's' : ''}<br>`;
                 if (data.titles.length <= 5) {
                     html += data.titles.map(t => `• ${t}`).join("<br>");
                 } else {
