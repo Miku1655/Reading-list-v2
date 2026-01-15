@@ -58,7 +58,6 @@ document.getElementById("saveCloudBtn").addEventListener("click", () => {
         .then(() => alert("Saved to cloud successfully!"))
         .catch(err => alert("Save failed: " + err.message));
 });
-
 document.getElementById("loadCloudBtn").addEventListener("click", () => {
     if (!currentUser) return alert("Sign in first");
     if (!confirm("Overwrite local data with cloud data? This cannot be undone.")) return;
@@ -73,7 +72,7 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             const settings = data.settings || {};
             document.getElementById("showNumbers").checked = settings.showNumbers ?? true;
             minAuthorBooks = settings.minAuthorBooks ?? 2;
-            minAuthorBooksInput.value = minAuthorBooks;
+            document.getElementById("minAuthorBooks").value = minAuthorBooks; // Fixed: was minAuthorBooksInput (likely undefined)
             showCoversInTimeline = settings.showCoversTimeline ?? false;
             document.getElementById("showCoversTimeline").checked = showCoversInTimeline;
             showYearGoalProgress = settings.showYearGoalProgress ?? true;
@@ -81,7 +80,7 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             document.getElementById("profileNick").value = profile.nick || "";
             document.getElementById("profileBio").value = profile.bio || "";
             if (profile.picture) document.getElementById("profilePic").src = profile.picture;
-            
+           
             saveBooksToLocal();
             localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
             localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
@@ -91,7 +90,6 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
         })
         .catch(err => alert("Load failed: " + err.message));
 });
-
 document.getElementById("saveCoversCloud").addEventListener("click", () => {
     if (!currentUser) return alert("Sign in first");
     if (!confirm("Save covers to cloud (separate from main data)?")) return;
@@ -103,7 +101,6 @@ document.getElementById("saveCoversCloud").addEventListener("click", () => {
         .then(() => alert("Covers saved to cloud!"))
         .catch(err => alert("Save failed: " + err.message));
 });
-
 document.getElementById("loadCoversCloud").addEventListener("click", () => {
     if (!currentUser) return alert("Sign in first");
     if (!confirm("Load covers from cloud? This will overwrite local covers.")) return;
@@ -126,7 +123,6 @@ document.getElementById("loadCoversCloud").addEventListener("click", () => {
         })
         .catch(err => alert("Load failed: " + err.message));
 });
-
 document.getElementById("deleteCoversCloud").addEventListener("click", () => {
     if (!currentUser) return alert("Sign in first");
     if (!confirm("Delete all covers from cloud? This is irreversible.")) return;
@@ -134,7 +130,6 @@ document.getElementById("deleteCoversCloud").addEventListener("click", () => {
         .then(() => alert("Covers deleted from cloud!"))
         .catch(err => alert("Delete failed: " + err.message));
 });
-
 // Covers management
 document.getElementById("fetchAllCovers").addEventListener("click", async () => {
     const missing = books.filter(b => !b.coverUrl && b.title);
@@ -153,7 +148,6 @@ document.getElementById("fetchAllCovers").addEventListener("click", async () => 
     }
     alert(`Done! Found covers for ${found} book(s).`);
 });
-
 document.getElementById("clearLocalCovers").addEventListener("click", () => {
     if (!confirm("Remove ALL cover URLs from local data? This is irreversible locally.")) return;
     books.forEach(b => b.coverUrl = null);
@@ -161,7 +155,6 @@ document.getElementById("clearLocalCovers").addEventListener("click", () => {
     renderAll();
     alert("All local covers cleared.");
 });
-
 // Import/Export/Clear
 document.getElementById("fileInput").addEventListener("change", e => {
     const file = e.target.files[0];
@@ -181,7 +174,6 @@ document.getElementById("fileInput").addEventListener("change", e => {
     };
     reader.readAsText(file);
 });
-
 document.getElementById("exportData").addEventListener("click", () => {
     const data = { books, profile, goals, shelfColors };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -192,7 +184,6 @@ document.getElementById("exportData").addEventListener("click", () => {
     a.click();
     URL.revokeObjectURL(url);
 });
-
 document.getElementById("clearStorage").addEventListener("click", () => {
     if (confirm("Clear all local data? (Cloud data stays if signed in)")) {
         localStorage.clear();
@@ -204,7 +195,6 @@ document.getElementById("clearStorage").addEventListener("click", () => {
         renderAll();
     }
 });
-
 // Goals
 document.getElementById("goalYear").addEventListener("change", () => {
     loadGoalsForYear();
@@ -239,19 +229,16 @@ document.getElementById("showYearGoalProgress").addEventListener("change", e => 
     localStorage.setItem(SHOW_YEAR_GOAL_PROGRESS_KEY, JSON.stringify(showYearGoalProgress));
     renderYearGoalProgress();
 });
-
 document.getElementById("minAuthorBooks").addEventListener("change", () => {
     minAuthorBooks = Math.max(1, Number(document.getElementById("minAuthorBooks").value) || 2);
     localStorage.setItem(MIN_AUTHOR_BOOKS_KEY, minAuthorBooks);
     renderStats();
 });
-
 document.getElementById("showCoversTimeline").addEventListener("change", e => {
     showCoversInTimeline = e.target.checked;
     localStorage.setItem(SHOW_COVERS_TIMELINE_KEY, JSON.stringify(showCoversInTimeline));
     renderTimeline();
 });
-
 // Profile
 document.getElementById("profilePic").addEventListener("click", () => document.getElementById("profilePicInput").click());
 document.getElementById("profilePicInput").addEventListener("change", e => {
@@ -265,7 +252,6 @@ document.getElementById("profilePicInput").addEventListener("change", e => {
     };
     reader.readAsDataURL(file);
 });
-
 let profileSaveTimeout;
 document.getElementById("profileNick").addEventListener("input", () => {
     clearTimeout(profileSaveTimeout);
@@ -281,7 +267,6 @@ document.getElementById("profileBio").addEventListener("input", () => {
         localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
     }, 800);
 });
-
 // Modal fetch cover
 document.getElementById("fetchCoverBtn").addEventListener("click", async () => {
     const title = document.getElementById("editTitle").value.trim();
@@ -300,7 +285,6 @@ document.getElementById("fetchCoverBtn").addEventListener("click", async () => {
         alert("No cover found for this book.");
     }
 });
-
 // Search info
 document.getElementById("filterInfo").addEventListener("click", () => {
     alert(`Search syntax:
@@ -316,8 +300,7 @@ document.getElementById("filterInfo").addEventListener("click", () => {
 • added:2024, added>2023-06-01, added:none
 Combine with spaces (AND).`);
 });
-
-// Auth buttons (already handled by listener, but add clicks if needed)
+// Auth buttons
 document.getElementById("signInBtn").addEventListener("click", () => {
     const email = document.getElementById("authEmail").value.trim();
     const pass = document.getElementById("authPassword").value;
@@ -332,29 +315,9 @@ document.getElementById("signUpBtn").addEventListener("click", () => {
 });
 document.getElementById("signOutBtn").addEventListener("click", () => auth.signOut());
 
-// Year in Review modal
-document.getElementById("openYearReview").addEventListener("click", openYearReview);
-document.getElementById("closeYearReview").addEventListener("click", () => {
-    document.getElementById("yearReviewModal").style.display = "none";
+// Initial load
+document.addEventListener("DOMContentLoaded", () => {
+    initApp(); // From ui-core.js
+    document.getElementById("goalYear").value = new Date().getFullYear();
+    loadGoalsForYear();
 });
-document.getElementById("yearReviewModal").addEventListener("click", e => {
-    if (e.target === document.getElementById("yearReviewModal")) {
-        document.getElementById("yearReviewModal").style.display = "none";
-    }
-});
-document.getElementById("reviewYearSelect").addEventListener("change", async e => {
-    tempCoverDataUrls = {}; // Clear old
-    await generateYearReview(Number(e.target.value));
-});
-
-document.getElementById("closeYearReview").addEventListener("click", () => {
-    document.getElementById("yearReviewModal").style.display = "none";
-    tempCoverDataUrls = {}; // Clear memory
-});
-document.getElementById("exportReviewPNG").addEventListener("click", exportReviewAsPNG);
-document.getElementById("exportReviewPDF").addEventListener("click", exportReviewAsPDF);
-// Initial setup
-document.getElementById("goalYear").value = new Date().getFullYear();
-loadGoalsForYear();
-
-document.addEventListener("DOMContentLoaded", initApp);
