@@ -2,13 +2,10 @@ function createBookCard(book) {
     const div = document.createElement("div");
     div.className = "book-card";
     div.dataset.bookId = book.importOrder;
-
-    // Book-level emojis display
     const emojis = book.emojis || [];
     const emojisDisplay = emojis.map(e => e.emoji).join(" ");
     const tooltip = emojis.map(e => `${e.emoji}${e.page ? ` (p.${e.page})` : ""}`).join(", ");
     const emojisHtml = emojis.length ? `<div style="margin-top:4px; font-size:1.4em;" title="${tooltip}">${emojisDisplay}</div>` : "";
-    // Stacked re-reads (up to 5 extra layers for a total of 6 visible "cards")
     const readCount = getReadCount(book);
     const extraLayers = Math.min(Math.max(readCount - 1, 0), 5);
     if (extraLayers > 0) div.classList.add("stacked");
@@ -17,11 +14,9 @@ function createBookCard(book) {
         layer.className = "stack-layer";
         div.appendChild(layer);
     }
-
     const coverHtml = book.coverUrl
         ? `<img src="${book.coverUrl}" alt="Cover" onerror="this.style.display='none'">`
         : `<div class="no-cover">No cover</div>`;
-
     div.innerHTML += `
         ${coverHtml}
         <strong class="profile-book-title">${book.title || "No title"}</strong>
@@ -32,10 +27,12 @@ function createBookCard(book) {
     div.addEventListener("click", () => openEditModal(book));
     return div;
 }
-
 function createSeriesCard(series) {
+    const progress = getSeriesProgress(series);
+    if (!progress) return null; // No books in series
+    const { completed, total, percent } = progress;
+    const isComplete = completed === total;
     let seriesBooks = books.filter(b => b.series === series);
-    if (seriesBooks.length === 0) return null;
     seriesBooks = seriesBooks.sort((a, b) => (a.seriesNumber ?? Infinity) - (b.seriesNumber ?? Infinity));
     const firstCoverBook = seriesBooks.find(b => b.coverUrl);
     const author = seriesBooks[0].author || "Various";
@@ -46,18 +43,22 @@ function createSeriesCard(series) {
     }
     const div = document.createElement("div");
     div.className = "book-card";
+    const progressText = isComplete 
+        ? `<span class="series-progress-text series-progress-complete">${total} / ${total} completed ✓</span>`
+        : `<span class="series-progress-text">${completed} / ${total} completed</span>`;
+    const progressBar = `<div class="series-progress-bar"><div class="series-progress-fill" style="width:${percent}%;"></div></div>`;
     div.innerHTML = `
         ${coverHtml}
         <strong class="profile-book-title">${series}</strong>
         <span class="profile-book-author">${author}</span>
         <small>${count} book${count > 1 ? 's' : ''}</small>
+        ${progressText}
+        ${progressBar}
     `;
-    div.title = `${series} (${count} books)`;
+    div.title = `${series} (${completed}/${total} completed)`;
     return div;
 }
-
 function makeFavouritesDraggable(container) {
-    // (unchanged – your original drag code)
     container.addEventListener("dragstart", e => {
         const card = e.target.closest(".book-card");
         if (card) {
