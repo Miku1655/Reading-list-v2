@@ -138,3 +138,63 @@ tr:hover { background: #1f1f1f; }
     color: #bbb;
     padding-top: 4px;
 }
+
+
+/* Year in Review modal light theme */
+#yearReviewPanel h2, #yearReviewPanel h3 { color:#222; }
+.review-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+}
+.review-stats-block {
+    background: #f0f0f0;
+    padding: 16px;
+    border-radius: 8px;
+    text-align: center;
+}
+.review-stats-block strong { font-size: 1.8em; display: block; margin: 8px 0; }
+.review-top-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin: 30px 0;
+}
+.review-book-card {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    background: #f9f9f9;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+.review-book-card img {
+    width: 80px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+.review-book-info { flex: 1; }
+.review-book-info strong { display: block; font-size: 1.1em; }
+.review-book-info small { color: #666; }
+.review-collage {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+    margin: 30px 0;
+}
+.review-collage img {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    border-radius: 6px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.review-no-data {
+    text-align: center;
+    color: #777;
+    font-size: 1.2em;
+    padding: 80px 20px;
+}
