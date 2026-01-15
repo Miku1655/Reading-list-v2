@@ -118,3 +118,23 @@ tr:hover { background: #1f1f1f; }
 .book-card .stack-layer:nth-child(3) { top: 20px; transform: rotate(-2deg); opacity: 0.8; left: -4px; }
 .book-card .stack-layer:nth-child(4) { top: 24px; transform: rotate(3deg); opacity: 0.75; left: 8px; }
 .book-card .stack-layer:nth-child(5) { top: 28px; transform: rotate(-4deg); opacity: 0.7; left: -8px; }
+
+/* Horizontal scroll for On this day widget */
+#onThisDayContainer {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+    padding-bottom: 8px;
+}
+#onThisDayContainer::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+}
+
+/* Anniversary note pushed to bottom of card */
+.anniversary-note {
+    margin-top: auto;
+    font-size: 0.85em;
+    color: #bbb;
+    padding-top: 4px;
+}
