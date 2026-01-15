@@ -220,7 +220,7 @@ function calculatePositions(mode) {
                 const dy = p.y - p2.y;
                 let dist = Math.hypot(dx, dy);
                 if (dist < 1) dist = 1;  // prevent division explosion
-                const repel = 220 / (dist * dist);  // 1/dist² – classic gravity-like
+                const repel = 320 / (dist * dist);  // 1/dist² – classic gravity-like
                 fx += dx * repel;
                 fy += dy * repel;
             }
@@ -369,7 +369,7 @@ function renderConstellation(force = false) {
             tooltip.style.display = 'block';
             const tooltipWidth = tooltip.offsetWidth || 200;
             tooltip.style.left = (e.clientX - tooltipWidth / 2) + 'px';
-            tooltip.style.top = (e.clientY - 200) + 'px';
+            tooltip.style.top = (e.clientY - 190) + 'px';
             tooltip.innerHTML = `
                 <strong>${hoveredBook.title}</strong><br>
                 ${hoveredBook.author}<br>
