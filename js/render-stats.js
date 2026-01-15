@@ -147,9 +147,7 @@ function renderStats() {
                 plugins: { legend: { labels: { color: '#eee' } } }
             }
         });
-    } else {
-        barContainer.innerHTML = '<p style="text-align:center; color:#aaa; padding:120px 20px; font-size:1.1em;">No finished reads yet!<br><br>Mark some books as finished to see yearly stats.</p><canvas id="statsChart" style="display:none;"></canvas>';
-    }
+
 
     // Doughnut charts (unchanged)
     const pieColors = [
