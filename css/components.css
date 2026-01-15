@@ -422,3 +422,22 @@ tr:hover { background: #1f1f1f; }
     background: #4caf50;
     transition: width 0.4s ease;
 }
+
+#worldMapSVG path {
+    stroke: #222;
+    stroke-width: 0.8;
+    transition: fill 0.3s;
+    cursor: pointer;
+}
+
+#worldMapSVG path.read {
+    fill: #4CAF50 !important;
+}
+
+#worldMapSVG path:not(.read) {
+    fill: #444;
+}
+
+#mapTooltip {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
