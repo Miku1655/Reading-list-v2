@@ -37,10 +37,12 @@ function switchTab(name) {
         renderFavourites();
         renderWaitingWidget();
         renderOnThisDay();
+        renderQuoteOfTheDay();
     }
     if (name === "list") renderYearGoalProgress();
     renderTable();
     renderAll();
+    if (name === "quotes") renderQuotes();
 }
 function renderAll() {
     populateShelfFilter();
