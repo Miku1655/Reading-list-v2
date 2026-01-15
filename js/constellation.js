@@ -6,15 +6,6 @@ let constellationCtx = null;
 let constellationBooks = [];
 let hoveredBook = null;
 
-const ratingColors = [
-    '#a0a0a0',     // 0 / unrated
-    '#87ceeb',     // 1
-    '#add8e6',     // 2
-    '#f0f8ff',     // 3
-    '#fffacd',     // 4
-    '#ffd700'      // 5
-];
-
 function initConstellation() {
     constellationCanvas = document.getElementById(CONSTELLATION_CANVAS_ID);
     if (!constellationCanvas) {
@@ -102,37 +93,40 @@ function prepareConstellationData() {
 }
 
 function getStarSize(pages) {
-    if (!pages || pages < 1) return 1;  // Tiny specks
-    return 1 + Math.pow(pages / 50, 0.7) * 4;  // Aggressive: 50p≈1.5px, 500p≈10px, 1200p≈20px, 3000p≈30px
+    if (!pages || pages < 50) return 0.8 + Math.random() * 0.6;       // tiny faint stars
+    if (pages < 200) return 1.2 + Math.random() * 0.8;
+    if (pages < 500) return 2.0 + Math.random() * 1.2;
+    if (pages < 1000) return 3.5 + Math.random() * 2;
+    return 5 + Math.random() * 4;   // only the real epics are noticeably bigger
 }
 
 function getStarColor(rating) {
-    const idx = Math.round(rating || 0);
-    return ratingColors[Math.min(idx, 5)];
+    // Almost all white, just very subtle tint
+    const base = 0.9 + rating/50;   // 0.9–1.0 brightness
+    if (rating <= 1) return `rgba(220,220,255,${base})`;  // very cool blue-white
+    if (rating <= 3) return `rgba(255,255,255,${base})`;  // pure white
+    return `rgba(255,245,220,${base})`;                    // very faint warm tint for 4–5
 }
-
 function drawStar(cx, cy, size, color, glow = false) {
     if (!constellationCtx) return;
 
     constellationCtx.save();
+    constellationCtx.globalAlpha = 0.7 + Math.random() * 0.3; // natural twinkling variation
+
+    // Core star
     constellationCtx.beginPath();
     constellationCtx.arc(cx, cy, size, 0, Math.PI * 2);
-    constellationCtx.closePath();
-
-    constellationCtx.shadowColor = '#ffffff';
-    constellationCtx.shadowBlur = 3 + size / 5;  // Scale glow with size for depth
-
-    if (glow) {
-        constellationCtx.shadowColor = '#ffd700';
-        constellationCtx.shadowBlur = 25 + size / 3;  // Stronger, size-scaled
-    }
-
-    constellationCtx.globalAlpha = 0.8 + Math.random() * 0.2;  // Slight opacity jitter for twinkle
     constellationCtx.fillStyle = color;
     constellationCtx.fill();
 
-    constellationCtx.globalAlpha = 1;
-    constellationCtx.shadowBlur = 0;
+    // Very subtle halo/glow
+    if (glow || size > 3) {
+        constellationCtx.shadowColor = glow ? '#fff7d4' : '#ffffff';
+        constellationCtx.shadowBlur = glow ? 12 : 6;
+        constellationCtx.fillStyle = color;
+        constellationCtx.fill();
+    }
+
     constellationCtx.restore();
 }
 
@@ -159,10 +153,11 @@ function calculatePositions(mode) {
     if (!constellationCanvas) return [];
     const w = constellationCanvas.width / devicePixelRatio;
     const h = constellationCanvas.height / devicePixelRatio;
-    // Start in central cloud for better distribution
+
+    // === NEW: Start positions in a very loose, natural cloud ===
     let positions = constellationBooks.map(() => ({
-        x: w / 2 + (Math.random() - 0.5) * w / 3,
-        y: h / 2 + (Math.random() - 0.5) * h / 3
+        x: w * (0.2 + Math.random() * 0.6),           // mostly middle 60%, not corners
+        y: h * (0.15 + Math.random() * 0.7)
     }));
 
     if (mode === 'timeline') {
@@ -189,90 +184,78 @@ function calculatePositions(mode) {
         });
     } else {  // Constellation mode: natural clusters
     const groups = {};
-    constellationBooks.forEach((b, i) => {
-        const key = (b.series || '') + '|' + (b.author || '') + '|' + (b.genre || '') + '|' + (b.country || '');
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(i);
-    });
+        constellationBooks.forEach((b, i) => {
+            const key = (b.series || '') + '|' + (b.author || '');
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(i);
+        });
 
-    // ←←← REPLACE EVERYTHING FROM HERE TO THE END OF THE ELSE BLOCK ↓↓↓
+        const centerX = w / 2;
+        const centerY = h / 2;
 
-    // Start more uniformly across the canvas (prevents extreme corner bias)
-    let positions = constellationBooks.map(() => ({
-        x: 40 + Math.random() * (w - 80),
-        y: 40 + Math.random() * (h - 80)
-    }));
+        // === Gentle multi-step relaxation (not full physics sim) ===
+        for (let iter = 0; iter < 12; iter++) {   // fewer iterations = less clumping
+            constellationBooks.forEach((book, i) => {
+                let fx = 0, fy = 0;
+                const p = positions[i];
+                const mass = Math.sqrt(getStarSize(book.pages));  // sqrt so big books still stand out, but don't dominate
 
-    const centerX = w / 2;
-    const centerY = h / 2;
-
-    for (let iter = 0; iter < 25; iter++) {  // Slightly more iterations for convergence
-        constellationBooks.forEach((book, i) => {
-            let fx = 0, fy = 0;
-            const p = positions[i];
-            const mass = getStarSize(book.pages) / 5;
-
-            // 1. Repulsion from all others (stronger when close)
-            for (let j = 0; j < constellationBooks.length; j++) {
-                if (i === j) continue;
-                const p2 = positions[j];
-                const dx = p.x - p2.x;
-                const dy = p.y - p2.y;
-                let dist = Math.hypot(dx, dy);
-                if (dist < 1) dist = 1;  // prevent division explosion
-                const repel = 320 / (dist * dist);  // 1/dist² – classic gravity-like
-                fx += dx * repel;
-                fy += dy * repel;
-            }
-
-            // 2. Attraction within group
-            const group = Object.values(groups).find(g => g.includes(i));
-            if (group) {
-                group.forEach(j => {
-                    if (i === j) return;
+                // 1. Very gentle repulsion (only when too close)
+                for (let j = 0; j < constellationBooks.length; j++) {
+                    if (i === j) continue;
                     const p2 = positions[j];
-                    const dx = p2.x - p.x;
-                    const dy = p2.y - p.y;
-                    const dist = Math.hypot(dx, dy) || 1;
-                    const strength = (book.series === constellationBooks[j].series) ? 0.9 : 0.45;
-                    const attract = (dist / 180) * mass * strength;
-                    fx += dx * attract;
-                    fy += dy * attract;
-                });
-            }
+                    const dx = p.x - p2.x;
+                    const dy = p.y - p2.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > 0 && dist < 120) {   // only repel when fairly close
+                        const repel = (120 - dist) / 120 * 0.8;
+                        fx += dx * repel;
+                        fy += dy * repel;
+                    }
+                }
 
-            // 3. Gentle global pull toward center (prevents corner orphans)
-            const toCenterX = centerX - p.x;
-            const toCenterY = centerY - p.y;
-            const centerDist = Math.hypot(toCenterX, toCenterY) || 1;
-            const centerPull = 0.0008 * centerDist;  // very gentle, scales with distance
-            fx += toCenterX * centerPull;
-            fy += toCenterY * centerPull;
+                // 2. Soft attraction only for meaningful groups (series > author)
+                const group = groups[Object.keys(groups).find(k => {
+                    const ids = groups[k];
+                    return ids.includes(i);
+                })];
+                if (group && group.length > 1) {
+                    group.forEach(j => {
+                        if (i === j) return;
+                        const p2 = positions[j];
+                        const dx = p2.x - p.x;
+                        const dy = p2.y - p.y;
+                        const dist = Math.hypot(dx, dy);
+                        if (dist > 200) return;   // don't pull from too far
+                        const strength = constellationBooks[i].series === constellationBooks[j].series ? 0.7 : 0.35;
+                        const attract = (dist < 80 ? 0 : (dist - 80) / 300) * strength;
+                        fx += dx * attract;
+                        fy += dy * attract;
+                    });
+                }
 
-            // Apply movement (damped)
-            p.x += fx * 0.025;
-            p.y += fy * 0.025;
+                // 3. Very gentle drift toward center (prevents corners)
+                const toCenterX = centerX - p.x;
+                const toCenterY = centerY - p.y;
+                const centerDist = Math.hypot(toCenterX, toCenterY);
+                if (centerDist > 100) {
+                    fx += toCenterX * 0.0008;
+                    fy += toCenterY * 0.0008;
+                }
 
-            // Weak boundary during simulation (allow some overshoot)
-            if (iter > 10) {  // only start clamping after some settling
-                p.x = Math.max(30, Math.min(w - 30, p.x));
-                p.y = Math.max(30, Math.min(h - 30, p.y));
-            }
+                // Apply movement + tiny organic jitter
+                p.x += fx * 0.8 + (Math.random() - 0.5) * 1.5;
+                p.y += fy * 0.8 + (Math.random() - 0.5) * 1.5;
+            });
+        }
 
-            // Tiny random drift every few steps → more organic, prevents stuck positions
-            if (iter % 5 === 0) {
-                p.x += (Math.random() - 0.5) * 4;
-                p.y += (Math.random() - 0.5) * 4;
-            }
+        // Final soft clamp – allow some to be near edge, but not stuck in corner
+        positions.forEach(p => {
+            p.x = Math.max(60, Math.min(w - 60, p.x));
+            p.y = Math.max(60, Math.min(h - 60, p.y));
         });
     }
 
-    // Final hard clamp to keep everything inside
-    positions.forEach(p => {
-        p.x = Math.max(20, Math.min(w - 20, p.x));
-        p.y = Math.max(20, Math.min(h - 20, p.y));
-    });
-}
     return positions;
 }
 
