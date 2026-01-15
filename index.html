@@ -12,6 +12,8 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -55,6 +57,9 @@
 </section>
 
 <section id="tab-stats" class="tab-content">
+    <div style="text-align:center; margin:20px 0;">
+        <button id="openYearReview" style="font-size:1.1em; padding:10px 20px;">Generate Year in Review</button>
+    </div>
     <div id="stats"></div>
     <div id="statsChartContainer"><canvas id="statsChart"></canvas></div>
     <div class="pie-charts-container">
@@ -254,6 +259,23 @@
     </div>
 </div>
 
+    
+<div id="yearReviewModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); justify-content:center; align-items:flex-start; overflow-y:auto; z-index:1000; padding:20px 0;">
+    <div id="yearReviewPanel" style="background:#fff; color:#000; max-width:900px; width:95%; margin:auto; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.5); overflow:hidden;">
+        <div style="padding:20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:#f8f8f8;">
+            <div>
+                <h2 style="margin:0;">Year in Review</h2>
+                <select id="reviewYearSelect" style="font-size:1em; padding:6px; margin-top:8px;"></select>
+            </div>
+            <button id="closeYearReview" style="font-size:1.5em; background:none; border:none; cursor:pointer;">×</button>
+        </div>
+        <div id="yearReviewContent" style="padding:20px; min-height:60vh;"></div>
+        <div style="padding:20px; border-top:1px solid #eee; text-align:center; background:#f8f8f8;">
+            <button id="exportReviewPNG" style="padding:10px 20px; margin:0 10px;">Export as PNG</button>
+            <button id="exportReviewPDF" style="padding:10px 20px; margin:0 10px;">Export as PDF</button>
+        </div>
+    </div>
+</div>
 <!-- JavaScript files – order matters a bit -->
 <script src="js/config.js"></script>
 <script src="js/state.js"></script>
@@ -266,6 +288,7 @@
 <script src="js/render-stats.js"></script>
 <script src="js/render-timeline.js"></script>
 <script src="js/covers.js"></script>
+<script src="js/year-review.js"></script>   
 <script src="js/ui.js"></script>
 
 </body>
