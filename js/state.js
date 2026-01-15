@@ -44,7 +44,11 @@ function loadLocalData() {
             // (migration code unchanged)
         }
         if (!Array.isArray(b.tags)) b.tags = [];
-    });
+    }
+                 if (!Array.isArray(b.quotes)) {
+    b.quotes = [];
+}
+                 );
     nextImportOrder = maxOrder + 1;
 
     const savedProfile = localStorage.getItem(PROFILE_KEY);
