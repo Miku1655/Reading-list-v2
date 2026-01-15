@@ -208,3 +208,33 @@ function renderRediscoverWidget() {
         ${notesHtml}
     `;
 }
+
+function renderQuoteOfTheDay() {
+    const container = document.getElementById("quoteWidget"); // Add this div to profile HTML
+    if (!container) return;
+
+    const favoriteQuotes = [];
+    books.forEach(b => {
+        if (b.quotes) {
+            b.quotes.filter(q => q.favorite && q.text.trim()).forEach(q => {
+                favoriteQuotes.push({ ...q, bookTitle: b.title, bookAuthor: b.author });
+            });
+        }
+    });
+
+    if (favoriteQuotes.length === 0) {
+        container.innerHTML = "<p>No favorite quotes yet. Mark some in book details!</p>";
+        return;
+    }
+
+    const random = favoriteQuotes[Math.floor(Math.random() * favoriteQuotes.length)];
+    container.innerHTML = `
+        <blockquote style="font-style:italic; margin:12px 0; padding:12px; background:#1a1a1a; border-left:4px solid #666;">
+            "${random.text}"
+        </blockquote>
+        <p style="text-align:right; color:#aaa;">
+            — ${random.bookTitle} by ${random.bookAuthor || "Unknown"}
+            ${random.page ? ` (p.${random.page})` : ''}
+        </p>
+    `;
+}
