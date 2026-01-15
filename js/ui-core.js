@@ -1,3 +1,5 @@
+let notePopup = null;
+
 function createNotePopup() {
     notePopup = document.createElement("div");
     notePopup.style.position = "absolute";
@@ -12,111 +14,112 @@ function createNotePopup() {
     notePopup.style.pointerEvents = "none";
     document.body.appendChild(notePopup);
 }
-function showNotePopup(popup, text) {
-    popup.textContent = text;
-    popup.style.display = "block";
+
+function showNotePopup(text) {
+    if (!notePopup) createNotePopup();
+    notePopup.textContent = text;
+    notePopup.style.display = "block";
     document.addEventListener("mousemove", moveNotePopup);
 }
-function hideNotePopup(popup) {
-    popup.style.display = "none";
-    document.removeEventListener("mousemove", moveNotePopup);
+
+function hideNotePopup() {
+    if (notePopup) {
+        notePopup.style.display = "none";
+        document.removeEventListener("mousemove", moveNotePopup);
+    }
 }
+
 function moveNotePopup(e) {
-    if (!notePopup) return;
+    if (!notePopup || notePopup.style.display === "none") return;
     notePopup.style.left = (e.clientX + 15) + "px";
     notePopup.style.top = (e.clientY + 20) + "px";
 }
-function switchTab(name) {
-    // Update active classes
-    document.querySelectorAll(".tab").forEach(t => {
-        t.classList.toggle("active", t.dataset.tab === name);
-    });
-    
-    document.querySelectorAll(".tab-content").forEach(c => {
-        c.classList.toggle("active", c.id === `tab-${name}`);
-    });
 
-    // Save the current tab
-    localStorage.setItem(TAB_KEY, name);
+// ────────────────────────────────────────────────
+// Dynamic tab loading
+// ────────────────────────────────────────────────
 
-    // Tab-specific renders
-    if (name === "options") {
-        renderShelfManager();
-        updateCoversCount();
-    }
-    
-    if (name === "profile") {
-        renderProfileStats();
-        renderRecentBooks();
-        renderFavourites();
-        renderWaitingWidget();
-        renderOnThisDay();
-        renderQuoteOfTheDay();
-        renderRediscoverWidget();
-    }
-    
-    if (name === "list") {
-        renderYearGoalProgress();
-        renderTable(); // table is main content on list tab
-    }
-    
-    if (name === "quotes") {
-        renderQuotes();
-    }
-    
-    if (name === "timeline") {
-        renderTimeline();
-    }
-    
-    if (name === "world-map") {
-        renderMap();
-    }
-    
-    if (name === "stats") {
-        renderStats?.(); // optional chaining if function might not exist yet
-    }
-    
-    if (name === "challenges") {
-        loadGoalsForYear();
-        renderChallengesTab?.();
-    }
-    async function loadTabContent(tabId) {
+async function loadTabContent(tabId) {
     const container = document.getElementById('tab-content-container');
-    container.innerHTML = '<p>Loading...</p>'; // placeholder
+    if (!container) {
+        console.error("Container #tab-content-container not found");
+        return;
+    }
+
+    container.innerHTML = '<p>Loading...</p>';
 
     let url = `partials/tab-${tabId}.html`;
-    if (tabId === 'editModal') url = 'partials/modal-edit-book.html';
-    if (tabId === 'yearReview') url = 'partials/modal-year-review.html';
+    let containerId = 'tab-content-container';
+
+    if (tabId === 'editModal') {
+        url = 'partials/modal-edit-book.html';
+        containerId = 'editModalContainer';
+    }
+    if (tabId === 'yearReview') {
+        url = 'partials/modal-year-review.html';
+        containerId = 'yearReviewModalContainer';
+    }
+
+    const target = document.getElementById(containerId);
+    if (!target) {
+        console.error(`Target container #${containerId} not found`);
+        return;
+    }
 
     try {
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to load ${url}`);
+        if (!response.ok) throw new Error(`Failed to load ${url} – ${response.status}`);
         const html = await response.text();
-        container.innerHTML = html;
+        target.innerHTML = html;
 
-        // Re-attach event listeners or re-render after load
-        if (tabId === 'list') renderList();
-        if (tabId === 'profile') renderProfile();
-        if (tabId === 'stats') renderStats();
-        if (tabId === 'timeline') renderTimeline();
-        if (tabId === 'challenges') renderChallenges();
-        if (tabId === 'world-map') renderMap();
-        if (tabId === 'quotes') renderQuotes();
-        if (tabId === 'options') renderOptions(); // if you have such function
+        // Re-render tab-specific content
+        if (tabId === 'list')        renderList();
+        if (tabId === 'profile')     renderProfile();
+        if (tabId === 'stats')       renderStats?.();
+        if (tabId === 'timeline')    renderTimeline?.();
+        if (tabId === 'challenges')  { loadGoalsForYear(); renderChallengesTab?.(); renderChallengesList?.(); }
+        if (tabId === 'world-map')   renderMap?.();
+        if (tabId === 'quotes')      renderQuotes?.();
+        if (tabId === 'options')     { renderShelfManager?.(); updateCoversCount?.(); }
+
+        // Special case: modals need to be shown after load
+        if (tabId === 'editModal' || tabId === 'yearReview') {
+            target.style.display = 'flex';
+        }
 
     } catch (err) {
-        console.error(err);
-        container.innerHTML = `<p style="color:red;">Error loading tab: ${err.message}</p>`;
+        console.error("Tab load error:", err);
+        target.innerHTML = `<p style="color:red; padding:20px;">Error loading content: ${err.message}</p>`;
     }
 }
 
-function switchTab(tabId) {
-    document.querySelectorAll('.tab').forEach(btn => btn.classList.remove('active'));
-    document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+// ────────────────────────────────────────────────
+// Tab switching
+// ────────────────────────────────────────────────
 
-    document.getElementById('tab-content-container').className = 'tab-content active';
+function switchTab(tabId) {
+    // Activate button
+    document.querySelectorAll('.tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+    });
+
+    // Load content (this replaces old direct ID toggle)
     loadTabContent(tabId);
+
+    // Save preference
+    localStorage.setItem('currentTab', tabId);
 }
+
+// ────────────────────────────────────────────────
+// Init
+// ────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+    const savedTab = localStorage.getItem('currentTab') || 'list';
+    switchTab(savedTab);
+    renderAll();           // still useful for shared elements
+    createNotePopup();     // create tooltip once
+});
 
 // Initial load (default tab)
 document.addEventListener('DOMContentLoaded', () => {
