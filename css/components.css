@@ -391,3 +391,21 @@ tr:hover { background: #1f1f1f; }
     border-radius: 3px;
     flex-shrink: 0;
 }
+
+.quote-entry {
+    margin-bottom: 12px;
+    padding: 8px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 6px;
+}
+.quote-entry textarea {
+    width: 100%;
+    min-height: 60px;
+    margin-bottom: 8px;
+}
+.quote-entry input[type="number"],
+.quote-entry input[type="date"] {
+    width: 100px;
+    margin-right: 8px;
+}
