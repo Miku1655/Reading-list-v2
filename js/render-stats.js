@@ -147,7 +147,7 @@ function renderStats() {
                 plugins: { legend: { labels: { color: '#eee' } } }
             }
         });
-
+    }
 
     // Doughnut charts (unchanged)
     const pieColors = [
