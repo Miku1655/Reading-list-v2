@@ -141,12 +141,12 @@ function drawConnection(x1, y1, x2, y2, isSeries = false) {
     constellationCtx.quadraticCurveTo(mx, my, x2, y2);
 
     constellationCtx.strokeStyle = isSeries ? '#66a3ff' : '#cccccc';
-    constellationCtx.lineWidth = isSeries ? 1.4 : 0.7;
+    constellationCtx.lineWidth = isSeries ? 0.9 : 0.5;
     constellationCtx.setLineDash(isSeries ? [3, 7] : []);
     constellationCtx.globalAlpha = 0.25 + Math.random() * 0.1;  // Faint, varied
     constellationCtx.stroke();
     constellationCtx.setLineDash([]);
-    constellationCtx.globalAlpha = 1;
+    constellationCtx.globalAlpha = 0.12 + Math.random() * 0.08;
 }
 
 function calculatePositions(mode) {
