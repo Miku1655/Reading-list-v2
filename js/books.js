@@ -191,10 +191,27 @@ function makeFavouritesDraggable(container) {
     });
 }
 
-function openEditModal(book = null) {
-    editingBook = book || { reads: [], tags: [], exclusiveShelf: "to-read", dateAdded: Date.now(), emojis: [] };
+async function openEditModal(book = null) {
+    // Step 1: Load the modal partial first (this awaits the fetch)
+    await loadTabContent('editModal');
 
-    // Fill all fields (your original)
+    // Step 2: Now the modal markup exists in the DOM → safe to query
+    const modalContainer = document.getElementById('editModalContainer');
+    if (!modalContainer) {
+        console.error("Modal container not found after loading");
+        return;
+    }
+
+    // Step 3: Prepare the book data (same as before)
+    editingBook = book || { 
+        reads: [], 
+        tags: [], 
+        exclusiveShelf: "to-read", 
+        dateAdded: Date.now(), 
+        emojis: [] 
+    };
+
+    // Step 4: Fill all fields (your original code, unchanged)
     document.getElementById("editTitle").value = book?.title || "";
     document.getElementById("editAuthor").value = book?.author || "";
     document.getElementById("editSeries").value = book?.series || "";
@@ -210,7 +227,9 @@ function openEditModal(book = null) {
     document.getElementById("editRating").value = book?.rating || 0;
     document.getElementById("editNotes").value = book?.notes || "";
     document.getElementById("editCoverUrl").value = book?.coverUrl || "";
-    document.getElementById("editDateAdded").value = book?.dateAdded ? new Date(book.dateAdded).toISOString().split('T')[0] : "";
+    document.getElementById("editDateAdded").value = book?.dateAdded 
+        ? new Date(book.dateAdded).toISOString().split('T')[0] 
+        : "";
 
     const preview = document.getElementById("coverPreview");
     if (book?.coverUrl) {
@@ -230,9 +249,12 @@ function openEditModal(book = null) {
         document.getElementById("favSeriesLabel").style.display = "none";
     }
 
-    // Simple reads list (original – no emojis here)
+    // Step 5: Rebuild reads list (your original logic)
     const readsList = document.getElementById("readsList");
-    readsList.innerHTML = "";
+    if (!readsList) {
+        console.error("readsList not found in modal");
+        return;
+    }
 
     function rebuildReadsList() {
         readsList.innerHTML = "";
@@ -248,36 +270,53 @@ function openEditModal(book = null) {
                 editingBook.reads.splice(idx, 1);
                 rebuildReadsList();
             };
-            div.querySelector(".readStart").onchange = e => read.started = e.target.value ? new Date(e.target.value).getTime() : null;
-            div.querySelector(".readFinish").onchange = e => read.finished = e.target.value ? new Date(e.target.value).getTime() : null;
+            div.querySelector(".readStart").onchange = e => {
+                read.started = e.target.value ? new Date(e.target.value).getTime() : null;
+            };
+            div.querySelector(".readFinish").onchange = e => {
+                read.finished = e.target.value ? new Date(e.target.value).getTime() : null;
+            };
             readsList.appendChild(div);
         });
     }
 
     rebuildReadsList();
 
-    document.getElementById("addReadBtn").onclick = () => {
-        editingBook.reads.push({ started: Date.now(), finished: null });
-        rebuildReadsList();
-    };
+    // Step 6: Attach "Add Read" button handler
+    const addReadBtn = document.getElementById("addReadBtn");
+    if (addReadBtn) {
+        addReadBtn.onclick = () => {
+            editingBook.reads.push({ started: Date.now(), finished: null });
+            rebuildReadsList();
+        };
+    }
 
-    document.getElementById("editExclusiveShelf").onchange = () => {
-        const status = document.getElementById("editExclusiveShelf").value;
-        editingBook.exclusiveShelf = status;
-        if (status === "currently-reading") {
-            if (editingBook.reads.length === 0 || editingBook.reads[editingBook.reads.length - 1].finished !== null) {
-                editingBook.reads.push({ started: Date.now(), finished: null });
+    // Step 7: Status change logic
+    const statusSelect = document.getElementById("editExclusiveShelf");
+    if (statusSelect) {
+        statusSelect.onchange = () => {
+            const status = statusSelect.value;
+            editingBook.exclusiveShelf = status;
+            if (status === "currently-reading") {
+                if (editingBook.reads.length === 0 || editingBook.reads[editingBook.reads.length - 1].finished !== null) {
+                    editingBook.reads.push({ started: Date.now(), finished: null });
+                }
+            } else if (status !== "read") {
+                editingBook.reads = editingBook.reads.filter(r => r.finished !== null);
             }
-        } else if (status !== "read") {
-            editingBook.reads = editingBook.reads.filter(r => r.finished !== null);
-        }
-        rebuildReadsList();
-    };
+            rebuildReadsList();
+        };
+    }
 
-    // Ensure emojis array exists and refresh display (handlers initialized once globally)
+    // Step 8: Emojis (your existing global handler)
     editingBook.emojis = editingBook.emojis || [];
-    if (window.__updateEmojiDisplay) window.__updateEmojiDisplay();
+    if (window.__updateEmojiDisplay) {
+        window.__updateEmojiDisplay();
+    }
 
+    // Step 9: Finally show the modal
+    modalContainer.style.display = 'flex';
+}
 // Quotes list – similar to reads
 const quotesList = document.getElementById("quotesList");
 if (!quotesList) { // Create if not exist (we'll add HTML later)
