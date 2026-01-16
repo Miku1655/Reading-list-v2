@@ -107,6 +107,7 @@
 /* Scrollable stats list for full content (languages, countries, genres) */
 .stats-scroll-container {
     max-height: 260px;            /* ← tune this: 220–340px depending on your taste */
+    mas-width: 200px
     overflow-y: auto;
     padding-right: 6px;
     margin-right: -6px;           /* prevents double scrollbar look */
