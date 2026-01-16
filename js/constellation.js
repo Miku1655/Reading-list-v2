@@ -504,7 +504,7 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
-
+}
 
 window.initConstellation = initConstellation;
 window.renderConstellation = renderConstellation;
