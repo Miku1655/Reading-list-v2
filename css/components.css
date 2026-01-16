@@ -25,6 +25,7 @@ tr:hover { background: #1f1f1f; }
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
+    align-content: flex-start;
 }
 
 .book-card {
@@ -333,7 +334,10 @@ tr:hover { background: #1f1f1f; }
 
 /* Collapsible series in favourites */
 .series-card {
-    position: relative;
+    flex: 0 0 160px;
+    max-width: 220px;
+    height: auto;
+    transition: all 0.3s ease;
 }
 
 .series-toggle-icon {
@@ -346,13 +350,18 @@ tr:hover { background: #1f1f1f; }
     pointer-events: none;
 }
 
+.series-card.expanded {
+    flex-basis: 320px;
+}
+
 .series-details {
-    margin-top: 12px;
+    position: relative;
+    z-index: 2;
+    margin-top: 8px;
     padding: 10px;
     background: #1a1a1a;
     border-radius: 6px;
     border: 1px solid #333;
-    transition: all 0.25s ease;
 }
 
 .series-details.collapsed {
