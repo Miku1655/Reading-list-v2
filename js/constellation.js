@@ -129,6 +129,14 @@ function drawStar(cx, cy, size, color, glow = false) {
         constellationCtx.fillStyle = color;
         constellationCtx.fill();
     }
+    if (glow && size > 8) { // only big favorites or sun-like
+        constellationCtx.shadowColor = '#ffeb3b';
+        constellationCtx.shadowBlur = 30 + Math.sin(Date.now() / 800) * 8; // gentle pulse
+        constellationCtx.fillStyle = 'rgba(255,235,59,0.4)';
+        constellationCtx.beginPath();
+        constellationCtx.arc(cx, cy, size * 1.8, 0, Math.PI * 2);
+        constellationCtx.fill();
+    }
     constellationCtx.restore();
 }
 
@@ -232,6 +240,12 @@ function calculatePositions(mode) {
                     const repel = (140 - dist) / 140 * 1.1;
                     fx += dx * repel;
                     fy += dy * repel;
+                if (group && group.includes(j)) {
+                    // Much weaker repulsion inside same series/author group
+                    const repel = (140 - dist) / 140 * (constellationBooks[i].series === constellationBooks[j].series ? 0.2 : 0.6);
+                } else {
+                    const repel = (140 - dist) / 140 * 1.1;
+                }
                 }
             }
 
@@ -245,8 +259,8 @@ function calculatePositions(mode) {
                     const dy = p2.y - p.y;
                     const dist = Math.hypot(dx, dy);
                     if (dist > 220) return;
-                    const strength = constellationBooks[i].series === constellationBooks[j].series ? 1.2 : 0.4;
-                    const attract = (dist < 40 ? 0 : (dist - 40) / 180) * strength;
+                    const strength = constellationBooks[i].series === constellationBooks[j].series ? 1.8 : 0.45; // much stronger for series
+                    const attract = (dist < 30 ? 0 : (dist - 30) / 180) * strength; // tighter minimum distance
                     fx += dx * attract;
                     fy += dy * attract;
                 });
@@ -294,12 +308,33 @@ function calculatePositions(mode) {
         });
     }
 
-    // Final very soft clamp (allow near edges, but not stuck)
-    positions.forEach(p => {
-        p.x = Math.max(20, Math.min(w - 20, p.x));
-        p.y = Math.max(20, Math.min(h - 20, p.y));
+    // No hard clamp anymore — soft repulsion from borders
+for (let iter = 0; iter < 4; iter++) { // extra few steps just for borders
+    constellationBooks.forEach((_, i) => {
+        const p = positions[i];
+        const borderDist = 100;
+        let fx = 0, fy = 0;
+
+        // Left
+        if (p.x < borderDist) {
+            fx += (borderDist - p.x) * 0.08;
+        }
+        // Right
+        if (p.x > w - borderDist) {
+            fx -= (borderDist - (w - p.x)) * 0.08;
+        }
+        // Top
+        if (p.y < borderDist) {
+            fy += (borderDist - p.y) * 0.08;
+        }
+        // Bottom
+        if (p.y > h - borderDist) {
+            fy -= (borderDist - (h - p.y)) * 0.08;
+        }
+
+        p.x += fx;
+        p.y += fy;
     });
-}
 
     return positions;
 }
@@ -320,6 +355,13 @@ function renderConstellation(force = false) {
     constellationCtx.fillStyle = gradient;
     constellationCtx.fillRect(0, 0, w, h);
 
+    const milkyGradient = constellationCtx.createLinearGradient(0, h*0.3, 0, h*0.7);
+milkyGradient.addColorStop(0, 'rgba(40,20,80,0.12)');
+milkyGradient.addColorStop(0.5, 'rgba(100,60,180,0.25)');
+milkyGradient.addColorStop(1, 'rgba(40,20,80,0.12)');
+constellationCtx.fillStyle = milkyGradient;
+constellationCtx.fillRect(0, h*0.3, w, h*0.4);
+    
     // Background tiny stars
     constellationCtx.fillStyle = '#ffffff';
     for (let i = 0; i < 600; i++) {
@@ -357,6 +399,7 @@ function renderConstellation(force = false) {
                 const p1 = positions[i];
                 const p2 = positions[j];
                 if (b1.author && b1.author === b2.author) {
+                    if (Math.hypot(p1.x - p2.x, p1.y - p2.y) > 300) return;
                     drawConnection(p1.x, p1.y, p2.x, p2.y, false);
                 }
             }
@@ -370,6 +413,7 @@ function renderConstellation(force = false) {
                 const p1 = positions[i];
                 const p2 = positions[j];
                 if (b1.series && b1.series === b2.series) {
+                    if (Math.hypot(p1.x - p2.x, p1.y - p2.y) > 300) return;
                     drawConnection(p1.x, p1.y, p2.x, p2.y, true);
                 }
             }
@@ -435,6 +479,14 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
+}
+        function animateTwinkle() {
+    renderConstellation(); // just redraws with random alpha variations
+    requestAnimationFrame(animateTwinkle);
+}
+// Start gentle animation only when tab is active
+if (document.getElementById('tab-constellation')?.classList.contains('active')) {
+    requestAnimationFrame(animateTwinkle);
 }
 
 // Export for ui-core.js
