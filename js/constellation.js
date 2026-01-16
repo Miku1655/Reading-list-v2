@@ -493,3 +493,4 @@ if (document.getElementById('tab-constellation')?.classList.contains('active')) 
 window.initConstellation = initConstellation;
 window.renderConstellation = renderConstellation;
 window.prepareConstellationData = prepareConstellationData;
+    }
