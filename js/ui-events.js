@@ -423,3 +423,37 @@ document.getElementById("addChallenge")?.addEventListener("click", addChallenge)
 document.getElementById("challengeYearly")?.addEventListener("change", e => {
     document.getElementById("challengeYearLabel").style.display = e.target.checked ? "inline" : "none";
 });
+
+// Manual pages today override
+document.addEventListener("input", e => {
+    if (e.target.id === "manualPagesToday") {
+        const selectedId = Number(document.getElementById("todayBookSelect").value);
+        const note = getDailyNoteForToday(selectedId);
+        if (note) {
+            const newValue = Math.max(0, Number(e.target.value) || 0);
+            note.pagesToday = newValue;
+            saveDailyNotesToLocal();
+
+            const display = document.getElementById("pagesTodayDisplay");
+            if (display) display.textContent = newValue;
+
+            const streakDisplay = document.getElementById("streakDisplay");
+            if (streakDisplay) streakDisplay.textContent = calculateStreak() + " days";
+        }
+    }
+});
+
+// Delete past note on click
+document.addEventListener("click", e => {
+    const item = e.target.closest(".past-note-item");
+    if (item) {
+        const date = item.dataset.date;
+        const bookId = Number(item.dataset.bookid);
+
+        if (confirm("Delete this note from " + date + "?\nThis cannot be undone.")) {
+            dailyNotes = dailyNotes.filter(n => !(n.date === date && n.bookId === bookId));
+            saveDailyNotesToLocal();
+            renderToday(); // refresh to remove it from list
+        }
+    }
+});
