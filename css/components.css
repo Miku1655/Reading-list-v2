@@ -355,17 +355,16 @@ tr:hover { background: #1f1f1f; }
 }
 
 .series-details {
-    position: relative;
-    z-index: 2;
-    margin-top: 8px;
+    margin-top: 12px;
     padding: 10px;
     background: #1a1a1a;
     border-radius: 6px;
     border: 1px solid #333;
+    transition: all 0.25s ease;
 }
 
 .series-details.collapsed {
-    display: none;
+    display: none !important;
 }
 
 .series-details ul {
