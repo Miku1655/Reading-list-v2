@@ -439,27 +439,50 @@ constellationBooks.forEach((book, i) => {
     drawStar(x, y, size, color, glow);
 });
 
-    // Hover & click
+        // Hover & click
     constellationCanvas.onmousemove = (e) => {
         const rect = constellationCanvas.getBoundingClientRect();
         const mx = (e.clientX - rect.left) * (constellationCanvas.width / rect.width) / devicePixelRatio;
         const my = (e.clientY - rect.top) * (constellationCanvas.height / rect.height) / devicePixelRatio;
 
         hoveredBook = null;
+        let closestDist = Infinity;
         for (let i = 0; i < constellationBooks.length; i++) {
             const {x, y} = positions[i];
-            const size = getStarSize(constellationBooks[i].pages) + 10;
-            if (Math.hypot(mx - x, my - y) < size) {
+            const size = getStarSize(constellationBooks[i].pages) + 5; // slightly larger hit area
+            const dist = Math.hypot(mx - x, my - y);
+            if (dist < size && dist < closestDist) {
+                closestDist = dist;
                 hoveredBook = constellationBooks[i];
-                break;
             }
         }
 
         if (hoveredBook) {
             tooltip.style.display = 'block';
-            const tooltipWidth = tooltip.offsetWidth || 200;
-            tooltip.style.left = (e.clientX - tooltipWidth / 2) + 'px';
-            tooltip.style.top = (e.clientY - 180) + 'px'; // better position, adjust if needed
+
+            // Base position: centered horizontally, 180px above cursor
+            let tooltipX = e.clientX - tooltip.offsetWidth / 2;
+            let tooltipY = e.clientY - 180 - 20; // 20px extra margin
+
+            // Flip to below if not enough space above (or if near bottom)
+            const spaceBelow = window.innerHeight - e.clientY;
+            const tooltipHeight = tooltip.offsetHeight || 120; // fallback estimate
+            if (tooltipY < 10 || spaceBelow < tooltipHeight + 60) {
+                tooltipY = e.clientY + 30; // show below cursor with margin
+            }
+
+            // Clamp horizontally to stay inside viewport
+            const spaceRight = window.innerWidth - e.clientX;
+            const tooltipW = tooltip.offsetWidth || 220;
+            if (tooltipX < 10) {
+                tooltipX = 10;
+            } else if (tooltipX + tooltipW > window.innerWidth - 10) {
+                tooltipX = window.innerWidth - tooltipW - 10;
+            }
+
+            tooltip.style.left = tooltipX + 'px';
+            tooltip.style.top  = tooltipY + 'px';
+
             tooltip.innerHTML = `
                 <strong>${hoveredBook.title}</strong><br>
                 ${hoveredBook.author}<br>
@@ -468,6 +491,36 @@ constellationBooks.forEach((book, i) => {
         } else {
             tooltip.style.display = 'none';
         }
+    };
+
+    // Optional: basic touch support for phones/tablets
+    let touchTimeout = null;
+    constellationCanvas.ontouchstart = (e) => {
+        e.preventDefault(); // prevent zoom/scroll interference if needed
+        const touch = e.touches[0];
+        // Simulate mousemove with touch coords
+        const simulatedEvent = { clientX: touch.clientX, clientY: touch.clientY };
+        constellationCanvas.onmousemove(simulatedEvent);
+
+        // Optional: hide after short delay if no movement
+        clearTimeout(touchTimeout);
+        touchTimeout = setTimeout(() => {
+            tooltip.style.display = 'none';
+        }, 4000); // hide after 4 seconds
+    };
+
+    constellationCanvas.ontouchmove = (e) => {
+        const touch = e.touches[0];
+        const simulatedEvent = { clientX: touch.clientX, clientY: touch.clientY };
+        constellationCanvas.onmousemove(simulatedEvent);
+        clearTimeout(touchTimeout);
+    };
+
+    constellationCanvas.ontouchend = () => {
+        clearTimeout(touchTimeout);
+        touchTimeout = setTimeout(() => {
+            tooltip.style.display = 'none';
+        }, 2000);
     };
 
     constellationCanvas.onclick = (e) => {
@@ -481,8 +534,6 @@ constellationBooks.forEach((book, i) => {
         tooltip.style.display = 'none';
         hoveredBook = null;
     };
-}
-
 function debounce(func, wait) {
     let timeout;
     return function(...args) {
