@@ -441,57 +441,55 @@ constellationBooks.forEach((book, i) => {
 
         // Hover & click
     constellationCanvas.onmousemove = (e) => {
-        const rect = constellationCanvas.getBoundingClientRect();
-        const mx = (e.clientX - rect.left) * (constellationCanvas.width / rect.width) / devicePixelRatio;
-        const my = (e.clientY - rect.top) * (constellationCanvas.height / rect.height) / devicePixelRatio;
+    e.preventDefault();  // ← Critical: stops page auto-scroll when mouse near edge
 
-        hoveredBook = null;
-        let closestDist = Infinity;
-        for (let i = 0; i < constellationBooks.length; i++) {
-            const {x, y} = positions[i];
-            const size = getStarSize(constellationBooks[i].pages) + 5; // slightly larger hit area
-            const dist = Math.hypot(mx - x, my - y);
-            if (dist < size && dist < closestDist) {
-                closestDist = dist;
-                hoveredBook = constellationBooks[i];
-            }
+    const rect = constellationCanvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (constellationCanvas.width / rect.width) / devicePixelRatio;
+    const my = (e.clientY - rect.top) * (constellationCanvas.height / rect.height) / devicePixelRatio;
+
+    hoveredBook = null;
+    let closestDist = Infinity;
+    for (let i = 0; i < constellationBooks.length; i++) {
+        const {x, y} = positions[i];
+        const size = getStarSize(constellationBooks[i].pages) + 10; // bumped to 10 for easier hover
+        const dist = Math.hypot(mx - x, my - y);
+        if (dist < size && dist < closestDist) {
+            closestDist = dist;
+            hoveredBook = constellationBooks[i];
+        }
+    }
+
+    if (hoveredBook) {
+        tooltip.style.display = 'block';
+
+        let tooltipX = e.clientX - tooltip.offsetWidth / 2;
+        let tooltipY = e.clientY - 180 - 20;
+
+        const spaceBelow = window.innerHeight - e.clientY;
+        const tooltipHeight = tooltip.offsetHeight || 120;
+        if (tooltipY < 10 || spaceBelow < tooltipHeight + 60) {
+            tooltipY = e.clientY + 40; // increased margin below for better visibility
         }
 
-        if (hoveredBook) {
-            tooltip.style.display = 'block';
-
-            // Base position: centered horizontally, 180px above cursor
-            let tooltipX = e.clientX - tooltip.offsetWidth / 2;
-            let tooltipY = e.clientY - 180 - 20; // 20px extra margin
-
-            // Flip to below if not enough space above (or if near bottom)
-            const spaceBelow = window.innerHeight - e.clientY;
-            const tooltipHeight = tooltip.offsetHeight || 120; // fallback estimate
-            if (tooltipY < 10 || spaceBelow < tooltipHeight + 60) {
-                tooltipY = e.clientY + 30; // show below cursor with margin
-            }
-
-            // Clamp horizontally to stay inside viewport
-            const spaceRight = window.innerWidth - e.clientX;
-            const tooltipW = tooltip.offsetWidth || 220;
-            if (tooltipX < 10) {
-                tooltipX = 10;
-            } else if (tooltipX + tooltipW > window.innerWidth - 10) {
-                tooltipX = window.innerWidth - tooltipW - 10;
-            }
-
-            tooltip.style.left = tooltipX + 'px';
-            tooltip.style.top  = tooltipY + 'px';
-
-            tooltip.innerHTML = `
-                <strong>${hoveredBook.title}</strong><br>
-                ${hoveredBook.author}<br>
-                Rating: ${hoveredBook.rating || '—'} • Pages: ${hoveredBook.pages || '?'}
-            `;
-        } else {
-            tooltip.style.display = 'none';
+        const tooltipW = tooltip.offsetWidth || 220;
+        if (tooltipX < 10) {
+            tooltipX = 10;
+        } else if (tooltipX + tooltipW > window.innerWidth - 10) {
+            tooltipX = window.innerWidth - tooltipW - 10;
         }
-    };
+
+        tooltip.style.left = tooltipX + 'px';
+        tooltip.style.top  = tooltipY + 'px';
+
+        tooltip.innerHTML = `
+            <strong>${hoveredBook.title}</strong><br>
+            ${hoveredBook.author}<br>
+            Rating: ${hoveredBook.rating || '—'} • Pages: ${hoveredBook.pages || '?'}
+        `;
+    } else {
+        tooltip.style.display = 'none';
+    }
+};
 
     // Optional: basic touch support for phones/tablets
     let touchTimeout = null;
