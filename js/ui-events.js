@@ -329,6 +329,65 @@ document.getElementById("signUpBtn").addEventListener("click", () => {
 });
 document.getElementById("signOutBtn").addEventListener("click", () => auth.signOut());
 
+// Today tab events
+document.addEventListener("change", e => {
+    if (e.target.id === "todayBookSelect") {
+        localStorage.setItem("todaySelectedBookId", e.target.value);
+        renderToday();
+    }
+});
+
+document.addEventListener("input", e => {
+    if (e.target.id === "todayPageSlider") {
+        const bookId = Number(document.getElementById("todayBookSelect").value);
+        const book = books.find(b => b.importOrder === bookId);
+        if (!book) return;
+
+        const currentRead = book.reads.find(r => r.finished === null);
+        if (currentRead) {
+            const newPage = Number(e.target.value);
+            currentRead.currentPage = newPage;
+
+            // Update today's note
+            let note = getDailyNoteForToday(bookId);
+            if (!note) {
+                note = { date: getTodayDateStr(), bookId, note: "", pagesToday: 0, sliderEnd: 0 };
+                dailyNotes.push(note);
+            }
+            note.sliderEnd = newPage;
+            note.pagesToday = note.sliderEnd; // simple: today's progress = current position (can be refined later)
+
+            saveBooksToLocal();
+            saveDailyNotesToLocal();
+
+            document.getElementById("pagesTodayDisplay").textContent = note.pagesToday;
+        }
+    }
+});
+
+document.addEventListener("blur", e => {
+    if (e.target.id === "todayNote") {
+        const bookId = Number(document.getElementById("todayBookSelect").value);
+        let note = getDailyNoteForToday(bookId);
+        if (!note) {
+            note = { date: getTodayDateStr(), bookId, note: "", pagesToday: 0, sliderEnd: 0 };
+            dailyNotes.push(note);
+        }
+        note.note = e.target.value.trim();
+
+        saveDailyNotesToLocal();
+
+        // Refresh streak display
+        document.getElementById("streakDisplay").textContent = calculateStreak() + " days";
+    }
+}, true); // capture blur
+
+document.addEventListener("click", e => {
+    if (e.target.id === "refreshTodayQuote") {
+        renderToday(); // just re-render to get new random quote
+    }
+});
+
 // Initial load
 document.addEventListener("DOMContentLoaded", () => {
     initApp(); // From ui-core.js
