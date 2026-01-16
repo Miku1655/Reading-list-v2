@@ -524,7 +524,8 @@ constellationBooks.forEach((book, i) => {
         hoveredBook = null;
         clearTimeout(touchHideTimer);
     });
-    
+}
+
 function debounce(func, wait) {
     let timeout;
     return function(...args) {
