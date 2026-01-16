@@ -197,6 +197,7 @@ function calculatePositions(mode) {
             groups[key].push(i);
         });
 
+        // Sun = max pages
         let sunIndex = 0;
         let maxPages = 0;
         constellationBooks.forEach((b, i) => {
@@ -220,7 +221,10 @@ function calculatePositions(mode) {
             return {x: w * (0.25 + Math.random() * 0.5), y: h * (0.25 + Math.random() * 0.5)};
         });
 
-        for (let iter = 0; iter < 20; iter++) {
+        const aspectRatio = w / h; // >1 = wider, <1 = taller
+        const borderStrength = 0.12 * (aspectRatio > 1 ? aspectRatio : 1 / aspectRatio); // stronger on shorter axis
+
+        for (let iter = 0; iter < 22; iter++) { // slightly more iterations for better settling
             constellationBooks.forEach((book, i) => {
                 if (i === sunIndex) return;
 
@@ -228,7 +232,7 @@ function calculatePositions(mode) {
                 const p = positions[i];
                 const mass = getStarSize(book.pages) / 8;
 
-                // Repulsion from others (gentle)
+                // Repulsion from others
                 for (let j = 0; j < constellationBooks.length; j++) {
                     if (i === j) continue;
                     const p2 = positions[j];
@@ -236,15 +240,15 @@ function calculatePositions(mode) {
                     const dy = p.y - p2.y;
                     const dist = Math.hypot(dx, dy);
                     if (dist < 140) {
-                        const isSameGroup = groups[Object.keys(groups).find(k => groups[k].includes(i))] === groups[Object.keys(groups).find(k => groups[k].includes(j))];
-                        const repelStrength = isSameGroup ? 0.3 : 1.1;
+                        const isSameSeries = constellationBooks[i].series === constellationBooks[j].series;
+                        const repelStrength = isSameSeries ? 0.15 : (dist < 80 ? 0.9 : 1.2);
                         const repel = (140 - dist) / 140 * repelStrength;
                         fx += dx * repel;
                         fy += dy * repel;
                     }
                 }
 
-                // Stronger attraction for series
+                // Series & author attraction (series much tighter)
                 const group = Object.values(groups).find(g => g.includes(i));
                 if (group && group.length > 1) {
                     group.forEach(j => {
@@ -254,20 +258,20 @@ function calculatePositions(mode) {
                         const dy = p2.y - p.y;
                         const dist = Math.hypot(dx, dy);
                         if (dist > 220) return;
-                        const strength = constellationBooks[i].series === constellationBooks[j].series ? 1.8 : 0.45;
-                        const attract = (dist < 30 ? 0 : (dist - 30) / 180) * strength;
+                        const strength = constellationBooks[i].series === constellationBooks[j].series ? 2.0 : 0.5;
+                        const attract = (dist < 25 ? 0 : (dist - 25) / 160) * strength;
                         fx += dx * attract;
                         fy += dy * attract;
                     });
                 }
 
-                // Attraction to sun & planets
+                // Sun & planets attraction
                 const sunP = positions[sunIndex];
                 const toSunX = sunP.x - p.x;
                 const toSunY = sunP.y - p.y;
                 const sunDist = Math.hypot(toSunX, toSunY);
-                const sunStrength = planetIndices.includes(i) ? 0.7 : 0.25;
-                const sunAttract = (sunDist / 300) * sunStrength * mass;
+                const sunStrength = planetIndices.includes(i) ? 0.75 : 0.3;
+                const sunAttract = (sunDist / 280) * sunStrength * mass;
                 fx += toSunX * sunAttract;
                 fy += toSunY * sunAttract;
 
@@ -279,21 +283,25 @@ function calculatePositions(mode) {
                         const dy = p2.y - p.y;
                         const dist = Math.hypot(dx, dy);
                         if (dist > 400) return;
-                        const attract = (400 - dist) / 400 * 0.12 * mass;
+                        const attract = (400 - dist) / 400 * 0.15 * mass;
                         fx += dx * attract;
                         fy += dy * attract;
                     });
                 }
 
-                // Soft border repulsion
-                const borderDist = 100;
-                if (p.x < borderDist) fx += (borderDist - p.x) * 0.08;
-                if (p.x > w - borderDist) fx -= (borderDist - (w - p.x)) * 0.08;
-                if (p.y < borderDist) fy += (borderDist - p.y) * 0.08;
-                if (p.y > h - borderDist) fy -= (borderDist - (h - p.y)) * 0.08;
+                // Continuous soft border repulsion (stronger on shorter axis)
+                const borderDist = 120;
+                const leftRepel = Math.max(0, (borderDist - p.x) / borderDist) * borderStrength;
+                const rightRepel = Math.max(0, (borderDist - (w - p.x)) / borderDist) * borderStrength;
+                const topRepel = Math.max(0, (borderDist - p.y) / borderDist) * borderStrength;
+                const bottomRepel = Math.max(0, (borderDist - (h - p.y)) / borderDist) * borderStrength;
 
-                p.x += fx * 0.55 + (Math.random() - 0.5) * 1.8;
-                p.y += fy * 0.55 + (Math.random() - 0.5) * 1.8;
+                fx += leftRepel * 30 - rightRepel * 30;
+                fy += topRepel * 30 - bottomRepel * 30;
+
+                // Apply movement + jitter
+                p.x += fx * 0.5 + (Math.random() - 0.5) * 2;
+                p.y += fy * 0.5 + (Math.random() - 0.5) * 2;
             });
         }
     }
