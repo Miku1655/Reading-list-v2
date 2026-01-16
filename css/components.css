@@ -334,39 +334,58 @@ tr:hover { background: #1f1f1f; }
 
 /* Collapsible series in favourites */
 .series-card {
-    flex: 0 0 160px;
+    position: relative;
+    flex: 0 0 160px;              /* base width for collapsed state */
     max-width: 220px;
+    min-height: 240px;            /* prevents too much jumping when expanding */
     height: auto;
-    transition: all 0.3s ease;
+    transition: all 0.35s ease;
+    overflow: hidden;             /* contains expanding content nicely */
+    border-radius: 6px;
+    background: #222;
+    border: 1px solid #444;
 }
 
 .series-toggle-icon {
     position: absolute;
     top: 12px;
     right: 12px;
-    font-size: 1.4em;
+    font-size: 1.5em;
     font-weight: bold;
     color: #888;
     pointer-events: none;
+    transition: transform 0.3s ease;
 }
 
-.series-card.expanded {
-    flex-basis: 320px;
+/* When expanded: full width + visual emphasis */
+.series-card:has(.series-details:not(.collapsed)) {
+    flex: 1 1 100%;               /* ← takes full row width */
+    max-width: none;
+    z-index: 2;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    transform: translateY(-4px);  /* slight lift effect */
 }
 
+.series-card:has(.series-details:not(.collapsed)) .series-toggle-icon {
+    transform: rotate(180deg);    /* nice visual feedback (optional) */
+}
+
+/* Details container */
 .series-details {
-    margin-top: 12px;
-    padding: 10px;
+    margin: 12px 0 4px 0;
+    padding: 12px;
     background: #1a1a1a;
     border-radius: 6px;
-    border: 1px solid #333;
-    transition: all 0.25s ease;
+    border: 1px solid #444;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    opacity: 1;
 }
 
 .series-details.collapsed {
     display: none !important;
 }
 
+/* List styling inside details */
 .series-details ul {
     list-style: none;
     padding: 0;
@@ -374,12 +393,17 @@ tr:hover { background: #1f1f1f; }
 }
 
 .series-details li {
-    padding: 6px 0;
+    padding: 8px 0;
     border-bottom: 1px solid #333;
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 0.9em;
+    gap: 12px;
+    font-size: 0.92em;
+    transition: background 0.2s;
+}
+
+.series-details li:hover {
+    background: rgba(255,255,255,0.04);
 }
 
 .series-details li:last-child {
@@ -387,19 +411,21 @@ tr:hover { background: #1f1f1f; }
 }
 
 .series-book-status {
-    min-width: 70px;
+    min-width: 80px;
     font-weight: bold;
-    color: #aaa;
+    color: #bbb;
+    text-align: right;
 }
 
 .series-book-thumb {
-    width: 36px;
-    height: 54px;
+    width: 40px;
+    height: 60px;
     object-fit: cover;
-    border-radius: 3px;
+    border-radius: 4px;
     flex-shrink: 0;
+    border: 1px solid #333;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
 }
-
 .quote-entry {
     margin-bottom: 12px;
     padding: 8px;
