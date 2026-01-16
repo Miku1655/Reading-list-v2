@@ -113,9 +113,8 @@ function createSeriesCard(series) {
 
     // Click handler – toggle collapse
     div.addEventListener("click", (e) => {
-        // Prevent opening edit modal when clicking series card
         e.stopPropagation();
-        
+        e.preventDefault();
         const isCollapsed = detailsContainer.classList.toggle("collapsed");
         const icon = div.querySelector(".series-toggle-icon");
         if (icon) {
