@@ -480,27 +480,40 @@ function getDailyNoteForToday(bookId) {
 function calculateStreak() {
     if (dailyNotes.length === 0) return 0;
     
-    // Sort by date descending
-    const sorted = [...dailyNotes]
-        .sort((a,b) => new Date(b.date) - new Date(a.date));
+    // Get unique active days (with pages >0 or non-empty note)
+    const activeDays = new Set();
+    dailyNotes.forEach(note => {
+        if (note.pagesToday > 0 || (note.note && note.note.trim())) {
+            activeDays.add(note.date);
+        }
+    });
     
-    let streak = 0;
-    let currentDate = new Date();
+    if (activeDays.size === 0) return 0;
+    
+    // Sort days descending
+    const sortedDays = Array.from(activeDays).sort((a,b) => new Date(b) - new Date(a));
+    
+    let streak = 1; // start with today if active
+    let currentDate = new Date(sortedDays[0]);
     currentDate.setHours(0,0,0,0);
     
-    for (let note of sorted) {
-        const noteDate = new Date(note.date);
-        noteDate.setHours(0,0,0,0);
+    for (let i = 1; i < sortedDays.length; i++) {
+        const prevDate = new Date(sortedDays[i]);
+        prevDate.setHours(0,0,0,0);
         
-        const diffDays = Math.round((currentDate - noteDate) / (1000*60*60*24));
-        
-        if (diffDays > 1) break; // gap → streak ends
-        if (note.pagesToday > 0 || (note.note && note.note.trim())) {
+        const diffDays = (currentDate - prevDate) / (1000*60*60*24);
+        if (diffDays === 1) {
             streak++;
-            currentDate = new Date(noteDate);
-            currentDate.setDate(currentDate.getDate() - 1);
+            currentDate = prevDate;
+        } else {
+            break; // gap → end streak
         }
     }
+    
+    // Check if today is active (otherwise streak=0 if no today activity)
+    const todayStr = getTodayDateStr();
+    if (!activeDays.has(todayStr)) return 0;
+    
     return streak;
 }
 
