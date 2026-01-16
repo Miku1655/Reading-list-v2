@@ -534,3 +534,11 @@ tr:hover { background: #1f1f1f; }
     border: 1px solid #333;
     color: #ddd;
 }
+
+#constellationCanvas {
+    touch-action: none;          /* Prevents touch scrolling/pan/zoom on mobile/tablet */
+    user-select: none;           /* Stops text/selection drag that triggers auto-scroll */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
