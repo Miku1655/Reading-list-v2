@@ -232,6 +232,11 @@ document.getElementById("removeGoal").addEventListener("click", () => {
     }
 });
 // Settings
+document.getElementById("showNumbers").addEventListener("change", e => {
+    const value = e.target.checked;
+    localStorage.setItem(SHOW_NUM_KEY, JSON.stringify(value));
+    renderTable();  // usually needed after this setting changes
+});
 document.getElementById("showYearGoalProgress").addEventListener("change", e => {
     showYearGoalProgress = e.target.checked;
     localStorage.setItem(SHOW_YEAR_GOAL_PROGRESS_KEY, JSON.stringify(showYearGoalProgress));
