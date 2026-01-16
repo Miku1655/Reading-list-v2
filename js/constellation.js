@@ -534,6 +534,7 @@ constellationBooks.forEach((book, i) => {
         tooltip.style.display = 'none';
         hoveredBook = null;
     };
+}
 function debounce(func, wait) {
     let timeout;
     return function(...args) {
