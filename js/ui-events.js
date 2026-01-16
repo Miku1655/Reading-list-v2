@@ -344,23 +344,40 @@ document.addEventListener("input", e => {
         if (!book) return;
 
         const currentRead = book.reads.find(r => r.finished === null);
-        if (currentRead) {
-            const newPage = Number(e.target.value);
-            currentRead.currentPage = newPage;
+        if (!currentRead) return;
 
-            // Update today's note
-            let note = getDailyNoteForToday(bookId);
-            if (!note) {
-                note = { date: getTodayDateStr(), bookId, note: "", pagesToday: 0, sliderEnd: 0 };
-                dailyNotes.push(note);
-            }
-            note.sliderEnd = newPage;
-            note.pagesToday = note.sliderEnd; // simple: today's progress = current position (can be refined later)
+        const newPage = Number(e.target.value);
+        currentRead.currentPage = newPage;
 
-            saveBooksToLocal();
-            saveDailyNotesToLocal();
+        // Update today's note / progress
+        let note = getDailyNoteForToday(bookId);
+        if (!note) {
+            note = { date: getTodayDateStr(), bookId, note: "", pagesToday: 0, sliderEnd: 0 };
+            dailyNotes.push(note);
+        }
+        note.sliderEnd = newPage;
+        note.pagesToday = newPage;  // For now: pages today = current position (simplest version)
+        // If you later want real daily delta, you'd track yesterday's end page here
 
-            document.getElementById("pagesTodayDisplay").textContent = note.pagesToday;
+        // SAVE immediately so data persists
+        saveBooksToLocal();
+        saveDailyNotesToLocal();
+
+        // LIVE UPDATE the UI elements without full re-render
+        const pageDisplay = document.querySelector("#todayContainer .book-card p:last-child");
+        if (pageDisplay) {
+            pageDisplay.textContent = `Pages: ${newPage} / ${book.pages || '?'}`;
+        }
+
+        const pagesTodayElem = document.getElementById("pagesTodayDisplay");
+        if (pagesTodayElem) {
+            pagesTodayElem.textContent = note.pagesToday;
+        }
+
+        // Optional: update streak if note becomes active (rarely needed live)
+        const streakElem = document.getElementById("streakDisplay");
+        if (streakElem) {
+            streakElem.textContent = calculateStreak() + " days";
         }
     }
 });
