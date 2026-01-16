@@ -441,50 +441,62 @@ constellationBooks.forEach((book, i) => {
 
 // Hover & click
     constellationCanvas.onmousemove = (e) => {
-        const rect = constellationCanvas.getBoundingClientRect();
-        const mx = (e.clientX - rect.left) * (constellationCanvas.width / rect.width) / devicePixelRatio;
-        const my = (e.clientY - rect.top) * (constellationCanvas.height / rect.height) / devicePixelRatio;
-        hoveredBook = null;
-        for (let i = 0; i < constellationBooks.length; i++) {
-            const {x, y} = positions[i];
-            const size = getStarSize(constellationBooks[i].pages) + 10;
-            if (Math.hypot(mx - x, my - y) < size) {
-                hoveredBook = constellationBooks[i];
-                break;
-            }
-        }
-        if (hoveredBook) {
-            tooltip.style.display = 'block';
-            const tooltipWidth = tooltip.offsetWidth || 200;
-            tooltip.style.left = (e.clientX - tooltipWidth / 2) + 'px';
-            tooltip.style.top = (e.clientY - 180) + 'px'; // better position, adjust if needed
-            tooltip.innerHTML = `
-                <strong>${hoveredBook.title}</strong><br>
-                ${hoveredBook.author}<br>
-                Rating: ${hoveredBook.rating || '—'} • Pages: ${hoveredBook.pages || '?'}
-            `;
-        } else {
-            tooltip.style.display = 'none';
-        }
-    };
-    constellationCanvas.onclick = (e) => {
-        if (hoveredBook) {
-            editingBook = hoveredBook;
-            openEditModal();
-        }
-    };
-    constellationCanvas.onmouseleave = () => {
-        tooltip.style.display = 'none';
-        hoveredBook = null;
-    };
-}
+    const rect = constellationCanvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (constellationCanvas.width / rect.width) / devicePixelRatio;
+    const my = (e.clientY - rect.top) * (constellationCanvas.height / rect.height) / devicePixelRatio;
 
-function debounce(func, wait) {
-    let timeout;
-    return function(...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-    };
+    hoveredBook = null;
+    for (let i = 0; i < constellationBooks.length; i++) {
+        const {x, y} = positions[i];
+        const size = getStarSize(constellationBooks[i].pages) + 10;
+        if (Math.hypot(mx - x, my - y) < size) {
+            hoveredBook = constellationBooks[i];
+            break;
+        }
+    }
+
+    if (hoveredBook) {
+        tooltip.style.display = 'block';
+
+        // Get dimensions after display:block (important!)
+        const tooltipWidth  = tooltip.offsetWidth  || 240;   // fallback if still 0
+        const tooltipHeight = tooltip.offsetHeight || 90;
+
+        // Desired center position (your original logic)
+        let left = e.clientX - tooltipWidth / 2;
+        let top  = e.clientY - 180;   // tries to show mostly above cursor
+
+        // ─── Clamp to screen edges ──────────────────────────────────────
+        // Left edge
+        if (left < 8) {
+            left = 8;
+        }
+        // Right edge
+        if (left + tooltipWidth > window.innerWidth - 8) {
+            left = window.innerWidth - tooltipWidth - 8;
+        }
+
+        // Top edge
+        if (top < 8) {
+            top = 8;
+        }
+        // Bottom edge — the main problem you described
+        if (top + tooltipHeight > window.innerHeight - 8) {
+            top = window.innerHeight - tooltipHeight - 8;
+        }
+
+        tooltip.style.left = left + 'px';
+        tooltip.style.top  = top + 'px';
+
+        tooltip.innerHTML = `
+            <strong>${hoveredBook.title}</strong><br>
+            ${hoveredBook.author}<br>
+            Rating: ${hoveredBook.rating || '—'} • Pages: ${hoveredBook.pages || '?'}
+        `;
+    } else {
+        tooltip.style.display = 'none';
+    }
+};
 }
 
 window.initConstellation = initConstellation;
