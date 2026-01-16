@@ -72,6 +72,10 @@ function switchTab(name) {
         renderMap();
     }
     
+if (name === "today") {
+    renderToday();
+}
+    
     if (name === "constellation") {
     if (!constellationCanvas) initConstellation();
     renderConstellation();
@@ -115,7 +119,9 @@ function renderAll() {
     if (document.getElementById("tab-list")?.classList.contains("active")) {
         renderYearGoalProgress();
     }
-    
+    if (document.getElementById("tab-today")?.classList.contains("active")) {
+    renderToday();
+}
     // Tab-specific heavy renders
     const activeTab = document.querySelector(".tab.active")?.dataset.tab;
     
