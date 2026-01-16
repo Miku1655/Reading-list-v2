@@ -328,3 +328,18 @@ document.getElementById("signUpBtn").addEventListener("click", () => {
     auth.createUserWithEmailAndPassword(email, pass).catch(err => alert("Sign up error: " + err.message));
 });
 document.getElementById("signOutBtn").addEventListener("click", () => auth.signOut());
+
+// Initial load
+document.addEventListener("DOMContentLoaded", () => {
+    initApp(); // From ui-core.js
+    document.getElementById("goalYear").value = new Date().getFullYear();
+    loadGoalsForYear();
+    if (localStorage.getItem(TAB_KEY) === "constellation") {
+        setTimeout(initConstellation, 100); // give time for canvas to exist
+    }
+});
+
+document.getElementById("addChallenge")?.addEventListener("click", addChallenge);
+document.getElementById("challengeYearly")?.addEventListener("change", e => {
+    document.getElementById("challengeYearLabel").style.display = e.target.checked ? "inline" : "none";
+});
