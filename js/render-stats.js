@@ -79,60 +79,68 @@ function renderStats() {
     });
     html += `Total books: ${dist.totalBooks}`;
     html += '</div></div>';
-    html += '<div class="stats-block"><h2>Languages</h2>';
+    
+    // Languages
+html += '<div class="stats-block"><h2>Languages</h2>';
 if (dist.readCount === 0) {
     html += '<div class="stats-list">No books marked as read yet.</div>';
 } else {
-    // Sort descending by count, then alphabetically on ties
-    const sortedLanguages = [...languageData.labels]
-        .map((label, i) => ({ label, count: languageData.values[i] }))
-        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    // Use RAW distribution data – should be object like { "Polish": 45, "English": 21, ... }
+    const langEntries = Object.entries(dist.language || {})
+        .map(([label, count]) => ({ label: label || 'Unknown', count }));
+
+    // Sort: count desc → label asc
+    langEntries.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
     html += '<div class="stats-scroll-container stats-list">';
-    sortedLanguages.forEach(item => {
+    langEntries.forEach(item => {
         const perc = (item.count / dist.readCount * 100).toFixed(0);
-        html += `<div>• ${item.label || 'Unknown'}: ${item.count} (${perc}%)</div>`;
+        html += `<div>• ${item.label}: ${item.count} (${perc}%)</div>`;
     });
     html += '</div>';
-    html += `<br><small>Among ${dist.readCount} read books • ${sortedLanguages.length} unique</small>`;
+    html += `<br><small>Among ${dist.readCount} read books • ${langEntries.length} unique</small>`;
 }
 html += '</div>';
 
-// ── Countries ────────────────────────────────────────────────────────────────
+
+// Countries – same pattern, use dist.country
 html += '<div class="stats-block"><h2>Countries</h2>';
 if (dist.readCount === 0) {
     html += '<div class="stats-list">No books marked as read yet.</div>';
 } else {
-    const sortedCountries = [...countryData.labels]
-        .map((label, i) => ({ label, count: countryData.values[i] }))
-        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    const countryEntries = Object.entries(dist.country || {})
+        .map(([label, count]) => ({ label: label || 'Unknown', count }));
+
+    countryEntries.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
     html += '<div class="stats-scroll-container stats-list">';
-    sortedCountries.forEach(item => {
+    countryEntries.forEach(item => {
         const perc = (item.count / dist.readCount * 100).toFixed(0);
-        html += `<div>• ${item.label || 'Unknown'}: ${item.count} (${perc}%)</div>`;
+        html += `<div>• ${item.label}: ${item.count} (${perc}%)</div>`;
     });
     html += '</div>';
-    html += `<br><small>Among ${dist.readCount} read books • ${sortedCountries.length} unique</small>`;
+    html += `<br><small>Among ${dist.readCount} read books • ${countryEntries.length} unique</small>`;
 }
 html += '</div>';
 
-// ── Genres ───────────────────────────────────────────────────────────────────
+
+// Genres – same, use dist.genre
 html += '<div class="stats-block"><h2>Genres</h2>';
 if (dist.readCount === 0) {
     html += '<div class="stats-list">No books marked as read yet.</div>';
 } else {
-    const sortedGenres = [...genreData.labels]
-        .map((label, i) => ({ label, count: genreData.values[i] }))
-        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    const genreEntries = Object.entries(dist.genre || {})
+        .map(([label, count]) => ({ label: label || 'Unknown', count }));
+
+    genreEntries.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
     html += '<div class="stats-scroll-container stats-list">';
-    sortedGenres.forEach(item => {
+    genreEntries.forEach(item => {
         const perc = (item.count / dist.readCount * 100).toFixed(0);
-        html += `<div>• ${item.label || 'Unknown'}: ${item.count} (${perc}%)</div>`;
+        html += `<div>• ${item.label}: ${item.count} (${perc}%)</div>`;
     });
     html += '</div>';
-    html += `<br><small>Among ${dist.readCount} read books • ${sortedGenres.length} unique</small>`;
+    html += `<br><small>Among ${dist.readCount} read books • ${genreEntries.length} unique</small>`;
 }
 html += '</div>';
     
