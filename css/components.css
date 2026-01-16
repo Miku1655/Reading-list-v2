@@ -570,3 +570,8 @@ tr:hover { background: #1f1f1f; }
     border-color: #666;
     box-shadow: 0 0 0 2px rgba(100,100,100,0.3);
 }
+
+.past-note-item:hover {
+    background: #222;
+    border-color: #555;
+}
