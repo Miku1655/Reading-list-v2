@@ -136,3 +136,19 @@
 .stats-scroll-container br + br {
     display: none;  /* reduces extra vertical space between items */
 }
+
+/* Force lower stats blocks to behave like upper ones */
+.stats-upper .stats-block {
+    flex: 1 1 280px;          /* grow, shrink, base min width */
+    min-width: 280px;
+    max-width: 420px;         /* ← prevents them from becoming too wide on very large screens */
+    box-sizing: border-box;
+}
+
+/* Optional: make sure the whole lower row wraps nicely like upper */
+.stats-upper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;  /* ← centers if fewer items */
+}
