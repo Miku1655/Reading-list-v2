@@ -1,9 +1,41 @@
+function renderPastNotes() {
+    if (dailyNotes.length === 0) {
+        return "<p style='color:#888; text-align:center;'>No notes yet – start writing!</p>";
+    }
+
+    // Sort by date descending
+    const sorted = [...dailyNotes].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    let html = "";
+    let lastDate = "";
+
+    for (const note of sorted) {
+        if (note.date !== lastDate) {
+            const dateObj = new Date(note.date);
+            const formatted = dateObj.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            html += `<h5 style="margin:20px 0 8px; color:#aaa; border-bottom:1px solid #333; padding-bottom:4px;">${formatted}</h5>`;
+            lastDate = note.date;
+        }
+
+        const book = books.find(b => b.importOrder === note.bookId);
+        const title = book ? book.title : "(Book deleted)";
+
+        html += `
+            <div style="padding:12px; background:#1a1a1a; border-radius:6px; margin-bottom:12px; border:1px solid #333;">
+                <strong>${title}</strong> — ${note.pagesToday} pages today<br>
+                ${note.note ? `<p style="margin:8px 0 0; font-style:italic; color:#ccc;">${note.note.replace(/\n/g, '<br>')}</p>` : '<p style="color:#666; margin:8px 0 0;">No note</p>'}
+            </div>
+        `;
+    }
+
+    return html;
+}
 function renderToday() {
     const container = document.getElementById("todayContainer");
     if (!container) return;
 
     const currentReading = books.filter(b => b.exclusiveShelf === "currently-reading");
-    
+
     if (currentReading.length === 0) {
         container.innerHTML = `
             <div style="text-align:center; padding:80px 20px; color:#aaa;">
@@ -17,7 +49,7 @@ function renderToday() {
         return;
     }
 
-    // Get last selected (or first)
+    // Get last selected book (or first)
     let selectedId = Number(localStorage.getItem("todaySelectedBookId") || currentReading[0].importOrder);
     let selectedBook = currentReading.find(b => b.importOrder === selectedId);
     if (!selectedBook) {
@@ -26,28 +58,30 @@ function renderToday() {
         localStorage.setItem("todaySelectedBookId", selectedId);
     }
 
-    // Ensure the book has an unfinished read entry
-    let currentRead = selectedBook.reads?.find(r => r.finished === null);
+    // Ensure this book has an unfinished read entry with currentPage
+    let currentRead = selectedBook.reads.find(r => r.finished === null);
     if (!currentRead) {
-        if (!selectedBook.reads) selectedBook.reads = [];
         currentRead = { started: Date.now(), finished: null, currentPage: 0 };
         selectedBook.reads.push(currentRead);
-        saveBooksToLocal();
+        saveBooksToLocal(); // persist immediately
     }
-    const currentPage = currentRead.currentPage || 0;
+    let currentPage = currentRead.currentPage || 0;
 
     const today = getTodayDateStr();
+
+    // Get or create today's note
     let todayNote = getDailyNoteForToday(selectedId);
 
-    // If no note for today → create with smart startPage
     if (!todayNote) {
-        let startPage = currentPage;
+        // New day: determine starting page for delta calculation
+        let startPage = currentPage; // default: assume you start today where you are
 
-        // Try to carry over from yesterday's end (if same book)
+        // Check yesterday's note for this book to continue from there
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = yesterday.toISOString().split('T')[0];
         const yesterdayNote = dailyNotes.find(n => n.date === yesterdayStr && n.bookId === selectedId);
+
         if (yesterdayNote && yesterdayNote.sliderEnd !== undefined) {
             startPage = yesterdayNote.sliderEnd;
         }
@@ -56,16 +90,17 @@ function renderToday() {
             date: today,
             bookId: selectedId,
             note: "",
-            pagesToday: 0,
-            startPage,
-            sliderEnd: currentPage
+            pagesToday: Math.max(0, currentPage - startPage), // initial delta
+            sliderEnd: currentPage,
+            startPage: startPage
         };
         dailyNotes.push(todayNote);
         saveDailyNotesToLocal();
     } else {
-        // Recalculate pagesToday in case currentPage changed elsewhere
-        todayNote.pagesToday = Math.max(0, currentPage - (todayNote.startPage || 0));
-        saveDailyNotesToLocal();
+        // Existing note today: ensure pagesToday is correct delta
+        const startPage = todayNote.startPage || 0;
+        todayNote.pagesToday = Math.max(0, currentPage - startPage);
+        todayNote.sliderEnd = currentPage;
     }
 
     // Random favorite quote
@@ -77,13 +112,15 @@ function renderToday() {
             });
         }
     });
-    const randomQuote = favoriteQuotes.length > 0 ? favoriteQuotes[Math.floor(Math.random() * favoriteQuotes.length)] : null;
+    const randomQuote = favoriteQuotes.length > 0 
+        ? favoriteQuotes[Math.floor(Math.random() * favoriteQuotes.length)] 
+        : null;
 
     let html = `
         <h2 style="text-align:center; margin-bottom:32px;">Your Reading Today</h2>
         
         <div style="margin-bottom:24px; text-align:center;">
-            <label>Select book: 
+            <label>Select book:
                 <select id="todayBookSelect" style="padding:8px; font-size:1.1em; background:#222; color:#eee; border:1px solid #444;">
                     ${currentReading.map(b => `<option value="${b.importOrder}" ${b.importOrder === selectedId ? 'selected' : ''}>${b.title} by ${b.author || '?'}</option>`).join('')}
                 </select>
@@ -91,7 +128,10 @@ function renderToday() {
         </div>
 
         <div class="book-card" style="margin:0 auto 32px; width:300px; padding:16px;">
-            ${selectedBook.coverUrl ? `<img src="${selectedBook.coverUrl}" alt="${selectedBook.title}" style="width:100%; height:400px; object-fit:cover; border-radius:8px;">` : '<div class="no-cover" style="height:400px;">No cover</div>'}
+            ${selectedBook.coverUrl 
+                ? `<img src="${selectedBook.coverUrl}" alt="${selectedBook.title}" style="width:100%; height:400px; object-fit:cover; border-radius:8px;">` 
+                : '<div class="no-cover" style="height:400px; background:#1a1a1a; display:flex; align-items:center; justify-content:center; color:#666; border-radius:8px;">No cover</div>'
+            }
             <h3 style="margin:12px 0 4px;">${selectedBook.title}</h3>
             <p style="color:#aaa;">${selectedBook.author || 'Unknown'}</p>
             <p style="margin-top:8px;">Pages: ${currentPage} / ${selectedBook.pages || '?'}</p>
@@ -100,7 +140,9 @@ function renderToday() {
         <div style="margin:32px 0; text-align:center;">
             <h3>Progress Today</h3>
             <input type="range" id="todayPageSlider" min="0" max="${selectedBook.pages || 1000}" value="${currentPage}" style="width:80%; max-width:500px; height:12px; margin:16px 0;">
-            <div id="liveProgressDisplay" style="font-size:1.6em; font-weight:bold;">${currentPage} pages</div>
+            <div id="liveProgressDisplay" style="font-size:2em; font-weight:bold; margin-top:12px; color:#eee;">
+                ${currentPage} pages
+            </div>
         </div>
 
         <div style="margin:32px 0;">
@@ -110,16 +152,25 @@ function renderToday() {
 
         <div style="display:flex; justify-content:space-between; margin:24px 0; padding:16px; background:#1a1a1a; border:1px solid #333; border-radius:8px;">
             <div>Streak: <strong id="streakDisplay">${calculateStreak()} days</strong></div>
-            <div>Pages today: <strong id="pagesTodayDisplay">${todayNote.pagesToday || 0}</strong></div>
+            <div>Pages today: <strong id="pagesTodayDisplay">${todayNote.pagesToday}</strong></div>
         </div>
 
         ${randomQuote ? `
         <div style="margin-top:40px; padding:20px; background:#111; border-left:4px solid #666; border-radius:4px;">
-            <blockquote style="font-style:italic; margin:0 0 12px;">"${randomQuote.text}"</blockquote>
-            <p style="text-align:right; color:#aaa;">— ${randomQuote.bookTitle} by ${randomQuote.bookAuthor || '?'}${randomQuote.page ? ` (p.${randomQuote.page})` : ''}</p>
+            <blockquote style="font-style:italic; margin:0 0 12px; font-size:1.1em;">"${randomQuote.text}"</blockquote>
+            <p style="text-align:right; color:#aaa;">
+                — ${randomQuote.bookTitle} by ${randomQuote.bookAuthor || '?'}${randomQuote.page ? ` (p.${randomQuote.page})` : ''}
+            </p>
             <button id="refreshTodayQuote" style="margin-top:8px; padding:6px 12px;">New quote</button>
         </div>
-        ` : '<p style="text-align:center; color:#666; margin-top:40px;">No favorite quotes yet</p>'}
+        ` : '<p style="text-align:center; color:#666; margin-top:40px;">No favorite quotes yet – mark some in book details!</p>'}
+
+        <div class="edit-section" style="margin-top:40px;">
+            <h4 onclick="this.parentElement.classList.toggle('collapsed')" style="cursor:pointer;">Past Notes ▼</h4>
+            <div class="edit-section-content" style="max-height:300px; overflow-y:auto; padding:8px 0;">
+                ${renderPastNotes()}
+            </div>
+        </div>
     `;
 
     container.innerHTML = html;
