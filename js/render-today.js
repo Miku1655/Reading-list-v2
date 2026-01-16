@@ -65,7 +65,7 @@ function renderToday() {
         <div style="margin:32px 0; text-align:center;">
             <h3>Progress Today</h3>
             <input type="range" id="todayPageSlider" min="0" max="${selectedBook.pages || 1000}" value="${currentPage}" style="width:80%; max-width:500px; height:12px; margin:16px 0;">
-            <div style="font-size:1.6em; font-weight:bold;">${currentPage} pages</div>
+            <div id="liveProgressDisplay" style="font-size:1.6em; font-weight:bold;">${currentPage} pages</div>
         </div>
 
         <div style="margin:32px 0;">
