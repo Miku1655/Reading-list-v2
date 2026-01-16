@@ -26,14 +26,49 @@ function renderToday() {
         localStorage.setItem("todaySelectedBookId", selectedId);
     }
 
-    const today = getTodayDateStr();
-    const todayNote = getDailyNoteForToday(selectedId) || { date: today, bookId: selectedId, note: "", pagesToday: 0, sliderEnd: 0 };
-    
-    // Current page from book's read entry
-    const currentRead = selectedBook.reads.find(r => r.finished === null);
-    const currentPage = currentRead?.currentPage || 0;
+    // Ensure the book has an unfinished read entry
+    let currentRead = selectedBook.reads?.find(r => r.finished === null);
+    if (!currentRead) {
+        if (!selectedBook.reads) selectedBook.reads = [];
+        currentRead = { started: Date.now(), finished: null, currentPage: 0 };
+        selectedBook.reads.push(currentRead);
+        saveBooksToLocal();
+    }
+    const currentPage = currentRead.currentPage || 0;
 
-    // Random favorite quote (reuse logic)
+    const today = getTodayDateStr();
+    let todayNote = getDailyNoteForToday(selectedId);
+
+    // If no note for today → create with smart startPage
+    if (!todayNote) {
+        let startPage = currentPage;
+
+        // Try to carry over from yesterday's end (if same book)
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const yesterdayNote = dailyNotes.find(n => n.date === yesterdayStr && n.bookId === selectedId);
+        if (yesterdayNote && yesterdayNote.sliderEnd !== undefined) {
+            startPage = yesterdayNote.sliderEnd;
+        }
+
+        todayNote = {
+            date: today,
+            bookId: selectedId,
+            note: "",
+            pagesToday: 0,
+            startPage,
+            sliderEnd: currentPage
+        };
+        dailyNotes.push(todayNote);
+        saveDailyNotesToLocal();
+    } else {
+        // Recalculate pagesToday in case currentPage changed elsewhere
+        todayNote.pagesToday = Math.max(0, currentPage - (todayNote.startPage || 0));
+        saveDailyNotesToLocal();
+    }
+
+    // Random favorite quote
     const favoriteQuotes = [];
     books.forEach(b => {
         if (b.quotes) {
