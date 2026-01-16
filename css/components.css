@@ -503,6 +503,18 @@ tr:hover { background: #1f1f1f; }
     cursor: pointer;
 }
 
+#worldMapSVG g.read path,
+#worldMapSVG path.read {
+    fill: #4CAF50 !important;
+}
+
+#worldMapSVG g path {
+    stroke: #222;
+    stroke-width: 0.8;
+    transition: fill 0.3s;
+    cursor: pointer;
+}
+
 #worldMapSVG path:not(.read) {
     fill: #444;
 }
@@ -533,12 +545,4 @@ tr:hover { background: #1f1f1f; }
     background: rgba(10, 10, 20, 0.9);
     border: 1px solid #333;
     color: #ddd;
-}
-
-#constellationCanvas {
-    touch-action: none;          /* Prevents touch scrolling/pan/zoom on mobile/tablet */
-    user-select: none;           /* Stops text/selection drag that triggers auto-scroll */
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
 }
