@@ -430,7 +430,7 @@ constellationBooks.forEach((book, i) => {
         // Extra sun-specific warm halo (even without glow toggle)
         constellationCtx.shadowColor = '#ffd700'; // bright gold
         constellationCtx.shadowBlur = 50 + Math.sin(Date.now() / 700) * 15;
-        constellationCtx.fillStyle = 'rgba(255, 215, 0, 0.6)';
+        constellationCtx.fillStyle = 'rgba(255, 215, 0, 0.45)';
         constellationCtx.beginPath();
         constellationCtx.arc(x, y, size * 1.9, 0, Math.PI * 2);
         constellationCtx.fill();
