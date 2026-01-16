@@ -91,7 +91,7 @@ if (dist.readCount === 0) {
     html += '<div class="stats-scroll-container stats-list">';
     sortedLanguages.forEach(item => {
         const perc = (item.count / dist.readCount * 100).toFixed(0);
-        html += `• ${item.label || 'Unknown'}: ${item.count} (${perc}%)<br>`;
+        html += `<div>• ${item.label || 'Unknown'}: ${item.count} (${perc}%)</div>`;
     });
     html += '</div>';
     html += `<br><small>Among ${dist.readCount} read books • ${sortedLanguages.length} unique</small>`;
@@ -110,7 +110,7 @@ if (dist.readCount === 0) {
     html += '<div class="stats-scroll-container stats-list">';
     sortedCountries.forEach(item => {
         const perc = (item.count / dist.readCount * 100).toFixed(0);
-        html += `• ${item.label || 'Unknown'}: ${item.count} (${perc}%)<br>`;
+        html += `<div>• ${item.label || 'Unknown'}: ${item.count} (${perc}%)</div>`;
     });
     html += '</div>';
     html += `<br><small>Among ${dist.readCount} read books • ${sortedCountries.length} unique</small>`;
@@ -129,7 +129,7 @@ if (dist.readCount === 0) {
     html += '<div class="stats-scroll-container stats-list">';
     sortedGenres.forEach(item => {
         const perc = (item.count / dist.readCount * 100).toFixed(0);
-        html += `• ${item.label || 'Unknown'}: ${item.count} (${perc}%)<br>`;
+        html += `<div>• ${item.label || 'Unknown'}: ${item.count} (${perc}%)</div>`;
     });
     html += '</div>';
     html += `<br><small>Among ${dist.readCount} read books • ${sortedGenres.length} unique</small>`;
