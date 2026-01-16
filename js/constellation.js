@@ -369,7 +369,7 @@ function renderConstellation(force = false) {
                 const p2 = positions[j];
                 if (b1.author && b1.author === b2.author) {
                     const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-                    if (dist > 300) continue;
+                    // if (dist > 300) continue; // max distance
                     drawConnection(p1.x, p1.y, p2.x, p2.y, false);
                 }
             }
