@@ -184,6 +184,9 @@ function calculatePositions(mode) {
         y: h * (0.15 + Math.random() * 0.7)
     }));
 
+    let sunIndex = -1;  // ← declare here, outside if/else
+    let maxPages = 0;
+
     if (mode === 'timeline') {
         const minTime = Math.min(...constellationBooks.map(b => b.lastFinished || 0));
         const maxTime = Math.max(...constellationBooks.map(b => b.lastFinished || 0));
@@ -206,37 +209,35 @@ function calculatePositions(mode) {
             const jitterY = (Math.random() - 0.5) * 120;
             return {x: baseX + jitterX, y: baseY + jitterY};
         });
-    } else { // Constellation mode - solar system + tight series clusters
-    const groups = {};
-    constellationBooks.forEach((b, i) => {
-        const key = (b.series || '') + '|' + (b.author || '');
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(i);
-    });
+    } else { // Constellation mode
+        const groups = {};
+        constellationBooks.forEach((b, i) => {
+            const key = (b.series || '') + '|' + (b.author || '');
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(i);
+        });
 
-    // Sun = max pages
-    let sunIndex = 0;
-    let maxPages = 0;
-    constellationBooks.forEach((b, i) => {
-        if (b.pages > maxPages) {
-            maxPages = b.pages;
-            sunIndex = i;
-        }
-    });
+        // Sun = max pages
+        constellationBooks.forEach((b, i) => {
+            if (b.pages > maxPages) {
+                maxPages = b.pages;
+                sunIndex = i;
+            }
+        });
 
-    const sortedByPages = [...constellationBooks].sort((a, b) => b.pages - a.pages);
-    const planetCount = Math.max(2, Math.min(10, Math.round(constellationBooks.length * 0.2)));
-    const planetIndices = sortedByPages.slice(0, planetCount).map(b => constellationBooks.findIndex(bb => bb.importOrder === b.importOrder));
+        const sortedByPages = [...constellationBooks].sort((a, b) => b.pages - a.pages);
+        const planetCount = Math.max(2, Math.min(10, Math.round(constellationBooks.length * 0.2)));
+        const planetIndices = sortedByPages.slice(0, planetCount).map(b => constellationBooks.findIndex(bb => bb.importOrder === b.importOrder));
 
-    positions = constellationBooks.map((_, i) => {
-        if (i === sunIndex) return {x: w / 2, y: h / 2};
-        if (planetIndices.includes(i)) {
-            const angle = Math.random() * Math.PI * 2;
-            const radius = 80 + Math.random() * 200;
-            return {x: w / 2 + Math.cos(angle) * radius, y: h / 2 + Math.sin(angle) * radius};
-        }
-        return {x: w * (0.25 + Math.random() * 0.5), y: h * (0.25 + Math.random() * 0.5)};
-    });
+        positions = constellationBooks.map((_, i) => {
+            if (i === sunIndex) return {x: w / 2, y: h / 2};
+            if (planetIndices.includes(i)) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 80 + Math.random() * 200;
+                return {x: w / 2 + Math.cos(angle) * radius, y: h / 2 + Math.sin(angle) * radius};
+            }
+            return {x: w * (0.25 + Math.random() * 0.5), y: h * (0.25 + Math.random() * 0.5)};
+        });
 
     const aspectRatio = w / h;
     const borderStrength = 0.18 * (aspectRatio > 1 ? aspectRatio : 1 / aspectRatio); // slightly stronger
