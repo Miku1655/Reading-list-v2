@@ -146,3 +146,36 @@ function renderToday() {
 
     container.innerHTML = html;
 }
+
+function renderPastNotes() {
+    if (dailyNotes.length === 0) {
+        return "<p style='color:#888; text-align:center;'>No past notes yet.</p>";
+    }
+
+    const sorted = [...dailyNotes].sort((a,b) => new Date(b.date) - new Date(a.date));
+
+    let html = "";
+    let lastDate = "";
+
+    sorted.forEach(note => {
+        if (note.date !== lastDate) {
+            const dateObj = new Date(note.date);
+            const formatted = dateObj.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            html += `<h5 style="margin:20px 0 8px; color:#aaa;">${formatted}</h5>`;
+            lastDate = note.date;
+        }
+
+        const book = books.find(b => b.importOrder === note.bookId);
+        const title = book ? book.title : "(Book deleted)";
+
+        html += `
+            <div class="past-note-item" data-date="${note.date}" data-bookid="${note.bookId}" 
+                 style="padding:12px; background:#1a1a1a; border-radius:6px; margin-bottom:12px; border:1px solid #333; cursor:pointer; transition:background 0.2s;">
+                <strong>${title}</strong> — ${note.pagesToday} pages today<br>
+                ${note.note ? `<p style="margin:8px 0 0; font-style:italic; color:#ccc;">${note.note.replace(/\n/g, '<br>')}</p>` : '<p style="color:#666; margin:8px 0 0;">No note</p>'}
+            </div>
+        `;
+    });
+
+    return html;
+}
