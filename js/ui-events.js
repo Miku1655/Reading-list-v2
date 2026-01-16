@@ -349,32 +349,36 @@ document.addEventListener("input", e => {
         const newPage = Number(e.target.value);
         currentRead.currentPage = newPage;
 
-        // Update today's note / progress
         let note = getDailyNoteForToday(bookId);
         if (!note) {
             note = { date: getTodayDateStr(), bookId, note: "", pagesToday: 0, sliderEnd: 0 };
             dailyNotes.push(note);
         }
         note.sliderEnd = newPage;
-        note.pagesToday = newPage;  // For now: pages today = current position (simplest version)
-        // If you later want real daily delta, you'd track yesterday's end page here
+        note.pagesToday = newPage; // or your preferred logic
 
-        // SAVE immediately so data persists
         saveBooksToLocal();
         saveDailyNotesToLocal();
 
-        // LIVE UPDATE the UI elements without full re-render
+        // Update book card summary
         const pageDisplay = document.querySelector("#todayContainer .book-card p:last-child");
         if (pageDisplay) {
             pageDisplay.textContent = `Pages: ${newPage} / ${book.pages || '?'}`;
         }
 
+        // Update pages today badge
         const pagesTodayElem = document.getElementById("pagesTodayDisplay");
         if (pagesTodayElem) {
             pagesTodayElem.textContent = note.pagesToday;
         }
 
-        // Optional: update streak if note becomes active (rarely needed live)
+        // Update the main live number under slider ← THIS WAS MISSING
+        const liveDisplay = document.getElementById("liveProgressDisplay");
+        if (liveDisplay) {
+            liveDisplay.textContent = `${newPage} pages`;
+        }
+
+        // Optional: streak refresh
         const streakElem = document.getElementById("streakDisplay");
         if (streakElem) {
             streakElem.textContent = calculateStreak() + " days";
