@@ -78,38 +78,59 @@ function createSeriesCard(series) {
     
     // Build mini list of books in series
     if (seriesBooks.length > 0) {
-        const ul = document.createElement("ul");
-        seriesBooks.forEach(book => {
-            const status = book.exclusiveShelf === "read" ? "✓ read" :
-                          book.exclusiveShelf === "currently-reading" ? "→ reading" :
-                          book.exclusiveShelf === "dnf" ? "✗ DNF" : "to-read";
-            
-            const li = document.createElement("li");
-            li.innerHTML = `
-                <span class="series-book-status">${status}</span>
-                ${book.seriesNumber != null ? `<small>#${book.seriesNumber}</small> ` : ''}
-                <strong>${book.title}</strong>
-            `;
-            
-            // Optional: tiny cover thumbnail
-            if (book.coverUrl) {
-                const thumb = document.createElement("img");
-                thumb.src = book.coverUrl;
-                thumb.className = "series-book-thumb";
-                thumb.alt = "";
-                thumb.onerror = () => thumb.style.display = "none";
-                li.prepend(thumb);
-            }
-            
-            ul.appendChild(li);
-        });
-        detailsContainer.appendChild(ul);
-    } else {
-        detailsContainer.innerHTML = "<p style='color:#888; font-style:italic; padding:8px;'>No books found in this series.</p>";
-    }
+    const ul = document.createElement("ul");
 
-    // Insert details right after the main card content
-    div.appendChild(detailsContainer);
+    seriesBooks.forEach(book => {
+        // Status text
+        const status = book.exclusiveShelf === "read" ? "✓ read" :
+                       book.exclusiveShelf === "currently-reading" ? "→ reading" :
+                       book.exclusiveShelf === "dnf" ? "✗ DNF" : "to-read";
+
+        // Rating stars (only if rated)
+        let ratingHtml = "";
+        if (book.rating > 0) {
+            ratingHtml = `<span class="series-book-rating">${"★".repeat(book.rating)}${"☆".repeat(5 - book.rating)}</span>`;
+        }
+
+        // Series number only if it exists
+        const seriesNumHtml = book.seriesNumber != null 
+            ? `<span class="series-book-number">#${book.seriesNumber}</span>` 
+            : "";
+
+        const titleHtml = `<strong class="series-book-title">${book.title}${seriesNumHtml ? ` (${book.series}, ${seriesNumHtml.replace(/<[^>]+>/g,'')})` : ''}</strong>`;
+
+        const li = document.createElement("li");
+
+        // Build the structure
+        li.innerHTML = `
+            ${book.coverUrl ? `<img src="${book.coverUrl}" class="series-book-thumb" alt="">` : '<div class="series-book-thumb-placeholder"></div>'}
+            <span class="series-book-status">${status}</span>
+            ${ratingHtml}
+            ${seriesNumHtml}
+            ${titleHtml}
+        `;
+
+        // Handle broken images gracefully
+        if (book.coverUrl) {
+            const img = li.querySelector("img.series-book-thumb");
+            img.onerror = () => {
+                img.style.display = "none";
+                const placeholder = document.createElement("div");
+                placeholder.className = "series-book-thumb-placeholder";
+                img.replaceWith(placeholder);
+            };
+        }
+
+        ul.appendChild(li);
+    });
+
+    detailsContainer.appendChild(ul);
+} else {
+    detailsContainer.innerHTML = "<p style='color:#888; font-style:italic; padding:8px;'>No books found in this series.</p>";
+}
+
+// Insert details right after the main card content
+div.appendChild(detailsContainer);
 
     // Click handler – toggle collapse
     div.addEventListener("click", (e) => {
