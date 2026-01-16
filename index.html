@@ -29,6 +29,7 @@
     <button class="tab" data-tab="world-map">World Map</button>
     <button class="tab" data-tab="constellation">Constellation</button>
     <button class="tab" data-tab="quotes">Quotes</button>
+    <button class="tab" data-tab="today">Today</button>
     <button class="tab" data-tab="options">Options</button>
 </div>
 
@@ -605,6 +606,11 @@
     <p>Collected memorable quotes from your books.</p>
     <div id="quotesContainer"></div> <!-- We'll render here -->
 </section>
+
+ <section id="tab-today" class="tab-content">
+    <div id="todayContainer" style="max-width:800px; margin:40px auto; padding:0 20px;">
+    </div>
+</section>
  
 <section id="tab-options" class="tab-content">
     <h3>Import / Export</h3>
@@ -646,7 +652,7 @@
     <h3>Manage Shelves</h3>
     <div id="shelfManager"></div>
     <hr style="border:1px solid #333; margin:16px 0;">
-    Version 1.13 – reading constellations
+    Version 1.14 – today tab
 </section>
 
 <div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); justify-content:center; align-items:center; z-index:1000;">
