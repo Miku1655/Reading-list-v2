@@ -27,7 +27,6 @@ let challenges = [];
 let showYearGoalProgress = true;
 let notePopup = null;
 let settings = {};
-let dailyNotes = [];
 
 function loadLocalData() {
     const savedBooks = localStorage.getItem(STORAGE_KEY);
@@ -136,7 +135,4 @@ function saveChallengesToLocal() {
 
 function saveSettingsToLocal() {
     localStorage.setItem('settings', JSON.stringify(settings));
-}
-function saveDailyNotesToLocal() {
-    localStorage.setItem(DAILY_NOTES_KEY, JSON.stringify(dailyNotes));
 }
