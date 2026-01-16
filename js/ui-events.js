@@ -355,7 +355,7 @@ document.addEventListener("input", e => {
             dailyNotes.push(note);
         }
         note.sliderEnd = newPage;
-        note.pagesToday = newPage; // or your preferred logic
+        note.pagesToday = Math.max(0, newPage - (note.startPage || 0));
 
         saveBooksToLocal();
         saveDailyNotesToLocal();
