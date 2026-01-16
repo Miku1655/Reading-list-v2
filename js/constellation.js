@@ -8,6 +8,7 @@ let constellationCtx = null;
 let constellationBooks = [];
 let hoveredBook = null;
 let cachedPositions = {}; // Cache: mode → positions array
+let currentSunIndex = -1;
 
 function initConstellation() {
     constellationCanvas = document.getElementById(CONSTELLATION_CANVAS_ID);
@@ -329,7 +330,7 @@ function calculatePositions(mode) {
         if (p.y > h - 10) p.y = h - 10 - (Math.random() * 20);
     });
 }
-
+currentSunIndex = sunIndex;
     return positions;
 }
 
@@ -392,7 +393,7 @@ function renderConstellation(force = false) {
                 const p2 = positions[j];
                 if (b1.author && b1.author === b2.author) {
                     const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-                    // if (dist > 300) continue; // max distance
+                    if (dist > 300) continue; // max distance
                     drawConnection(p1.x, p1.y, p2.x, p2.y, false);
                 }
             }
@@ -407,7 +408,7 @@ function renderConstellation(force = false) {
                 const p2 = positions[j];
                 if (b1.series && b1.series === b2.series) {
                     const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-                    if (dist > 300) continue;
+                    // if (dist > 300) continue; // max distance
                     drawConnection(p1.x, p1.y, p2.x, p2.y, true);
                 }
             }
@@ -415,13 +416,27 @@ function renderConstellation(force = false) {
     }
 
     // Draw stars
-    constellationBooks.forEach((book, i) => {
-        const {x, y} = positions[i];
-        const size = getStarSize(book.pages) * (0.9 + Math.random() * 0.2);
-        const color = getStarColor(book.rating);
-        const glow = settings.constellation.showFavoritesGlow && book.isFavorite;
-        drawStar(x, y, size, color, glow);
-    });
+    // Draw stars
+constellationBooks.forEach((book, i) => {
+    const {x, y} = positions[i];
+    let size = getStarSize(book.pages) * (0.9 + Math.random() * 0.2);
+    const color = getStarColor(book.rating);
+    const glow = settings.constellation.showFavoritesGlow && book.isFavorite;
+
+    // Sun is 1.5× bigger + extra warm glow
+    if (i === currentSunIndex) {
+        size *= 1.5;
+        // Extra sun-specific warm halo (even without glow toggle)
+        constellationCtx.shadowColor = '#ffd700'; // bright gold
+        constellationCtx.shadowBlur = 50 + Math.sin(Date.now() / 700) * 15;
+        constellationCtx.fillStyle = 'rgba(255, 215, 0, 0.6)';
+        constellationCtx.beginPath();
+        constellationCtx.arc(x, y, size * 2.8, 0, Math.PI * 2);
+        constellationCtx.fill();
+    }
+
+    drawStar(x, y, size, color, glow);
+});
 
     // Hover & click
     constellationCanvas.onmousemove = (e) => {
