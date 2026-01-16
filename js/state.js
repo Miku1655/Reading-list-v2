@@ -57,6 +57,19 @@ challenges = savedChallenges ? JSON.parse(savedChallenges) : [];
 challenges.forEach(c => {
     if (!c.id) c.id = Date.now() + Math.random(); // simple unique
 });
+    const savedDailyNotes = localStorage.getItem(DAILY_NOTES_KEY);
+dailyNotes = savedDailyNotes ? JSON.parse(savedDailyNotes) : [];
+
+// Simple migration: add currentPage to unfinished reads if missing
+books.forEach(book => {
+    if (book.reads) {
+        book.reads.forEach(read => {
+            if (read.finished === null && read.currentPage === undefined) {
+                read.currentPage = 0;
+            }
+        });
+    }
+});
 });
     nextImportOrder = maxOrder + 1;
 
@@ -123,4 +136,7 @@ function saveChallengesToLocal() {
 
 function saveSettingsToLocal() {
     localStorage.setItem('settings', JSON.stringify(settings));
+}
+function saveDailyNotesToLocal() {
+    localStorage.setItem(DAILY_NOTES_KEY, JSON.stringify(dailyNotes));
 }
