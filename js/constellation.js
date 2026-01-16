@@ -119,26 +119,41 @@ function getStarColor(rating) {
 function drawStar(cx, cy, size, color, glow = false) {
     if (!constellationCtx) return;
     constellationCtx.save();
-    constellationCtx.globalAlpha = 0.7 + Math.random() * 0.3;
+
+    // Core star (slightly brighter for favourites)
+    constellationCtx.globalAlpha = 0.8 + Math.random() * 0.2;
     constellationCtx.beginPath();
     constellationCtx.arc(cx, cy, size, 0, Math.PI * 2);
-    constellationCtx.fillStyle = color;
+    constellationCtx.fillStyle = glow ? '#ffffff' : color; // pure white for favourites to stand out
     constellationCtx.fill();
-    if (glow || size > 3) {
-        constellationCtx.shadowColor = glow ? '#fff7d4' : '#ffffff';
-        constellationCtx.shadowBlur = glow ? 12 : 6;
+
+    // Base subtle halo for all larger stars
+    if (size > 3) {
+        constellationCtx.shadowColor = '#ffffff';
+        constellationCtx.shadowBlur = 8;
         constellationCtx.fillStyle = color;
         constellationCtx.fill();
     }
-    // Sun/favorite pulse (subtle)
-    if ((glow || size > 8) && (glow)) {  // only pulse if it's a favorite (individual or series)
-    constellationCtx.shadowColor = '#ffeb3b';
-    constellationCtx.shadowBlur = 30 + Math.sin(Date.now() / 800) * 8;
-    constellationCtx.fillStyle = 'rgba(255,235,59,0.35)';
-    constellationCtx.beginPath();
-    constellationCtx.arc(cx, cy, size * 1.8, 0, Math.PI * 2);
-    constellationCtx.fill();
-}
+
+    // Stronger, more visible glow + pulse for favourites (individual or series)
+    if (glow) {
+        // Outer glowing ring (bigger and brighter)
+        constellationCtx.shadowColor = '#ffeb3b'; // golden
+        constellationCtx.shadowBlur = 40 + Math.sin(Date.now() / 800) * 10; // stronger pulse range
+        constellationCtx.fillStyle = 'rgba(255, 235, 59, 0.5)'; // more opaque yellow
+        constellationCtx.beginPath();
+        constellationCtx.arc(cx, cy, size * 2.5, 0, Math.PI * 2); // much larger halo
+        constellationCtx.fill();
+
+        // Inner bright core pulse (makes it pop)
+        constellationCtx.shadowColor = '#ffffff';
+        constellationCtx.shadowBlur = 15 + Math.sin(Date.now() / 600) * 5;
+        constellationCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        constellationCtx.beginPath();
+        constellationCtx.arc(cx, cy, size * 1.2, 0, Math.PI * 2);
+        constellationCtx.fill();
+    }
+
     constellationCtx.restore();
 }
 
