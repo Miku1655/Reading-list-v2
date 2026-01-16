@@ -69,6 +69,9 @@ function renderStats() {
     if (mostReread && getReadCount(mostReread) > 1) html += `Most re-read: <strong>${mostReread.title}</strong> (${getReadCount(mostReread)} times)<br>`;
     if (maxYearBooksYear) html += `Most books in a year: ${maxYearBooks} (${maxYearBooksYear})<br>`;
     if (maxYearPagesYear) html += `Most pages in a year: ${maxYearPages} (${maxYearPagesYear})<br>`;
+    html += `Longest streak: <strong>${calculateStreak()} days</strong><br>`;
+    html += `Most pages in a day: <strong>${getMostPagesInADay()}</strong><br>`;
+    html += `Total ritual days: <strong>${getTotalRitualDays()}</strong><br>`;
     html += '</div></div>';
     html += '<div class="stats-block"><h2>Reading Speed</h2><div class="stats-list">';
     html += `<strong>Average:</strong> ${speeds.avg} pages/day<br>`;
