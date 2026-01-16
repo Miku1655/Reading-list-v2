@@ -44,6 +44,9 @@ function renderStats() {
     const languageData = prepareChartData(dist.language);
     const countryData = prepareChartData(dist.country);
     const genreData = prepareChartData(dist.genre);
+    const avgLength = readBooks.length > 0 //
+  ? Math.round(pagesRead / readBooks.length) //
+  : '—'; //
     let html = '<div class="stats-upper">';
     html += '<div class="stats-block"><h2>Overall Stats</h2>';
     html += '<div class="stats-grid">';
@@ -51,6 +54,7 @@ function renderStats() {
     html += `<div>Read</div><div>${readBooks.length}</div>`;
     html += `<div>DNF</div><div>${dnfBooks.length}</div>`;
     html += `<div>Pages read (× count)</div><div>${pagesRead}</div>`;
+    html += `<div>Average book length</div><div>${avgLength}${avgLength !== '—' ? ' pages' : ''}</div>`; //
     html += '</div></div>';
     html += '<div class="stats-block"><h2>Favorite Authors</h2><div class="stats-list">';
     html += '<strong>By books read:</strong><br>';
