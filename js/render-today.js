@@ -17,7 +17,6 @@ function renderToday() {
         return;
     }
 
-    // Get last selected
     let selectedId = Number(localStorage.getItem("todaySelectedBookId") || currentReading[0].importOrder);
     let selectedBook = currentReading.find(b => b.importOrder === selectedId);
     if (!selectedBook) {
@@ -26,7 +25,6 @@ function renderToday() {
         localStorage.setItem("todaySelectedBookId", selectedId);
     }
 
-    // Ensure unfinished read entry exists
     let currentRead = selectedBook.reads.find(r => r.finished === null);
     if (!currentRead) {
         currentRead = { started: Date.now(), finished: null, currentPage: 0 };
@@ -36,8 +34,6 @@ function renderToday() {
     let currentPage = currentRead.currentPage || 0;
 
     const today = getTodayDateStr();
-
-    // Get or create today's note
     let todayNote = getDailyNoteForToday(selectedId);
 
     if (!todayNote) {
@@ -55,18 +51,22 @@ function renderToday() {
             date: today,
             bookId: selectedId,
             note: "",
-            pagesToday: Math.max(0, currentPage - startPage),
+            pagesToday: 0,                      // start at 0 — only add when reading forward
             sliderEnd: currentPage,
-            startPage: startPage
+            startPage: startPage,
+            lastKnownPage: currentPage          // new: tracks the last page we saw for delta
         };
         dailyNotes.push(todayNote);
         saveDailyNotesToLocal();
     } else {
-        todayNote.pagesToday = Math.max(0, currentPage - (todayNote.startPage || 0));
+        // Calculate only forward progress since last known position
+        const delta = Math.max(0, currentPage - (todayNote.lastKnownPage || todayNote.startPage || 0));
+        todayNote.pagesToday += delta;
         todayNote.sliderEnd = currentPage;
+        todayNote.lastKnownPage = currentPage;
     }
 
-    // Random quote
+    // Random quote (unchanged)
     const favoriteQuotes = [];
     books.forEach(b => {
         if (b.quotes) {
@@ -101,7 +101,17 @@ function renderToday() {
         </div>
 
         <div style="margin:32px 0; text-align:center;">
-            <h3>Progress Today</h3>
+            <h3>Current Position</h3>
+            <div style="display:flex; justify-content:center; gap:16px; margin:16px 0; flex-wrap:wrap;">
+                <input type="number" id="setCurrentPageInput" min="0" max="${selectedBook.pages || 1000}" value="${currentPage}" 
+                       style="width:120px; padding:10px; font-size:1.2em; background:#222; color:#eee; border:1px solid #444; border-radius:6px; text-align:center;">
+                <button id="applyCurrentPageBtn" style="padding:10px 20px; background:#444; color:#eee; border:none; border-radius:6px; cursor:pointer;">
+                    Set Page
+                </button>
+            </div>
+            <p style="color:#888; font-size:0.9em; margin-top:8px;">Use this to jump to your actual position without counting as reading today</p>
+
+            <h3 style="margin-top:32px;">Progress Today (reading forward)</h3>
             <input type="range" id="todayPageSlider" min="0" max="${selectedBook.pages || 1000}" value="${currentPage}" style="width:80%; max-width:500px; height:12px; margin:16px 0;">
             <div id="liveProgressDisplay" style="font-size:2em; font-weight:bold; margin-top:12px; color:#eee;">
                 ${currentPage} pages
@@ -113,14 +123,9 @@ function renderToday() {
             <textarea id="todayNote" placeholder="Thoughts, favorite passage, mood... (short & sweet)" style="width:100%; height:120px; padding:12px; background:#1a1a1a; color:#eee; border:1px solid #444; border-radius:6px; resize:vertical;">${todayNote.note || ''}</textarea>
         </div>
 
-        <div style="display:flex; justify-content:space-between; margin:24px 0; padding:16px; background:#1a1a1a; border:1px solid #333; border-radius:8px; align-items:center;">
+        <div style="display:flex; justify-content:space-between; margin:24px 0; padding:16px; background:#1a1a1a; border:1px solid #333; border-radius:8px;">
             <div>Streak: <strong id="streakDisplay">${calculateStreak()} days</strong></div>
-            <div style="display:flex; align-items:center; gap:12px;">
-                Pages today: 
-                <strong id="pagesTodayDisplay">${todayNote.pagesToday}</strong>
-                <input type="number" id="manualPagesToday" min="0" value="${todayNote.pagesToday}" style="width:80px; padding:6px; background:#222; color:#eee; border:1px solid #444; border-radius:4px; text-align:center;">
-                <small style="color:#888;">(override)</small>
-            </div>
+            <div>Pages today: <strong id="pagesTodayDisplay">${todayNote.pagesToday}</strong></div>
         </div>
 
         ${randomQuote ? `
@@ -140,37 +145,4 @@ function renderToday() {
     `;
 
     container.innerHTML = html;
-}
-
-function renderPastNotes() {
-    if (dailyNotes.length === 0) {
-        return "<p style='color:#888; text-align:center;'>No past notes yet.</p>";
-    }
-
-    const sorted = [...dailyNotes].sort((a,b) => new Date(b.date) - new Date(a.date));
-
-    let html = "";
-    let lastDate = "";
-
-    sorted.forEach(note => {
-        if (note.date !== lastDate) {
-            const dateObj = new Date(note.date);
-            const formatted = dateObj.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            html += `<h5 style="margin:20px 0 8px; color:#aaa;">${formatted}</h5>`;
-            lastDate = note.date;
-        }
-
-        const book = books.find(b => b.importOrder === note.bookId);
-        const title = book ? book.title : "(Book deleted)";
-
-        html += `
-            <div class="past-note-item" data-date="${note.date}" data-bookid="${note.bookId}" 
-                 style="padding:12px; background:#1a1a1a; border-radius:6px; margin-bottom:12px; border:1px solid #333; cursor:pointer; transition:background 0.2s;">
-                <strong>${title}</strong> — ${note.pagesToday} pages today<br>
-                ${note.note ? `<p style="margin:8px 0 0; font-style:italic; color:#ccc;">${note.note.replace(/\n/g, '<br>')}</p>` : '<p style="color:#666; margin:8px 0 0;">No note</p>'}
-            </div>
-        `;
-    });
-
-    return html;
 }
