@@ -466,3 +466,50 @@ function getCountryProgress() {
     const read = Object.keys(getCountriesRead()).length;
     return { read, total: 195 }; // approx sovereign countries
 }
+
+function getTodayDateStr() {
+    const now = new Date();
+    return now.toISOString().split('T')[0]; // 'YYYY-MM-DD'
+}
+
+function getDailyNoteForToday(bookId) {
+    const today = getTodayDateStr();
+    return dailyNotes.find(n => n.date === today && n.bookId === bookId);
+}
+
+function calculateStreak() {
+    if (dailyNotes.length === 0) return 0;
+    
+    // Sort by date descending
+    const sorted = [...dailyNotes]
+        .sort((a,b) => new Date(b.date) - new Date(a.date));
+    
+    let streak = 0;
+    let currentDate = new Date();
+    currentDate.setHours(0,0,0,0);
+    
+    for (let note of sorted) {
+        const noteDate = new Date(note.date);
+        noteDate.setHours(0,0,0,0);
+        
+        const diffDays = Math.round((currentDate - noteDate) / (1000*60*60*24));
+        
+        if (diffDays > 1) break; // gap → streak ends
+        if (note.pagesToday > 0 || (note.note && note.note.trim())) {
+            streak++;
+            currentDate = new Date(noteDate);
+            currentDate.setDate(currentDate.getDate() - 1);
+        }
+    }
+    return streak;
+}
+
+function getMostPagesInADay() {
+    if (dailyNotes.length === 0) return 0;
+    return Math.max(...dailyNotes.map(n => n.pagesToday || 0));
+}
+
+function getTotalRitualDays() {
+    const uniqueDays = new Set(dailyNotes.map(n => n.date));
+    return uniqueDays.size;
+}
