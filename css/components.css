@@ -397,9 +397,9 @@ tr:hover { background: #1f1f1f; }
     border-bottom: 1px solid #333;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     font-size: 0.92em;
-    transition: background 0.2s;
+    flex-wrap: wrap;
 }
 
 .series-details li:hover {
@@ -414,17 +414,44 @@ tr:hover { background: #1f1f1f; }
     min-width: 80px;
     font-weight: bold;
     color: #bbb;
-    text-align: right;
+    text-align: left;
 }
 
-.series-book-thumb {
-    width: 40px;
-    height: 60px;
+.series-book-thumb,
+.series-book-thumb-placeholder {
+    width: 36px;
+    height: 54px;
     object-fit: cover;
-    border-radius: 4px;
+    border-radius: 3px;
     flex-shrink: 0;
-    border: 1px solid #333;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    background: #1a1a1a;
+    border: 1px solid #444;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+.series-book-rating {
+    color: #ffd700; /* gold */
+    font-size: 1.1em;
+    letter-spacing: 1px;
+    min-width: 80px;
+    text-align: center;
+}
+.series-book-number {
+    min-width: 40px;
+    color: #888;
+    font-weight: bold;
+    text-align: center;
+}
+.series-book-thumb-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7em;
+    color: #555;
+}
+.series-book-title {
+    flex: 1;
+    color: #eee;
+    white-space: normal;
 }
 .quote-entry {
     margin-bottom: 12px;
