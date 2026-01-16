@@ -424,24 +424,41 @@ document.getElementById("challengeYearly")?.addEventListener("change", e => {
     document.getElementById("challengeYearLabel").style.display = e.target.checked ? "inline" : "none";
 });
 
-// Manual pages today override
-document.addEventListener("input", e => {
-    if (e.target.id === "manualPagesToday") {
+// Set current page without affecting daily progress
+document.addEventListener("click", e => {
+    if (e.target.id === "applyCurrentPageBtn") {
         const selectedId = Number(document.getElementById("todayBookSelect").value);
-        const note = getDailyNoteForToday(selectedId);
+        const book = books.find(b => b.importOrder === selectedId);
+        if (!book) return;
+
+        const currentRead = book.reads.find(r => r.finished === null);
+        if (!currentRead) return;
+
+        const input = document.getElementById("setCurrentPageInput");
+        const newPage = Math.max(0, Math.min(Number(input.value) || 0, book.pages || 1000));
+
+        currentRead.currentPage = newPage;
+        saveBooksToLocal();
+
+        // Update today's note without adding to pagesToday
+        let note = getDailyNoteForToday(selectedId);
         if (note) {
-            const newValue = Math.max(0, Number(e.target.value) || 0);
-            note.pagesToday = newValue;
+            note.sliderEnd = newPage;
+            note.lastKnownPage = newPage;
+            // Do NOT change pagesToday here
             saveDailyNotesToLocal();
-
-            const display = document.getElementById("pagesTodayDisplay");
-            if (display) display.textContent = newValue;
-
-            const streakDisplay = document.getElementById("streakDisplay");
-            if (streakDisplay) streakDisplay.textContent = calculateStreak() + " days";
         }
+
+        // Refresh display
+        document.getElementById("liveProgressDisplay").textContent = `${newPage} pages`;
+        const slider = document.getElementById("todayPageSlider");
+        if (slider) slider.value = newPage;
+
+        alert(`Current page set to ${newPage}. This did not add to today's pages read.`);
     }
 });
+
+// Slider still adds forward progress (existing input listener stays, but ensure it uses lastKnownPage)
 
 // Delete past note on click
 document.addEventListener("click", e => {
