@@ -95,7 +95,8 @@ function prepareConstellationData() {
             ...b,
             finishedDates: b.reads.filter(r => r.finished).map(r => r.finished),
             lastFinished: Math.max(...b.reads.filter(r => r.finished).map(r => r.finished || 0)),
-            isFavorite: profile?.favourites?.includes(b.importOrder) || false
+            isFavorite: profile?.favourites?.includes(b.importOrder) ||
+            (b.series && profile?.favouriteSeries?.includes(b.series)) || false
         }));
 }
 
@@ -130,14 +131,14 @@ function drawStar(cx, cy, size, color, glow = false) {
         constellationCtx.fill();
     }
     // Sun/favorite pulse (subtle)
-    if (glow && size > 8) {
-        constellationCtx.shadowColor = '#ffeb3b';
-        constellationCtx.shadowBlur = 30 + Math.sin(Date.now() / 800) * 8;
-        constellationCtx.fillStyle = 'rgba(255,235,59,0.4)';
-        constellationCtx.beginPath();
-        constellationCtx.arc(cx, cy, size * 1.8, 0, Math.PI * 2);
-        constellationCtx.fill();
-    }
+    if ((glow || size > 8) && (glow)) {  // only pulse if it's a favorite (individual or series)
+    constellationCtx.shadowColor = '#ffeb3b';
+    constellationCtx.shadowBlur = 30 + Math.sin(Date.now() / 800) * 8;
+    constellationCtx.fillStyle = 'rgba(255,235,59,0.35)';
+    constellationCtx.beginPath();
+    constellationCtx.arc(cx, cy, size * 1.8, 0, Math.PI * 2);
+    constellationCtx.fill();
+}
     constellationCtx.restore();
 }
 
