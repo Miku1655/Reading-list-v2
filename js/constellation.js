@@ -212,7 +212,7 @@ function calculatePositions(mode) {
     } else { // Constellation mode
         const groups = {};
         constellationBooks.forEach((b, i) => {
-            const key = (b.series || '') + '|' + (b.author || '');
+            const key = (b.series || '') + '|' + (b.author || '') + '|' + (b.country || '');
             if (!groups[key]) groups[key] = [];
             groups[key].push(i);
         });
