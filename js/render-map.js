@@ -63,3 +63,4 @@ svg.querySelectorAll("path").forEach(path => {
         });
     }
 });
+}
