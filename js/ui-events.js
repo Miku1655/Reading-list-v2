@@ -265,6 +265,27 @@ document.getElementById("profilePicInput").addEventListener("change", e => {
     };
     reader.readAsDataURL(file);
 });
+document.getElementById("favouritesContainer").addEventListener("click", function(e) {
+    const toggle = e.target.closest(".series-toggle, .series-card-header, .series-card"); // adjust selectors to match your HTML
+    if (!toggle) return;
+
+    const card = toggle.closest(".series-card");
+    if (!card) return;
+
+    const details = card.querySelector(".series-details");
+    if (!details) return;
+
+    // Toggle only this one
+    details.classList.toggle("collapsed");
+
+    // Optional: rotate icon or change + / - 
+    const icon = card.querySelector(".series-toggle-icon");
+    if (icon) {
+        icon.textContent = details.classList.contains("collapsed") ? "+" : "−";
+    }
+
+    e.stopPropagation(); // prevent bubbling if needed
+});
 let profileSaveTimeout;
 document.getElementById("profileNick").addEventListener("input", () => {
     clearTimeout(profileSaveTimeout);
