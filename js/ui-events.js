@@ -79,11 +79,13 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             const settings = data.settings || {};
             document.getElementById("showNumbers").checked = settings.showNumbers ?? true;
             minAuthorBooks = settings.minAuthorBooks ?? 2;
-            document.getElementById("minAuthorBooks").value = minAuthorBooks; // Fixed: was minAuthorBooksInput (likely undefined)
+            document.getElementById("minAuthorBooks").value = minAuthorBooks;
             showCoversInTimeline = settings.showCoversTimeline ?? false;
             document.getElementById("showCoversTimeline").checked = showCoversInTimeline;
             showYearGoalProgress = settings.showYearGoalProgress ?? true;
             document.getElementById("showYearGoalProgress").checked = showYearGoalProgress;
+            hideToReadExceptOwnShelf = settings.hideToReadExceptOwnShelf ?? false;
+            document.getElementById("hideToReadExceptOwn").checked = hideToReadExceptOwnShelf;
             document.getElementById("profileNick").value = profile.nick || "";
             document.getElementById("profileBio").value = profile.bio || "";
             if (profile.picture) document.getElementById("profilePic").src = profile.picture;
@@ -251,6 +253,11 @@ document.getElementById("showCoversTimeline").addEventListener("change", e => {
     showCoversInTimeline = e.target.checked;
     localStorage.setItem(SHOW_COVERS_TIMELINE_KEY, JSON.stringify(showCoversInTimeline));
     renderTimeline();
+});
+document.getElementById("hideToReadExceptOwn").addEventListener("change", e => {
+    hideToReadExceptOwnShelf = e.target.checked;
+    localStorage.setItem(HIDE_TO_READ_KEY, JSON.stringify(hideToReadExceptOwnShelf));
+    renderTable();
 });
 // Profile
 document.getElementById("profilePic").addEventListener("click", () => document.getElementById("profilePicInput").click());
