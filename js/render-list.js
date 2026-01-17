@@ -112,9 +112,12 @@ function renderTable() {
     if (filter !== "all") {
         list = list.filter(b => b.exclusiveShelf === filter || (b.shelves || []).includes(filter));
     }
+    if (hideToReadExceptOwnShelf) {
+        list = list.filter(b => b.exclusiveShelf !== "to-read" || filter === "to-read");
+    }
+
     const query = document.getElementById("searchInput").value.trim();
     if (query) list = filterBooksByQuery(list, query);
-
     if (sortState.column) {
         list.sort((a, b) => compare(a, b, sortState.column) * sortState.direction);
     } else {
