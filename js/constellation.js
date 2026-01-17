@@ -159,53 +159,19 @@ function drawStar(cx, cy, size, color, glow = false) {
 }
 
 function drawConnection(x1, y1, x2, y2, isSeries = false) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const dist = Math.hypot(dx, dy);
-    const maxDist = isSeries ? 360 : 260;
-    if (dist > maxDist) return;
-
-    // Smoother bezier curve
-    const ctrl1x = x1 + dx * 0.33 + (Math.random() - 0.5) * 35;
-    const ctrl1y = y1 + dy * 0.33 + (Math.random() - 0.5) * 35;
-    const ctrl2x = x1 + dx * 0.67 + (Math.random() - 0.5) * 35;
-    const ctrl2y = y1 + dy * 0.67 + (Math.random() - 0.5) * 35;
-
+    if (!constellationCtx) return;
     constellationCtx.beginPath();
     constellationCtx.moveTo(x1, y1);
-    constellationCtx.bezierCurveTo(ctrl1x, ctrl1y, ctrl2x, ctrl2y, x2, y2);
-
-    if (isSeries) {
-        // Series: warmer, more prominent, dashed + glow
-        constellationCtx.strokeStyle = 'rgba(240, 80, 140, 0.30)';
-        constellationCtx.lineWidth = 1.5;
-        constellationCtx.setLineDash([6, 10]);
-
-        // Soft glow behind the line
-        constellationCtx.shadowColor = 'rgba(80, 200, 255, 0.5)';
-        constellationCtx.shadowBlur = 12;
-        constellationCtx.stroke();
-
-        // Reset shadow for main line
-        constellationCtx.shadowBlur = 0;
-
-        // Main stroke (on top of glow)
-        constellationCtx.globalAlpha = 0.75;
-        constellationCtx.stroke();
-    } else {
-        // Author: cooler, thinner, solid or lightly dotted
-        constellationCtx.strokeStyle = 'rgba(200, 220, 255, 0.40)';  // pale lavender-blue
-        constellationCtx.lineWidth = 0.9;
-        constellationCtx.setLineDash([1, 4]);  // very light dotted for distinction
-
-        constellationCtx.globalAlpha = 0.55 + 0.25 * (1 - dist / maxDist);
-        constellationCtx.stroke();
-    }
-
-    // Reset
+    const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * 30;
+    const my = (y1 + y2) / 2 + (Math.random() - 0.5) * 30;
+    constellationCtx.quadraticCurveTo(mx, my, x2, y2);
+    constellationCtx.strokeStyle = isSeries ? '#66a3ff' : '#cccccc';
+    constellationCtx.lineWidth = isSeries ? 0.9 : 0.5;
+    constellationCtx.setLineDash(isSeries ? [3, 7] : []);
+    constellationCtx.globalAlpha = 0.15 + Math.random() * 0.05;
+    constellationCtx.stroke();
     constellationCtx.setLineDash([]);
     constellationCtx.globalAlpha = 1;
-    constellationCtx.shadowBlur = 0;
 }
 
 function calculatePositions(mode) {
