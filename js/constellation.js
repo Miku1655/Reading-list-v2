@@ -162,8 +162,10 @@ function drawConnection(x1, y1, x2, y2, isSeries = false) {
     const dx = x2 - x1;
     const dy = y2 - y1;
     const dist = Math.hypot(dx, dy);
-    if (dist > (isSeries ? 340 : 240)) return;
+    const maxDist = isSeries ? 340 : 240;
+    if (dist > maxDist) return;
 
+    // Control points for smooth bezier curve
     const mx1 = x1 + dx * 0.3 + (Math.random() - 0.5) * 40;
     const my1 = y1 + dy * 0.3 + (Math.random() - 0.5) * 40;
     const mx2 = x1 + dx * 0.7 + (Math.random() - 0.5) * 40;
@@ -174,15 +176,17 @@ function drawConnection(x1, y1, x2, y2, isSeries = false) {
     constellationCtx.bezierCurveTo(mx1, my1, mx2, my2, x2, y2);
 
     if (isSeries) {
-        constellationCtx.strokeStyle = 'rgba(100, 180, 255, 0.35)';
-        constellationCtx.lineWidth = 1.1;
-        constellationCtx.setLineDash([2, 6]);
+        constellationCtx.strokeStyle = '#88ccff';           // brighter cyan-blue
+        constellationCtx.lineWidth = 1.4;                   // thicker
+        constellationCtx.setLineDash([4, 8]);               // longer dashes
     } else {
-        constellationCtx.strokeStyle = 'rgba(200, 200, 255, 0.18)';
-        constellationCtx.lineWidth = 0.7;
+        constellationCtx.strokeStyle = '#ccd6ff';           // soft lavender-white
+        constellationCtx.lineWidth = 0.9;                   // slightly thicker
     }
 
-    constellationCtx.globalAlpha = Math.max(0.08, 0.42 * (1 - dist / (isSeries ? 340 : 240)));
+    // Fade less aggressively – stays visible longer
+    const alpha = 0.25 + 0.50 * (1 - dist / maxDist);   // 0.75 → 0.25 range
+    constellationCtx.globalAlpha = alpha;
     constellationCtx.stroke();
     constellationCtx.setLineDash([]);
     constellationCtx.globalAlpha = 1;
