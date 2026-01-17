@@ -54,7 +54,8 @@ document.getElementById("saveCloudBtn").addEventListener("click", () => {
             showNumbers: document.getElementById("showNumbers").checked,
             minAuthorBooks: minAuthorBooks,
             showCoversTimeline: showCoversInTimeline,
-            showYearGoalProgress: showYearGoalProgress
+            showYearGoalProgress: showYearGoalProgress,
+            hideToReadExceptOwnShelf: hideToReadExceptOwnShelf
         }
     };
     userRef.set(dataToSave)
