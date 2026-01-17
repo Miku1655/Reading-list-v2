@@ -360,6 +360,7 @@ function calculatePositions(mode) {
     currentSunIndex = sunIndex;
     return positions;
 }
+}
 
 function renderConstellation(force = false) {
     if (!constellationCtx || !constellationCanvas) return;
