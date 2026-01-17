@@ -162,32 +162,41 @@ function drawConnection(x1, y1, x2, y2, isSeries = false) {
     const dx = x2 - x1;
     const dy = y2 - y1;
     const dist = Math.hypot(dx, dy);
-    const maxDist = isSeries ? 340 : 240;
+    const maxDist = isSeries ? 360 : 260;
     if (dist > maxDist) return;
 
-    // Control points for smooth bezier curve
-    const mx1 = x1 + dx * 0.3 + (Math.random() - 0.5) * 40;
-    const my1 = y1 + dy * 0.3 + (Math.random() - 0.5) * 40;
-    const mx2 = x1 + dx * 0.7 + (Math.random() - 0.5) * 40;
-    const my2 = y1 + dy * 0.7 + (Math.random() - 0.5) * 40;
+    // Smoother, more natural curves
+    const ctrl1x = x1 + dx * 0.35 + (Math.random() - 0.5) * 30;
+    const ctrl1y = y1 + dy * 0.35 + (Math.random() - 0.5) * 30;
+    const ctrl2x = x1 + dx * 0.65 + (Math.random() - 0.5) * 30;
+    const ctrl2y = y1 + dy * 0.65 + (Math.random() - 0.5) * 30;
 
     constellationCtx.beginPath();
     constellationCtx.moveTo(x1, y1);
-    constellationCtx.bezierCurveTo(mx1, my1, mx2, my2, x2, y2);
+    constellationCtx.bezierCurveTo(ctrl1x, ctrl1y, ctrl2x, ctrl2y, x2, y2);
 
     if (isSeries) {
-        constellationCtx.strokeStyle = '#88ccff';           // brighter cyan-blue
-        constellationCtx.lineWidth = 1.4;                   // thicker
-        constellationCtx.setLineDash([4, 8]);               // longer dashes
+        constellationCtx.globalAlpha = 0.12;
+        constellationCtx.lineWidth = 2.8;
+        constellationCtx.strokeStyle = 'rgba(140,200,255,0.15)';
+        constellationCtx.stroke();  // faint wider underglow
+        constellationCtx.globalAlpha = 1;
+        constellationCtx.lineWidth = 1.1;
     } else {
-        constellationCtx.strokeStyle = '#ccd6ff';           // soft lavender-white
-        constellationCtx.lineWidth = 0.9;                   // slightly thicker
+        constellationCtx.strokeStyle = 'rgba(220, 230, 255, 0.28)';  // very pale blue-white
+        constellationCtx.lineWidth = 0.8;
     }
 
-    // Fade less aggressively – stays visible longer
-    const alpha = 0.25 + 0.50 * (1 - dist / maxDist);   // 0.75 → 0.25 range
-    constellationCtx.globalAlpha = alpha;
+    // Very gentle fade — lines stay visible but never dominate
+    constellationCtx.globalAlpha = 0.18 + 0.32 * (1 - dist / maxDist);  // 0.5 → 0.18 range
     constellationCtx.stroke();
+
+    // Tiny glow (optional, but makes it feel premium)
+    constellationCtx.shadowColor = isSeries ? 'rgba(100,180,255,0.4)' : 'rgba(220,230,255,0.2)';
+    constellationCtx.shadowBlur = 6;
+    constellationCtx.stroke();
+
+    constellationCtx.shadowBlur = 0;
     constellationCtx.setLineDash([]);
     constellationCtx.globalAlpha = 1;
 }
