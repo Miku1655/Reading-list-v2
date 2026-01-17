@@ -25,6 +25,7 @@ let minAuthorBooks = 2;
 let showCoversInTimeline = false;
 let challenges = [];
 let showYearGoalProgress = true;
+let hideToReadExceptOwnShelf = false;
 let notePopup = null;
 let settings = {};
 
@@ -87,6 +88,7 @@ books.forEach(book => {
     showCoversTimelineCheckbox.checked = showCoversInTimeline;
     showYearGoalProgress = JSON.parse(localStorage.getItem(SHOW_YEAR_GOAL_PROGRESS_KEY) || "true");
     showYearGoalProgressCheckbox.checked = showYearGoalProgress;
+    hideToReadExceptOwnShelf = JSON.parse(localStorage.getItem(HIDE_TO_READ_KEY) || "false");
     // Constellation settings
 const savedSettings = localStorage.getItem('settings');
 if (savedSettings) {
