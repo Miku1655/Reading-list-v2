@@ -177,7 +177,7 @@ function drawConnection(x1, y1, x2, y2, isSeries = false) {
 
     if (isSeries) {
         // Series: warmer, more prominent, dashed + glow
-        constellationCtx.strokeStyle = 'rgba(240, 80, 110, 0.40)';  // bright cyan-teal
+        constellationCtx.strokeStyle = 'rgba(240, 80, 140, 0.30)';
         constellationCtx.lineWidth = 1.5;
         constellationCtx.setLineDash([6, 10]);
 
