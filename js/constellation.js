@@ -177,7 +177,7 @@ function drawConnection(x1, y1, x2, y2, isSeries = false) {
 
     if (isSeries) {
         // Series: warmer, more prominent, dashed + glow
-        constellationCtx.strokeStyle = 'rgba(100, 220, 255, 0.70)';  // bright cyan-teal
+        constellationCtx.strokeStyle = 'rgba(240, 80, 110, 0.40)';  // bright cyan-teal
         constellationCtx.lineWidth = 1.5;
         constellationCtx.setLineDash([6, 10]);
 
@@ -190,7 +190,7 @@ function drawConnection(x1, y1, x2, y2, isSeries = false) {
         constellationCtx.shadowBlur = 0;
 
         // Main stroke (on top of glow)
-        constellationCtx.globalAlpha = 0.85;
+        constellationCtx.globalAlpha = 0.75;
         constellationCtx.stroke();
     } else {
         // Author: cooler, thinner, solid or lightly dotted
