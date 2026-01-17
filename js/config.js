@@ -25,3 +25,4 @@ const SHOW_COVERS_TIMELINE_KEY = "reading_show_covers_timeline";
 const SHOW_YEAR_GOAL_PROGRESS_KEY = "reading_show_year_goal_progress";
 const CHALLENGES_KEY = "reading_challenges";
 const DAILY_NOTES_KEY = "reading_daily_notes";
+const HIDE_TO_READ_KEY = "reading_hide_to_read_except_own_shelf";
