@@ -159,16 +159,30 @@ function drawStar(cx, cy, size, color, glow = false) {
 }
 
 function drawConnection(x1, y1, x2, y2, isSeries = false) {
-    if (!constellationCtx) return;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dist = Math.hypot(dx, dy);
+    if (dist > (isSeries ? 340 : 240)) return;
+
+    const mx1 = x1 + dx * 0.3 + (Math.random() - 0.5) * 40;
+    const my1 = y1 + dy * 0.3 + (Math.random() - 0.5) * 40;
+    const mx2 = x1 + dx * 0.7 + (Math.random() - 0.5) * 40;
+    const my2 = y1 + dy * 0.7 + (Math.random() - 0.5) * 40;
+
     constellationCtx.beginPath();
     constellationCtx.moveTo(x1, y1);
-    const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * 30;
-    const my = (y1 + y2) / 2 + (Math.random() - 0.5) * 30;
-    constellationCtx.quadraticCurveTo(mx, my, x2, y2);
-    constellationCtx.strokeStyle = isSeries ? '#66a3ff' : '#cccccc';
-    constellationCtx.lineWidth = isSeries ? 0.9 : 0.5;
-    constellationCtx.setLineDash(isSeries ? [3, 7] : []);
-    constellationCtx.globalAlpha = 0.15 + Math.random() * 0.05;
+    constellationCtx.bezierCurveTo(mx1, my1, mx2, my2, x2, y2);
+
+    if (isSeries) {
+        constellationCtx.strokeStyle = 'rgba(100, 180, 255, 0.35)';
+        constellationCtx.lineWidth = 1.1;
+        constellationCtx.setLineDash([2, 6]);
+    } else {
+        constellationCtx.strokeStyle = 'rgba(200, 200, 255, 0.18)';
+        constellationCtx.lineWidth = 0.7;
+    }
+
+    constellationCtx.globalAlpha = Math.max(0.08, 0.42 * (1 - dist / (isSeries ? 340 : 240)));
     constellationCtx.stroke();
     constellationCtx.setLineDash([]);
     constellationCtx.globalAlpha = 1;
