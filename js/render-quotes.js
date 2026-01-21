@@ -19,7 +19,7 @@ function renderQuotes() {
         return;
     }
 
-    // Populate book filter dropdown (only books with quotes)
+    // Populate book filter dropdown
     const bookFilter = document.getElementById("quoteBookFilter");
     if (bookFilter) {
         const currentValue = bookFilter.value;
@@ -43,23 +43,27 @@ function renderQuotes() {
             bookFilter.appendChild(opt);
         });
 
-        if (currentValue && bookFilter.querySelector(`option[value="${currentValue}"]`)) {
-            bookFilter.value = currentValue;
-        } else {
-            bookFilter.value = "all";
-        }
+        bookFilter.value = currentValue && bookFilter.querySelector(`option[value="${currentValue}"]`) 
+            ? currentValue 
+            : "all";
     }
 
-    // Render function (called on filter/search change)
+    // Render filtered quotes
     function renderFilteredQuotes() {
         const selectedBookId = bookFilter?.value || "all";
         const searchText = (document.getElementById("quoteSearchInput")?.value || "").toLowerCase().trim();
+        const onlyFavorites = document.getElementById("quoteFavoritesOnly")?.checked || false;
 
         let filtered = allQuotes;
 
         // Book filter
         if (selectedBookId !== "all") {
             filtered = filtered.filter(q => q.book.importOrder == selectedBookId);
+        }
+
+        // Favorites only
+        if (onlyFavorites) {
+            filtered = filtered.filter(q => q.favorite);
         }
 
         // Text search (quote OR book title OR author)
@@ -91,12 +95,12 @@ function renderQuotes() {
                             — <strong>${q.book.title}</strong> by ${q.book.author || "Unknown"}
                             ${pageStr ? ` (${pageStr})` : ""}
                             ${dateStr ? ` • ${dateStr}` : ""}
-                            <span style="margin-left:8px; cursor:pointer;" class="toggle-favorite" data-fav="${q.favorite ? 'true' : 'false'}">${favStar}</span>
+                            <span style="margin-left:8px; cursor:pointer; font-size:1.2em;" class="toggle-favorite" data-fav="${q.favorite ? 'true' : 'false'}">${favStar}</span>
                         </div>
                         <button class="edit-quote-btn" style="padding:4px 10px; font-size:0.85em;">Edit</button>
                     </div>
 
-                    <!-- Inline edit form (hidden by default) -->
+                    <!-- Inline edit form -->
                     <div class="edit-quote-form" style="display:none; margin-top:12px; padding:12px; background:#1a1a1a; border-radius:6px;">
                         <textarea class="edit-quote-text" style="width:100%; height:80px; resize:vertical;">${q.text}</textarea>
                         <div style="margin:8px 0; display:flex; gap:12px; flex-wrap:wrap;">
@@ -104,7 +108,8 @@ function renderQuotes() {
                             <label>Date: <input type="date" class="edit-quote-date" value="${q.date ? new Date(q.date).toISOString().split('T')[0] : ''}"></label>
                             <label>Favorite: <input type="checkbox" class="edit-quote-fav" ${q.favorite ? 'checked' : ''}></label>
                         </div>
-                        <div style="text-align:right;">
+                        <div style="text-align:right; margin-top:8px;">
+                            <button class="remove-quote-btn" style="padding:6px 12px; background:#c0392b; color:white; border:none; border-radius:4px; margin-right:8px;">Remove</button>
                             <button class="save-quote-btn" style="padding:6px 12px;">Save</button>
                             <button class="cancel-quote-btn" style="padding:6px 12px; margin-left:8px;">Cancel</button>
                         </div>
@@ -115,7 +120,7 @@ function renderQuotes() {
 
         container.innerHTML = html;
 
-        // Attach event listeners
+        // Event listeners
         container.querySelectorAll(".edit-quote-btn").forEach(btn => {
             btn.addEventListener("click", e => {
                 const item = e.target.closest(".quote-item");
@@ -137,17 +142,14 @@ function renderQuotes() {
                 q.date = dateVal ? new Date(dateVal).getTime() : null;
                 q.favorite = item.querySelector(".edit-quote-fav").checked;
 
-                // Save to book
                 const book = q.book;
-                const quoteIdx = book.quotes.findIndex(quote => 
-                    quote.text === q.text && quote.page === q.page && quote.date === q.date
-                ); // rough match - improve if needed
+                const quoteIdx = book.quotes.findIndex(quote => quote.text === q.text && quote.page === q.page && quote.date === q.date);
                 if (quoteIdx !== -1) {
-                    book.quotes[quoteIdx] = { ...q }; // update
+                    book.quotes[quoteIdx] = { ...q };
                 }
 
                 saveBooksToLocal();
-                renderQuotes(); // refresh
+                renderQuotes();
             });
         });
 
@@ -158,7 +160,28 @@ function renderQuotes() {
             });
         });
 
-        // Favorite toggle (click star)
+        // Remove quote
+        container.querySelectorAll(".remove-quote-btn").forEach(btn => {
+            btn.addEventListener("click", e => {
+                if (!confirm("Are you sure you want to remove this quote? This cannot be undone.")) return;
+
+                const item = e.target.closest(".quote-item");
+                const idx = parseInt(item.dataset.quoteIndex);
+                const q = allQuotes[idx];
+                if (!q) return;
+
+                const book = q.book;
+                const quoteIdx = book.quotes.findIndex(quote => quote.text === q.text && quote.page === q.page && quote.date === q.date);
+                if (quoteIdx !== -1) {
+                    book.quotes.splice(quoteIdx, 1);
+                }
+
+                saveBooksToLocal();
+                renderQuotes();
+            });
+        });
+
+        // Favorite toggle (star click)
         container.querySelectorAll(".toggle-favorite").forEach(star => {
             star.addEventListener("click", e => {
                 const item = e.target.closest(".quote-item");
@@ -181,12 +204,13 @@ function renderQuotes() {
     // Initial render
     renderFilteredQuotes();
 
-    // Event listeners for filters
+    // Filter events
     document.getElementById("quoteBookFilter")?.addEventListener("change", renderFilteredQuotes);
     document.getElementById("quoteSearchInput")?.addEventListener("input", debounce(renderFilteredQuotes, 300));
+    document.getElementById("quoteFavoritesOnly")?.addEventListener("change", renderFilteredQuotes);
 }
 
-// Simple debounce helper (add to utils.js if not present, or inline here)
+// Debounce helper
 function debounce(func, wait) {
     let timeout;
     return function(...args) {
