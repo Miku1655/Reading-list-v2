@@ -602,8 +602,22 @@
  
 <section id="tab-quotes" class="tab-content">
     <h2>Quotes & Highlights</h2>
-    <p>Collected memorable quotes from your books.</p>
-    <div id="quotesContainer"></div> <!-- We'll render here -->
+    
+    <div style="margin: 16px 0; display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+        <label>
+            Filter by book: 
+            <select id="quoteBookFilter">
+                <option value="all">All books with quotes</option>
+            </select>
+        </label>
+        
+        <label>
+            Search: 
+            <input type="text" id="quoteSearchInput" placeholder="Quote text or book title/author" style="width: 300px; padding: 6px;">
+        </label>
+    </div>
+    
+    <div id="quotesContainer"></div>
 </section>
  
 <section id="tab-options" class="tab-content">
@@ -647,7 +661,7 @@
     <h3>Manage Shelves</h3>
     <div id="shelfManager"></div>
     <hr style="border:1px solid #333; margin:16px 0;">
-    Version 1.15 – back to stable, new option (hide to-read)
+    Version 1.16 – quotes search and filters, stories tab
 </section>
 
 <div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); justify-content:center; align-items:center; z-index:1000;">
