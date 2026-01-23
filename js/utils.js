@@ -45,6 +45,7 @@ function compare(a, b, col) {
     av = av ?? "";
     bv = bv ?? "";
     return String(av).localeCompare(String(bv));
+}
 function calculateReadingSpeeds() {
     const validReads = [];
     const msPerDay = 1000 * 60 * 60 * 24;
