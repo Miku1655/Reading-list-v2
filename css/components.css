@@ -546,3 +546,19 @@ tr:hover { background: #1f1f1f; }
     border: 1px solid #333;
     color: #ddd;
 }
+
+.quote-item.dragging {
+    opacity: 0.4;
+    background: #333;
+    border-left-color: #888;
+}
+
+.quote-item[draggable="true"]:hover {
+    cursor: move;
+    background: #2a2a2a;
+}
+
+
+.quote-item {
+    transition: opacity 0.2s ease;
+}
