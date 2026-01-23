@@ -7,12 +7,11 @@ function setQuotesSortMode(mode) {
 }
 
 function assignInitialCustomOrders(allQuotes) {
-    // Sort newest first → assign 0, 1, 2, ... (lower number = higher position)
+    // Sort newest first → assign 0, 1, 2, ...
     const sortedByDate = [...allQuotes].sort((a, b) => (b.date || 0) - (a.date || 0));
     sortedByDate.forEach((q, index) => {
-        q.customOrder = index;
+        q.originalQuote.customOrder = index;
     });
-    // Because allQuotes entries are shallow copies, but we mutate the original objects in book.quotes
 }
 
 function getSortedQuotes(allQuotes) {
@@ -20,11 +19,11 @@ function getSortedQuotes(allQuotes) {
     let sorted = [...allQuotes];
 
     if (mode === 'custom') {
-        // Initialize if any quote lacks customOrder
-        if (sorted.some(q => q.customOrder === undefined)) {
+        // Initialize if needed
+        if (sorted.some(q => q.originalQuote.customOrder === undefined)) {
             assignInitialCustomOrders(sorted);
         }
-        sorted.sort((a, b) => (a.customOrder ?? 999999) - (b.customOrder ?? 999999));
+        sorted.sort((a, b) => (a.originalQuote.customOrder ?? 999999) - (b.originalQuote.customOrder ?? 999999));
     } else if (mode === 'newest') {
         sorted.sort((a, b) => (b.date || 0) - (a.date || 0));
     } else if (mode === 'oldest') {
@@ -48,12 +47,15 @@ function renderQuotes() {
 
     container.innerHTML = "<p>Loading quotes...</p>";
 
-    // Collect all quotes with book reference
+    // Collect all quotes with reference to original quote object
     const allQuotes = [];
     books.forEach(book => {
         (book.quotes || []).forEach(quote => {
             if (quote.text?.trim()) {
-                allQuotes.push({ ...quote, book }); // shallow copy
+                if (quote.id === undefined) {
+                    quote.id = Date.now() + Math.random().toString(36).slice(2); // unique ID if missing
+                }
+                allQuotes.push({ ...quote, book, originalQuote: quote }); // keep ref to original
             }
         });
     });
@@ -63,35 +65,26 @@ function renderQuotes() {
         return;
     }
 
-    // Populate book filter dropdown
+    // Populate book filter (unchanged)
     const bookFilter = document.getElementById("quoteBookFilter");
     if (bookFilter) {
         const currentValue = bookFilter.value;
         bookFilter.innerHTML = '<option value="all">All books with quotes</option>';
-
         const bookMap = new Map();
         allQuotes.forEach(q => {
-            if (!bookMap.has(q.book.importOrder)) {
-                bookMap.set(q.book.importOrder, q.book);
-            }
+            if (!bookMap.has(q.book.importOrder)) bookMap.set(q.book.importOrder, q.book);
         });
-
-        const sortedBooks = Array.from(bookMap.values()).sort((a, b) =>
-            a.title.localeCompare(b.title)
-        );
-
+        const sortedBooks = Array.from(bookMap.values()).sort((a, b) => a.title.localeCompare(b.title));
         sortedBooks.forEach(book => {
             const opt = document.createElement("option");
             opt.value = book.importOrder;
             opt.textContent = `${book.title} (${book.quotes.length} quote${book.quotes.length === 1 ? '' : 's'})`;
             bookFilter.appendChild(opt);
         });
-        bookFilter.value = currentValue && bookFilter.querySelector(`option[value="${currentValue}"]`)
-            ? currentValue
-            : "all";
+        bookFilter.value = currentValue && bookFilter.querySelector(`option[value="${currentValue}"]`) ? currentValue : "all";
     }
 
-    // Render filtered & sorted quotes
+    // Render function
     function renderFilteredQuotes() {
         const selectedBookId = bookFilter?.value || "all";
         const searchText = (document.getElementById("quoteSearchInput")?.value || "").toLowerCase().trim();
@@ -126,10 +119,7 @@ function renderQuotes() {
             const favStar = q.favorite ? "★" : "☆";
 
             html += `
-                <div class="quote-item" 
-                     data-quote-text="${encodeURIComponent(q.text.substring(0, 100))}" 
-                     draggable="${getQuotesSortMode() === 'custom' ? 'true' : 'false'}"
-                     style="margin:16px 0; padding:12px; background:#222; border-radius:6px; border-left:4px solid #555; cursor: ${getQuotesSortMode() === 'custom' ? 'move' : 'default'};">
+                <div class="quote-item" data-quote-id="${q.id}" draggable="${getQuotesSortMode() === 'custom' ? 'true' : 'false'}" style="margin:16px 0; padding:12px; background:#222; border-radius:6px; border-left:4px solid #555;">
                     <blockquote style="margin:0 0 8px; font-style:italic; white-space:pre-wrap;">"${q.text}"</blockquote>
                     <div style="color:#aaa; font-size:0.9em; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                         <div>
@@ -140,6 +130,7 @@ function renderQuotes() {
                         </div>
                         <button class="edit-quote-btn" style="padding:4px 10px; font-size:0.85em;">Edit</button>
                     </div>
+                    <!-- Inline edit form -->
                     <div class="edit-quote-form" style="display:none; margin-top:12px; padding:12px; background:#1a1a1a; border-radius:6px;">
                         <textarea class="edit-quote-text" style="width:100%; height:80px; resize:vertical;">${q.text}</textarea>
                         <div style="margin:8px 0; display:flex; gap:12px; flex-wrap:wrap;">
@@ -156,10 +147,9 @@ function renderQuotes() {
                 </div>
             `;
         });
-
         container.innerHTML = html;
 
-        // Re-attach all event listeners
+        // Event listeners
         container.querySelectorAll(".edit-quote-btn").forEach(btn => {
             btn.addEventListener("click", e => {
                 const item = e.target.closest(".quote-item");
@@ -167,86 +157,69 @@ function renderQuotes() {
                 form.style.display = form.style.display === "none" ? "block" : "none";
             });
         });
-
         container.querySelectorAll(".save-quote-btn").forEach(btn => {
             btn.addEventListener("click", e => {
                 const item = e.target.closest(".quote-item");
-                const textSnippet = item.querySelector("blockquote").textContent.trim().substring(0, 100);
-                const quote = allQuotes.find(q => q.text.substring(0, 100).trim() === textSnippet);
-                if (!quote) return;
+                const id = item.dataset.quoteId;
+                const originalQuote = books.flatMap(b => b.quotes || []).find(q => q.id === id);
+                if (!originalQuote) return;
 
-                quote.text = item.querySelector(".edit-quote-text").value.trim();
-                quote.page = Number(item.querySelector(".edit-quote-page").value) || null;
+                originalQuote.text = item.querySelector(".edit-quote-text").value.trim();
+                originalQuote.page = Number(item.querySelector(".edit-quote-page").value) || null;
                 const dateVal = item.querySelector(".edit-quote-date").value;
-                quote.date = dateVal ? new Date(dateVal).getTime() : null;
-                quote.favorite = item.querySelector(".edit-quote-fav").checked;
+                originalQuote.date = dateVal ? new Date(dateVal).getTime() : null;
+                originalQuote.favorite = item.querySelector(".edit-quote-fav").checked;
 
-                const book = quote.book;
-                const quoteIdx = book.quotes.findIndex(q => q.text === quote.text && q.page === quote.page && q.date === quote.date);
-                if (quoteIdx !== -1) {
-                    book.quotes[quoteIdx] = { ...quote };
-                }
                 saveBooksToLocal();
                 renderQuotes();
             });
         });
-
         container.querySelectorAll(".cancel-quote-btn").forEach(btn => {
             btn.addEventListener("click", e => {
                 const form = e.target.closest(".edit-quote-form");
                 form.style.display = "none";
             });
         });
-
+        // Remove
         container.querySelectorAll(".remove-quote-btn").forEach(btn => {
             btn.addEventListener("click", e => {
                 if (!confirm("Are you sure you want to remove this quote? This cannot be undone.")) return;
                 const item = e.target.closest(".quote-item");
-                const textSnippet = item.querySelector("blockquote").textContent.trim().substring(0, 100);
-                const quote = allQuotes.find(q => q.text.substring(0, 100).trim() === textSnippet);
-                if (!quote) return;
-
-                const book = quote.book;
-                const quoteIdx = book.quotes.findIndex(q => q.text.substring(0, 100).trim() === textSnippet);
-                if (quoteIdx !== -1) {
-                    book.quotes.splice(quoteIdx, 1);
-                }
+                const id = item.dataset.quoteId;
+                books.forEach(book => {
+                    book.quotes = book.quotes?.filter(q => q.id !== id) || [];
+                });
                 saveBooksToLocal();
                 renderQuotes();
             });
         });
-
+        // Favorite toggle
         container.querySelectorAll(".toggle-favorite").forEach(star => {
             star.addEventListener("click", e => {
                 const item = e.target.closest(".quote-item");
-                const textSnippet = item.querySelector("blockquote").textContent.trim().substring(0, 100);
-                const quote = allQuotes.find(q => q.text.substring(0, 100).trim() === textSnippet);
-                if (!quote) return;
+                const id = item.dataset.quoteId;
+                const originalQuote = books.flatMap(b => b.quotes || []).find(q => q.id === id);
+                if (!originalQuote) return;
 
-                quote.favorite = !quote.favorite;
-                const book = quote.book;
-                const quoteIdx = book.quotes.findIndex(q => q.text.substring(0, 100).trim() === textSnippet);
-                if (quoteIdx !== -1) {
-                    book.quotes[quoteIdx].favorite = quote.favorite;
-                }
+                originalQuote.favorite = !originalQuote.favorite;
                 saveBooksToLocal();
                 renderQuotes();
             });
         });
 
-        // Attach drag & drop only in custom mode
+        // Drag if custom
         if (getQuotesSortMode() === 'custom') {
             attachDragAndDrop(container);
         }
     }
 
+    // Initial render
     renderFilteredQuotes();
 
-    // Filter & sort events
+    // Events
     document.getElementById("quoteBookFilter")?.addEventListener("change", renderFilteredQuotes);
     document.getElementById("quoteSearchInput")?.addEventListener("input", debounce(renderFilteredQuotes, 300));
     document.getElementById("quoteFavoritesOnly")?.addEventListener("change", renderFilteredQuotes);
-
     const sortSelect = document.getElementById("quotesSortSelect");
     if (sortSelect) {
         sortSelect.value = getQuotesSortMode();
@@ -259,40 +232,40 @@ function renderQuotes() {
 
 function attachDragAndDrop(container) {
     let dragged = null;
-
-    container.addEventListener('dragstart', e => {
-        dragged = e.target.closest('.quote-item');
-        if (!dragged) return;
-        dragged.style.opacity = '0.4';
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', ''); // Firefox needs this
-    });
-
-    container.addEventListener('dragend', () => {
-        if (dragged) {
-            dragged.style.opacity = '1';
-            dragged = null;
-        }
-        saveCustomOrder(container);
-    });
-
-    container.addEventListener('dragover', e => {
+    const handleDragOver = debounce(e => {
         e.preventDefault();
         const afterElement = getDragAfterElement(container, e.clientY);
-        const dragging = container.querySelector('.quote-item[style*="opacity"]');
+        const dragging = container.querySelector('.quote-item.dragging');
         if (!dragging) return;
         if (afterElement == null) {
             container.appendChild(dragging);
         } else {
             container.insertBefore(dragging, afterElement);
         }
+    }, 50); // Throttle to 50ms for smoothness
+
+    container.addEventListener('dragstart', e => {
+        dragged = e.target.closest('.quote-item');
+        if (!dragged) return;
+        dragged.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', '');
     });
+
+    container.addEventListener('dragend', () => {
+        const dragging = container.querySelector('.dragging');
+        if (dragging) dragging.classList.remove('dragging');
+        dragged = null;
+        saveCustomOrder(container);
+    });
+
+    container.addEventListener('dragover', handleDragOver);
 
     container.addEventListener('drop', e => e.preventDefault());
 }
 
 function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('.quote-item:not([style*="opacity"])')];
+    const draggableElements = [...container.querySelectorAll('.quote-item:not(.dragging)')];
 
     return draggableElements.reduce((closest, child) => {
         const box = child.getBoundingClientRect();
@@ -306,23 +279,14 @@ function getDragAfterElement(container, y) {
 
 function saveCustomOrder(container) {
     const currentItems = [...container.querySelectorAll('.quote-item')];
-
     currentItems.forEach((item, newIndex) => {
-        const quoteTextStart = item.querySelector('blockquote')?.textContent?.trim().substring(0, 80);
-        if (!quoteTextStart) return;
-
-        // Find matching quote in books
-        for (const book of books) {
-            const quote = book.quotes?.find(q => q.text.trim().startsWith(quoteTextStart));
-            if (quote) {
-                quote.customOrder = newIndex;
-                break;
-            }
+        const id = item.dataset.quoteId;
+        const originalQuote = books.flatMap(b => b.quotes || []).find(q => q.id === id);
+        if (originalQuote) {
+            originalQuote.customOrder = newIndex;
         }
     });
-
     saveBooksToLocal();
-    // No need to re-render here – DOM already shows the new order
 }
 
 function debounce(func, wait) {
