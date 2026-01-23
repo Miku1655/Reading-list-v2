@@ -8,6 +8,12 @@ function renderStats() {
     const readBooks = books.filter(b => b.exclusiveShelf === "read");
     const dnfBooks = books.filter(b => b.exclusiveShelf === "dnf");
     const pagesRead = readBooks.reduce((s, b) => s + (b.pages || 0) * getReadCount(b), 0);
+
+    const ratedBooks = readBooks.filter(b => b.rating > 0);
+    const avgRating = ratedBooks.length 
+        ? (ratedBooks.reduce((sum, b) => sum + b.rating, 0) / ratedBooks.length).toFixed(2)
+        : '—';
+    
     const authorStats = {};
     readBooks.forEach(b => {
         const auth = b.author || "Unknown";
@@ -54,7 +60,8 @@ function renderStats() {
     html += `<div>Read</div><div>${readBooks.length}</div>`;
     html += `<div>DNF</div><div>${dnfBooks.length}</div>`;
     html += `<div>Pages read (× count)</div><div>${pagesRead}</div>`;
-    html += `<div>Average book length</div><div>${avgLength}${avgLength !== '—' ? ' pages' : ''}</div>`; //
+    html += `<div>Average book length</div><div>${avgLength}${avgLength !== '—' ? ' pages' : ''}</div>`;
+    html += `<div>Average rating</div><div>${avgRating}</div>`;
     html += '</div></div>';
     html += '<div class="stats-block"><h2>Favorite Authors</h2><div class="stats-list">';
     html += '<strong>By books read:</strong><br>';
