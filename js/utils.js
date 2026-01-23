@@ -45,32 +45,43 @@ function compare(a, b, col) {
     av = av ?? "";
     bv = bv ?? "";
     return String(av).localeCompare(String(bv));
-}
 function calculateReadingSpeeds() {
     const validReads = [];
+    const msPerDay = 1000 * 60 * 60 * 24;
+
     books.forEach(book => {
         if (!book.reads || book.pages <= 0) return;
         book.reads.forEach(read => {
-            if (read.started !== null && read.finished !== null) {
-                const days = (read.finished - read.started) / (1000 * 60 * 60 * 24);
-                if (days > 0) {
+            if (read.started !== null && read.finished !== null && read.finished >= read.started) {
+                const daysDiff = (read.finished - read.started) / msPerDay;
+                const days = Math.floor(daysDiff) + 1; // inclusive: same day = 1 day
+
+                if (days >= 1) {
                     validReads.push({
                         book: book,
                         speed: book.pages / days,
-                        days: days
+                        days: days,
+                        finished: read.finished   // for potential future sorting by recency
                     });
                 }
             }
         });
     });
+
     if (validReads.length === 0) {
-        return { avg: "0", fastest: null, slowest: null };
+        return { avg: "—", fastest: null, slowest: null };
     }
+
     const speeds = validReads.map(r => r.speed);
     const avg = (speeds.reduce((a, b) => a + b, 0) / speeds.length).toFixed(1);
+
+    // Sort descending for fastest
     validReads.sort((a, b) => b.speed - a.speed);
     const fastest = validReads[0];
+
+    // Slowest = last after descending sort
     const slowest = validReads[validReads.length - 1];
+
     return { avg, fastest, slowest };
 }
 function calculatePerYear() {
