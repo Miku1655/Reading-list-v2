@@ -1,7 +1,51 @@
+function getQuotesSortMode() {
+    return localStorage.getItem('quotesSortMode') || 'newest';
+}
+
+function setQuotesSortMode(mode) {
+    localStorage.setItem('quotesSortMode', mode);
+}
+
+function assignInitialCustomOrders(allQuotes) {
+    // Sort newest first → assign 0, 1, 2, ... (lower number = higher position)
+    const sortedByDate = [...allQuotes].sort((a, b) => (b.date || 0) - (a.date || 0));
+    sortedByDate.forEach((q, index) => {
+        q.customOrder = index;
+    });
+    // Because allQuotes entries are shallow copies, but we mutate the original objects in book.quotes
+}
+
+function getSortedQuotes(allQuotes) {
+    const mode = getQuotesSortMode();
+    let sorted = [...allQuotes];
+
+    if (mode === 'custom') {
+        // Initialize if any quote lacks customOrder
+        if (sorted.some(q => q.customOrder === undefined)) {
+            assignInitialCustomOrders(sorted);
+        }
+        sorted.sort((a, b) => (a.customOrder ?? 999999) - (b.customOrder ?? 999999));
+    } else if (mode === 'newest') {
+        sorted.sort((a, b) => (b.date || 0) - (a.date || 0));
+    } else if (mode === 'oldest') {
+        sorted.sort((a, b) => (a.date || 0) - (b.date || 0));
+    } else if (mode === 'title') {
+        sorted.sort((a, b) => a.book.title.localeCompare(b.book.title));
+    } else if (mode === 'author') {
+        sorted.sort((a, b) => (a.book.author || '').localeCompare(b.book.author || ''));
+    } else if (mode === 'page') {
+        sorted.sort((a, b) => (a.page || 999999) - (b.page || 999999));
+    } else if (mode === 'favorite') {
+        sorted.sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0));
+    }
+
+    return sorted;
+}
+
 function renderQuotes() {
     const container = document.getElementById("quotesContainer");
     if (!container) return;
-    
+
     container.innerHTML = "<p>Loading quotes...</p>";
 
     // Collect all quotes with book reference
@@ -9,7 +53,7 @@ function renderQuotes() {
     books.forEach(book => {
         (book.quotes || []).forEach(quote => {
             if (quote.text?.trim()) {
-                allQuotes.push({ ...quote, book });
+                allQuotes.push({ ...quote, book }); // shallow copy
             }
         });
     });
@@ -24,49 +68,43 @@ function renderQuotes() {
     if (bookFilter) {
         const currentValue = bookFilter.value;
         bookFilter.innerHTML = '<option value="all">All books with quotes</option>';
-        
+
         const bookMap = new Map();
         allQuotes.forEach(q => {
             if (!bookMap.has(q.book.importOrder)) {
                 bookMap.set(q.book.importOrder, q.book);
             }
         });
-        
-        const sortedBooks = Array.from(bookMap.values()).sort((a, b) => 
+
+        const sortedBooks = Array.from(bookMap.values()).sort((a, b) =>
             a.title.localeCompare(b.title)
         );
-        
+
         sortedBooks.forEach(book => {
             const opt = document.createElement("option");
             opt.value = book.importOrder;
             opt.textContent = `${book.title} (${book.quotes.length} quote${book.quotes.length === 1 ? '' : 's'})`;
             bookFilter.appendChild(opt);
         });
-
-        bookFilter.value = currentValue && bookFilter.querySelector(`option[value="${currentValue}"]`) 
-            ? currentValue 
+        bookFilter.value = currentValue && bookFilter.querySelector(`option[value="${currentValue}"]`)
+            ? currentValue
             : "all";
     }
 
-    // Render filtered quotes
+    // Render filtered & sorted quotes
     function renderFilteredQuotes() {
         const selectedBookId = bookFilter?.value || "all";
         const searchText = (document.getElementById("quoteSearchInput")?.value || "").toLowerCase().trim();
         const onlyFavorites = document.getElementById("quoteFavoritesOnly")?.checked || false;
 
-        let filtered = allQuotes;
+        let filtered = getSortedQuotes(allQuotes);
 
-        // Book filter
         if (selectedBookId !== "all") {
             filtered = filtered.filter(q => q.book.importOrder == selectedBookId);
         }
-
-        // Favorites only
         if (onlyFavorites) {
             filtered = filtered.filter(q => q.favorite);
         }
-
-        // Text search (quote OR book title OR author)
         if (searchText) {
             filtered = filtered.filter(q => {
                 const quoteMatch = q.text.toLowerCase().includes(searchText);
@@ -88,7 +126,10 @@ function renderQuotes() {
             const favStar = q.favorite ? "★" : "☆";
 
             html += `
-                <div class="quote-item" data-quote-index="${allQuotes.indexOf(q)}" style="margin:16px 0; padding:12px; background:#222; border-radius:6px; border-left:4px solid #555;">
+                <div class="quote-item" 
+                     data-quote-text="${encodeURIComponent(q.text.substring(0, 100))}" 
+                     draggable="${getQuotesSortMode() === 'custom' ? 'true' : 'false'}"
+                     style="margin:16px 0; padding:12px; background:#222; border-radius:6px; border-left:4px solid #555; cursor: ${getQuotesSortMode() === 'custom' ? 'move' : 'default'};">
                     <blockquote style="margin:0 0 8px; font-style:italic; white-space:pre-wrap;">"${q.text}"</blockquote>
                     <div style="color:#aaa; font-size:0.9em; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                         <div>
@@ -99,8 +140,6 @@ function renderQuotes() {
                         </div>
                         <button class="edit-quote-btn" style="padding:4px 10px; font-size:0.85em;">Edit</button>
                     </div>
-
-                    <!-- Inline edit form -->
                     <div class="edit-quote-form" style="display:none; margin-top:12px; padding:12px; background:#1a1a1a; border-radius:6px;">
                         <textarea class="edit-quote-text" style="width:100%; height:80px; resize:vertical;">${q.text}</textarea>
                         <div style="margin:8px 0; display:flex; gap:12px; flex-wrap:wrap;">
@@ -120,7 +159,7 @@ function renderQuotes() {
 
         container.innerHTML = html;
 
-        // Event listeners
+        // Re-attach all event listeners
         container.querySelectorAll(".edit-quote-btn").forEach(btn => {
             btn.addEventListener("click", e => {
                 const item = e.target.closest(".quote-item");
@@ -132,22 +171,21 @@ function renderQuotes() {
         container.querySelectorAll(".save-quote-btn").forEach(btn => {
             btn.addEventListener("click", e => {
                 const item = e.target.closest(".quote-item");
-                const idx = parseInt(item.dataset.quoteIndex);
-                const q = allQuotes[idx];
-                if (!q) return;
+                const textSnippet = item.querySelector("blockquote").textContent.trim().substring(0, 100);
+                const quote = allQuotes.find(q => q.text.substring(0, 100).trim() === textSnippet);
+                if (!quote) return;
 
-                q.text = item.querySelector(".edit-quote-text").value.trim();
-                q.page = Number(item.querySelector(".edit-quote-page").value) || null;
+                quote.text = item.querySelector(".edit-quote-text").value.trim();
+                quote.page = Number(item.querySelector(".edit-quote-page").value) || null;
                 const dateVal = item.querySelector(".edit-quote-date").value;
-                q.date = dateVal ? new Date(dateVal).getTime() : null;
-                q.favorite = item.querySelector(".edit-quote-fav").checked;
+                quote.date = dateVal ? new Date(dateVal).getTime() : null;
+                quote.favorite = item.querySelector(".edit-quote-fav").checked;
 
-                const book = q.book;
-                const quoteIdx = book.quotes.findIndex(quote => quote.text === q.text && quote.page === q.page && quote.date === q.date);
+                const book = quote.book;
+                const quoteIdx = book.quotes.findIndex(q => q.text === quote.text && q.page === quote.page && q.date === quote.date);
                 if (quoteIdx !== -1) {
-                    book.quotes[quoteIdx] = { ...q };
+                    book.quotes[quoteIdx] = { ...quote };
                 }
-
                 saveBooksToLocal();
                 renderQuotes();
             });
@@ -160,57 +198,133 @@ function renderQuotes() {
             });
         });
 
-        // Remove quote
         container.querySelectorAll(".remove-quote-btn").forEach(btn => {
             btn.addEventListener("click", e => {
                 if (!confirm("Are you sure you want to remove this quote? This cannot be undone.")) return;
-
                 const item = e.target.closest(".quote-item");
-                const idx = parseInt(item.dataset.quoteIndex);
-                const q = allQuotes[idx];
-                if (!q) return;
+                const textSnippet = item.querySelector("blockquote").textContent.trim().substring(0, 100);
+                const quote = allQuotes.find(q => q.text.substring(0, 100).trim() === textSnippet);
+                if (!quote) return;
 
-                const book = q.book;
-                const quoteIdx = book.quotes.findIndex(quote => quote.text === q.text && quote.page === q.page && quote.date === q.date);
+                const book = quote.book;
+                const quoteIdx = book.quotes.findIndex(q => q.text.substring(0, 100).trim() === textSnippet);
                 if (quoteIdx !== -1) {
                     book.quotes.splice(quoteIdx, 1);
                 }
-
                 saveBooksToLocal();
                 renderQuotes();
             });
         });
 
-        // Favorite toggle (star click)
         container.querySelectorAll(".toggle-favorite").forEach(star => {
             star.addEventListener("click", e => {
                 const item = e.target.closest(".quote-item");
-                const idx = parseInt(item.dataset.quoteIndex);
-                const q = allQuotes[idx];
-                q.favorite = !q.favorite;
+                const textSnippet = item.querySelector("blockquote").textContent.trim().substring(0, 100);
+                const quote = allQuotes.find(q => q.text.substring(0, 100).trim() === textSnippet);
+                if (!quote) return;
 
-                const book = q.book;
-                const quoteIdx = book.quotes.findIndex(quote => quote.text === q.text);
+                quote.favorite = !quote.favorite;
+                const book = quote.book;
+                const quoteIdx = book.quotes.findIndex(q => q.text.substring(0, 100).trim() === textSnippet);
                 if (quoteIdx !== -1) {
-                    book.quotes[quoteIdx].favorite = q.favorite;
+                    book.quotes[quoteIdx].favorite = quote.favorite;
                 }
-
                 saveBooksToLocal();
                 renderQuotes();
             });
         });
+
+        // Attach drag & drop only in custom mode
+        if (getQuotesSortMode() === 'custom') {
+            attachDragAndDrop(container);
+        }
     }
 
-    // Initial render
     renderFilteredQuotes();
 
-    // Filter events
+    // Filter & sort events
     document.getElementById("quoteBookFilter")?.addEventListener("change", renderFilteredQuotes);
     document.getElementById("quoteSearchInput")?.addEventListener("input", debounce(renderFilteredQuotes, 300));
     document.getElementById("quoteFavoritesOnly")?.addEventListener("change", renderFilteredQuotes);
+
+    const sortSelect = document.getElementById("quotesSortSelect");
+    if (sortSelect) {
+        sortSelect.value = getQuotesSortMode();
+        sortSelect.addEventListener("change", e => {
+            setQuotesSortMode(e.target.value);
+            renderFilteredQuotes();
+        });
+    }
 }
 
-// Debounce helper
+function attachDragAndDrop(container) {
+    let dragged = null;
+
+    container.addEventListener('dragstart', e => {
+        dragged = e.target.closest('.quote-item');
+        if (!dragged) return;
+        dragged.style.opacity = '0.4';
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', ''); // Firefox needs this
+    });
+
+    container.addEventListener('dragend', () => {
+        if (dragged) {
+            dragged.style.opacity = '1';
+            dragged = null;
+        }
+        saveCustomOrder(container);
+    });
+
+    container.addEventListener('dragover', e => {
+        e.preventDefault();
+        const afterElement = getDragAfterElement(container, e.clientY);
+        const dragging = container.querySelector('.quote-item[style*="opacity"]');
+        if (!dragging) return;
+        if (afterElement == null) {
+            container.appendChild(dragging);
+        } else {
+            container.insertBefore(dragging, afterElement);
+        }
+    });
+
+    container.addEventListener('drop', e => e.preventDefault());
+}
+
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.quote-item:not([style*="opacity"])')];
+
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        }
+        return closest;
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function saveCustomOrder(container) {
+    const currentItems = [...container.querySelectorAll('.quote-item')];
+
+    currentItems.forEach((item, newIndex) => {
+        const quoteTextStart = item.querySelector('blockquote')?.textContent?.trim().substring(0, 80);
+        if (!quoteTextStart) return;
+
+        // Find matching quote in books
+        for (const book of books) {
+            const quote = book.quotes?.find(q => q.text.trim().startsWith(quoteTextStart));
+            if (quote) {
+                quote.customOrder = newIndex;
+                break;
+            }
+        }
+    });
+
+    saveBooksToLocal();
+    // No need to re-render here – DOM already shows the new order
+}
+
 function debounce(func, wait) {
     let timeout;
     return function(...args) {
