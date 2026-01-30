@@ -606,9 +606,23 @@
         <button id="autoArrangeBookshelf">Auto Arrange</button>
         <button id="resetBookshelfArrangement">Reset Arrangement</button>
         <label><input type="checkbox" id="bookshelfJustify"> Justify / Spread widths when under capacity</label>
+        <label style="margin-left:16px;">
+            Max pages per shelf: 
+            <input type="number" id="maxPagesShelf" min="5000" step="1000" value="15000" style="width:120px;">
+        </label>
         <span id="bookshelfStats" style="margin-left:auto; color:#aaa;"></span>
     </div>
-    <div id="bookshelfContainer" style="padding:0 16px 40px; overflow-y:auto; max-height:calc(100vh - 180px);"></div>
+    <div id="bookshelfContainer" style="
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 20px 16px;
+        gap: 60px;              
+        scroll-behavior: smooth;
+        min-height: 80vh;
+    "></div>
 </section>
  
 <section id="tab-quotes" class="tab-content">
