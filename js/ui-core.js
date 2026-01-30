@@ -77,6 +77,10 @@ function switchTab(name) {
     renderConstellation();
 }
     
+    if (name === "bookshelf") {
+    renderBookshelf();
+}
+    
     if (name === "stats") {
         renderStats?.(); // optional chaining if function might not exist yet
     }
@@ -111,6 +115,11 @@ function renderAll() {
     if (document.getElementById("tab-world-map")?.classList.contains("active")) {
     renderMap();
 }
+    
+    if (document.getElementById("tab-bookshelf")?.classList.contains("active")) {
+    renderBookshelf();
+}
+    
     // Goal progress (only if list tab active)
     if (document.getElementById("tab-list")?.classList.contains("active")) {
         renderYearGoalProgress();
