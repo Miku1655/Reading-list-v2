@@ -28,6 +28,8 @@ let showYearGoalProgress = true;
 let hideToReadExceptOwnShelf = false;
 let notePopup = null;
 let settings = {};
+let bookshelfShelves = [];
+let bookshelfSettings = { maxPagesPerShelf: 8000, justify: false, customEditEnabled: false };
 
 function loadLocalData() {
     const savedBooks = localStorage.getItem(STORAGE_KEY);
@@ -69,6 +71,17 @@ books.forEach(book => {
             }
         });
     }
+});
+    const savedShelves = localStorage.getItem('bookshelfShelves');
+bookshelfShelves = savedShelves ? JSON.parse(savedShelves) : [];
+
+const savedBsSettings = localStorage.getItem('bookshelfSettings');
+bookshelfSettings = savedBsSettings ? JSON.parse(savedBsSettings) : { maxPagesPerShelf: 8000, justify: false, customEditEnabled: false };
+
+// Migrate books: add missing fields
+books.forEach(b => {
+    if (b.customHeight === undefined) b.customHeight = null;
+    if (b.spineColor === undefined) b.spineColor = null;
 });
 });
     nextImportOrder = maxOrder + 1;
@@ -115,6 +128,11 @@ if (savedSettings) {
 
 function saveBooksToLocal() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
+}
+
+function saveBookshelfToLocal() {
+    localStorage.setItem('bookshelfShelves', JSON.stringify(bookshelfShelves));
+    localStorage.setItem('bookshelfSettings', JSON.stringify(bookshelfSettings));
 }
 
 function loadGoalsForYear() {
