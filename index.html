@@ -28,6 +28,7 @@
     <button class="tab" data-tab="challenges">Challenges</button>
     <button class="tab" data-tab="world-map">World Map</button>
     <button class="tab" data-tab="constellation">Constellation</button>
+    <button class="tab" data-tab="bookshelf">Bookshelf</button>
     <button class="tab" data-tab="quotes">Quotes</button>
     <button class="tab" data-tab="options">Options</button>
 </div>
@@ -599,6 +600,16 @@
         <div id="constellationTooltip" style="position:absolute; display:none; background:rgba(0,0,0,0.85); color:#eee; padding:8px 12px; border-radius:6px; border:1px solid #444; pointer-events:none; max-width:280px; font-size:0.9em; box-shadow:0 2px 10px rgba(0,0,0,0.7);"></div>
     </div>
 </section>
+
+ <section id="tab-bookshelf" class="tab-content">
+    <div style="padding:16px; display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
+        <button id="autoArrangeBookshelf">Auto Arrange</button>
+        <button id="resetBookshelfArrangement">Reset Arrangement</button>
+        <label><input type="checkbox" id="bookshelfJustify"> Justify / Spread widths when under capacity</label>
+        <span id="bookshelfStats" style="margin-left:auto; color:#aaa;"></span>
+    </div>
+    <div id="bookshelfContainer" style="padding:0 16px 40px; overflow-y:auto; max-height:calc(100vh - 180px);"></div>
+</section>
  
 <section id="tab-quotes" class="tab-content">
     <h2>Quotes & Highlights</h2>
@@ -648,6 +659,7 @@
         <label>Min books read for author avg rating: <input type="number" id="minAuthorBooks" min="1" value="2" style="width:80px;"></label><br><br>
         <label><input type="checkbox" id="showYearGoalProgress" checked> Show current year goal progress bar on List tab</label><br><br>
         <label><input type="checkbox" id="hideToReadExceptOwn"> Hide to-read books from all shelves except "to-read"</label>
+        <br><label><input type="checkbox" id="bookshelfCustomEdit"> Enable custom book height & spine color in Bookshelf tab</label>
     </div>
     <div id="coversSection">
         <h3>Covers Management</h3>
@@ -677,7 +689,7 @@
     <h3>Manage Shelves</h3>
     <div id="shelfManager"></div>
     <hr style="border:1px solid #333; margin:16px 0;">
-    Version 1.16 – quotes search and filters, stats fix, (stories tab - withheld)
+    Version 1.17 – bookshelf tab
 </section>
 
 <div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); justify-content:center; align-items:center; z-index:1000;">
@@ -808,6 +820,7 @@
 <script src="js/ui-events.js"></script>
 <script src="js/ui-year-review.js"></script>
 <script src="js/constellation.js"></script>
+<script src="js/render-bookshelf.js"></script>
  
 </body>
 </html>
