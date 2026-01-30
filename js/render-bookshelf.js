@@ -48,10 +48,9 @@ function renderBookshelf() {
         booksRow.className = 'books-row';
         booksRow.style.display = 'flex';
         booksRow.style.alignItems = 'flex-end';
-        booksRow.style.minHeight = '200px';
-        booksRow.style.position = 'relative';
-        booksRow.style.top = '-240px'; // overlap shelf
-        booksRow.style.padding = '0 10px';
+        booksRow.style.padding = '60px 20px 60px 20px';  // ↑ increase top padding so books sit lower
+        booksRow.style.gap = '8px';
+        booksRow.style.overflowX = 'auto';
 
         let totalPages = 0;
         let maxHeight = DEFAULT_BOOK_HEIGHT;
