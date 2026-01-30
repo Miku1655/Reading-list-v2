@@ -50,6 +50,8 @@ document.getElementById("saveCloudBtn").addEventListener("click", () => {
         goals: goals,
         challenges: challenges,
         shelfColors: shelfColors,
+        bookshelfShelves: bookshelfShelves,
+        bookshelfSettings: bookshelfSettings,
         settings: {
             showNumbers: document.getElementById("showNumbers").checked,
             minAuthorBooks: minAuthorBooks,
@@ -90,7 +92,13 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             document.getElementById("profileNick").value = profile.nick || "";
             document.getElementById("profileBio").value = profile.bio || "";
             if (profile.picture) document.getElementById("profilePic").src = profile.picture;
-           
+            bookshelfShelves = data.bookshelfShelves || [];
+            bookshelfSettings = data.bookshelfSettings || { maxPagesPerShelf: 8000, justify: false, customEditEnabled: false };
+
+            // Sync settings to checkbox
+            document.getElementById("bookshelfCustomEdit").checked = bookshelfSettings.customEditEnabled;
+            document.getElementById("bookshelfJustify").checked = bookshelfSettings.justify;
+                       
             saveBooksToLocal();
             localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
             localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
@@ -345,6 +353,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (localStorage.getItem(TAB_KEY) === "constellation") {
         setTimeout(initConstellation, 100); // give time for canvas to exist
     }
+    initBookshelfEvents();
 });
 
 document.getElementById("addChallenge")?.addEventListener("click", addChallenge);
