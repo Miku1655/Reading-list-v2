@@ -104,7 +104,7 @@ function renderBookshelf() {
             spine.appendChild(titleEl);
 
             // Author if wide enough
-            if (width > 80) {
+            if (width > 30) {
                 const authorEl = document.createElement('div');
                 authorEl.textContent = book.author || '';
                 authorEl.style.writingMode = 'vertical-rl';
@@ -134,27 +134,37 @@ function renderBookshelf() {
         });
 
         // Adjust widths
-        const visualWidth = calculateShelfWidth() - 40; // padding
-        const softMax = bookshelfSettings.maxPagesPerShelf;
-        const hardMax = softMax * 1.1;
-        let scale = 1;
+        const visualWidth = container.offsetWidth * 0.9;  // rough usable width per shelf attempt
+const softMax = bookshelfSettings.maxPagesPerShelf;
+const hardMax = softMax * 1.1;
 
-        if (totalPages > hardMax) {
-            scale = visualWidth / (totalPages * 0.08); // force fit
-        } else if (totalPages > softMax) {
-            scale = visualWidth / (totalPages * 0.08); // compress
-        } else if (bookshelfSettings.justify) {
-            scale = visualWidth / (totalPages * 0.08); // spread
-        } else {
-            scale = 1; // natural, gap on right
-        }
+let scale = 1;
 
-        // Apply scale to all spines in row
-        Array.from(booksRow.children).forEach(sp => {
-            let baseW = parseFloat(sp.style.width);
-            sp.style.width = (baseW * scale) + 'px';
-            sp.style.height = (parseFloat(sp.style.height) * (scale > 1 ? 1 : scale)) + 'px'; // don't stretch height too much
-        });
+if (totalPages > hardMax) {
+    // force strong compression
+    scale = visualWidth / (totalPages * 0.12);  // 0.12 = base px per page — tune lower for more compression
+} else if (totalPages > softMax) {
+    // moderate compression
+    scale = visualWidth / (totalPages * 0.12);
+} else if (bookshelfSettings.justify) {
+    // spread to fill
+    scale = visualWidth / (totalPages * 0.12);
+} else {
+    // natural size, but cap so it doesn't overflow too much
+    scale = Math.min(1, visualWidth / (totalPages * 0.12));
+}
+
+// Apply to spines
+Array.from(booksRow.children).forEach(sp => {
+    let baseW = parseFloat(sp.style.width) || 60;  // fallback
+    let newW = baseW * scale;
+    newW = Math.max(40, newW);  // never thinner than 40px
+    sp.style.width = newW + 'px';
+
+    // Optional: slightly shrink height on heavy compression
+    let h = parseFloat(sp.style.height);
+    sp.style.height = (h * Math.min(1, scale * 1.2)) + 'px';
+});
 
         shelfDiv.style.height = (maxHeight + 80) + 'px'; // dynamic shelf height
 
