@@ -374,10 +374,17 @@ function initBookshelfEvents() {
             e.dataTransfer.setData('text/plain', e.target.dataset.order);
         }
     });
-
+    document.getElementById('maxPagesShelf').value = bookshelfSettings.maxPagesPerShelf;
     document.getElementById('bookshelfContainer')?.addEventListener('dragend', e => {
         if (e.target.classList.contains('book-spine')) {
             e.target.classList.remove('dragging');
         }
     });
+    document.getElementById('maxPagesShelf')?.addEventListener('input', e => {
+        const newMax = Math.max(1000, Number(e.target.value) || 15000);
+        bookshelfSettings.maxPagesPerShelf = newMax;
+        saveBookshelfToLocal();
+        renderBookshelf();
+    });
+    
 }
