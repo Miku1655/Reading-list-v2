@@ -37,8 +37,6 @@ function renderBookshelf() {
         const shelfDiv = document.createElement('div');
         shelfDiv.className = 'bookshelf-shelf';
         shelfDiv.dataset.shelfIndex = shelfIndex;
-        shelfDiv.style.marginBottom = '40px';
-        shelfDiv.style.position = 'relative';
 
         // Shelf background (simple wood look)
         shelfDiv.style.background = 'linear-gradient(to bottom, #8B5A2B, #A0522D)';
