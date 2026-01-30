@@ -562,3 +562,9 @@ tr:hover { background: #1f1f1f; }
 .quote-item {
     transition: opacity 0.2s ease;
 }
+
+.bookshelf-shelf { position: relative; }
+.books-row { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 4px; }
+.book-spine { transition: transform 0.2s; }
+.book-spine:hover { transform: scale(1.08) translateY(-8px); z-index: 10; }
+.dragging { opacity: 0.6; transform: scale(1.1); }
