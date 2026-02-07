@@ -809,7 +809,6 @@
                 </select>
             </div>
             <button id="closeYearReview" 
-                    onclick="closeYearReviewModal()"
                     style="font-size:1.8em; background:rgba(0,0,0,0.05); border:none; cursor:pointer; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; transition:all 0.3s ease;"
                     aria-label="Close Year Review">
                 ×
@@ -821,43 +820,16 @@
             <!-- Content will be dynamically generated here -->
         </div>
         
-        <!-- Footer with Export Buttons -->
-        <div id="reviewFooter" style="padding:24px 30px; border-top:1px solid #e2e8f0; text-align:center; background:#f8f9fa; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+        <!-- Footer with Export Button (PNG only) -->
+        <div id="reviewFooter" style="padding:24px 30px; border-top:1px solid #e2e8f0; text-align:center; background:#f8f9fa;">
             <button id="exportReviewPNG" 
-                    onclick="exportReviewAsPNG()" 
-                    style="padding:14px 32px; margin:0; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:#fff; border:none; border-radius:10px; font-size:1em; font-weight:600; cursor:pointer; box-shadow:0 4px 15px rgba(102,126,234,0.3); transition:all 0.3s ease;">
-                📥 Export as PNG
-            </button>
-            <button id="exportReviewPDF" 
-                    onclick="exportReviewAsPDF()" 
-                    style="padding:14px 32px; margin:0; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:#fff; border:none; border-radius:10px; font-size:1em; font-weight:600; cursor:pointer; box-shadow:0 4px 15px rgba(102,126,234,0.3); transition:all 0.3s ease;">
-                📄 Export as PDF
+                    style="padding:14px 40px; margin:0; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:#fff; border:none; border-radius:10px; font-size:1.1em; font-weight:600; cursor:pointer; box-shadow:0 4px 15px rgba(102,126,234,0.3); transition:all 0.3s ease;">
+                📥 Download as PNG
             </button>
         </div>
         
     </div>
 </div>
-
-<script>
-// Helper function to close modal
-function closeYearReviewModal() {
-    const modal = document.getElementById('yearReviewModal');
-    modal.classList.remove('modal-visible');
-    setTimeout(() => {
-        modal.style.display = 'none';
-    }, 300);
-}
-
-// Add year selector change handler
-document.addEventListener('DOMContentLoaded', function() {
-    const yearSelect = document.getElementById('reviewYearSelect');
-    if (yearSelect) {
-        yearSelect.addEventListener('change', function() {
-            generateYearReview(parseInt(this.value));
-        });
-    }
-});
-</script>
  
 <!-- JavaScript files – order matters a bit -->
 <script src="js/config.js"></script>
