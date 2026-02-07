@@ -2,30 +2,60 @@ let tempCoverDataUrls = {};
 
 async function preloadAndConvertCovers(booksNeedingCovers) {
     const promises = booksNeedingCovers.map(async (book) => {
-        if (!book.coverUrl || book.coverUrl.startsWith("data:")) {
+        if (!book.coverUrl) {
+            tempCoverDataUrls[book.importOrder] = null;
+            return;
+        }
+        
+        // If already a data URL, use it directly
+        if (book.coverUrl.startsWith("data:")) {
             tempCoverDataUrls[book.importOrder] = book.coverUrl;
             return;
         }
+        
         try {
-            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(book.coverUrl);
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error("Proxy failed");
-            const blob = await response.blob();
-            const reader = new FileReader();
-            await new Promise((resolve, reject) => {
-                reader.onload = () => {
-                    tempCoverDataUrls[book.importOrder] = reader.result;
-                    resolve();
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
+            // Try direct fetch first (might work for some URLs)
+            const response = await fetch(book.coverUrl, { mode: 'cors' });
+            if (response.ok) {
+                const blob = await response.blob();
+                const reader = new FileReader();
+                await new Promise((resolve, reject) => {
+                    reader.onload = () => {
+                        tempCoverDataUrls[book.importOrder] = reader.result;
+                        resolve();
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+                return;
+            }
         } catch (e) {
-            console.warn(`Failed to proxy cover for ${book.title}:`, e);
-            // Use null for placeholder - avoid CORS issues
-            tempCoverDataUrls[book.importOrder] = null;
+            // Direct fetch failed, try proxy
+            try {
+                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(book.coverUrl);
+                const response = await fetch(proxyUrl);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const reader = new FileReader();
+                    await new Promise((resolve, reject) => {
+                        reader.onload = () => {
+                            tempCoverDataUrls[book.importOrder] = reader.result;
+                            resolve();
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                    return;
+                }
+            } catch (proxyError) {
+                console.warn(`Failed to load cover for ${book.title}, using placeholder`);
+            }
         }
+        
+        // All methods failed - use null for placeholder
+        tempCoverDataUrls[book.importOrder] = null;
     });
+    
     await Promise.all(promises);
 }
 
@@ -38,17 +68,20 @@ function openYearReview() {
     tempCoverDataUrls = {};
     const perYear = calculatePerYear();
     const years = Object.keys(perYear).map(Number).sort((a, b) => b - a);
+    
     if (years.length === 0) {
         document.getElementById("yearReviewContent").innerHTML = '<p class="review-no-data">No finished reads yet — come back when you have some!</p>';
         document.getElementById("reviewYearSelect").innerHTML = "";
         return;
     }
+    
     const select = document.getElementById("reviewYearSelect");
     select.innerHTML = "";
     let defaultYear = new Date().getFullYear();
     if (!perYear[defaultYear] || perYear[defaultYear].books === 0) {
         defaultYear = years[0];
     }
+    
     years.forEach(y => {
         const opt = document.createElement("option");
         opt.value = y;
@@ -56,6 +89,7 @@ function openYearReview() {
         if (y === defaultYear) opt.selected = true;
         select.appendChild(opt);
     });
+    
     generateYearReview(defaultYear);
 }
 
@@ -223,7 +257,7 @@ function generatePlaceholderDataUrl(title) {
     const canvas = document.createElement('canvas');
     canvas.width = 300;
     canvas.height = 450;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     
     // Gradient background
     const gradient = ctx.createLinearGradient(0, 0, 0, 450);
@@ -284,11 +318,13 @@ async function captureCleanPanel() {
         return new Promise(resolve => {
             img.onload = resolve;
             img.onerror = resolve; // Continue even if image fails
+            // Timeout fallback
+            setTimeout(resolve, 3000);
         });
     }));
 
     // Small delay to ensure DOM updates and animations settle
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     const canvas = await html2canvas(panel, {
         scale: 2, // High quality
