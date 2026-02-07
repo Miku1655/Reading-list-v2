@@ -3,7 +3,7 @@ let tempCoverDataUrls = {};
 async function preloadAndConvertCovers(booksNeedingCovers) {
     const promises = booksNeedingCovers.map(async (book) => {
         if (!book.coverUrl) {
-            tempCoverDataUrls[book.importOrder] = null;
+            tempCoverDataUrls[book.importOrder] = generatePlaceholderDataUrl(book.title);
             return;
         }
         
@@ -13,47 +13,31 @@ async function preloadAndConvertCovers(booksNeedingCovers) {
             return;
         }
         
+        // Download the cover and convert to data URL (local copy)
         try {
-            // Try direct fetch first (might work for some URLs)
-            const response = await fetch(book.coverUrl, { mode: 'cors' });
-            if (response.ok) {
-                const blob = await response.blob();
-                const reader = new FileReader();
-                await new Promise((resolve, reject) => {
-                    reader.onload = () => {
-                        tempCoverDataUrls[book.importOrder] = reader.result;
-                        resolve();
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                });
-                return;
-            }
+            const response = await fetch(book.coverUrl);
+            if (!response.ok) throw new Error("Fetch failed");
+            
+            const blob = await response.blob();
+            const reader = new FileReader();
+            
+            await new Promise((resolve, reject) => {
+                reader.onload = () => {
+                    tempCoverDataUrls[book.importOrder] = reader.result;
+                    resolve();
+                };
+                reader.onerror = () => {
+                    console.warn(`Failed to convert cover for ${book.title}`);
+                    tempCoverDataUrls[book.importOrder] = generatePlaceholderDataUrl(book.title);
+                    resolve(); // Don't reject, just use placeholder
+                };
+                reader.readAsDataURL(blob);
+            });
         } catch (e) {
-            // Direct fetch failed, try proxy
-            try {
-                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(book.coverUrl);
-                const response = await fetch(proxyUrl);
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const reader = new FileReader();
-                    await new Promise((resolve, reject) => {
-                        reader.onload = () => {
-                            tempCoverDataUrls[book.importOrder] = reader.result;
-                            resolve();
-                        };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(blob);
-                    });
-                    return;
-                }
-            } catch (proxyError) {
-                console.warn(`Failed to load cover for ${book.title}, using placeholder`);
-            }
+            console.warn(`Failed to load cover for ${book.title}:`, e.message);
+            // Use placeholder for any failures
+            tempCoverDataUrls[book.importOrder] = generatePlaceholderDataUrl(book.title);
         }
-        
-        // All methods failed - use null for placeholder
-        tempCoverDataUrls[book.importOrder] = null;
     });
     
     await Promise.all(promises);
@@ -99,7 +83,7 @@ async function generateYearReview(year) {
         <div class="review-loading">
             <div class="loading-spinner"></div>
             <p><strong>Preparing your Year in Review...</strong></p>
-            <p style="color:#999; font-size:0.9em;">Loading covers for perfect display & export</p>
+            <p style="color:#999; font-size:0.9em;">Downloading covers for perfect display & export</p>
         </div>
     `;
 
@@ -137,6 +121,7 @@ async function generateYearReview(year) {
 
     const finishedBooks = Array.from(finishedThisYear);
 
+    // Download all covers locally before rendering
     tempCoverDataUrls = {};
     await preloadAndConvertCovers(allBooksThisYear);
 
@@ -178,7 +163,7 @@ async function generateYearReview(year) {
     if (newFavourites.length > 0) {
         html += '<div class="review-section"><h3>✨ New Favourites of the Year</h3><div class="review-top-list">';
         newFavourites.forEach((b, idx) => {
-            const coverUrl = tempCoverDataUrls[b.importOrder] || generatePlaceholderDataUrl(b.title);
+            const coverUrl = tempCoverDataUrls[b.importOrder];
             const ratingStars = b.rating > 0 ? '⭐'.repeat(Math.round(b.rating)) : '';
             const ratingText = b.rating > 0 
                 ? `<div class="book-rating">${ratingStars} <span>${b.rating}/5</span></div>` 
@@ -199,7 +184,7 @@ async function generateYearReview(year) {
         html += '<div class="review-section"><h3>🔄 Most Re-read</h3><div class="review-top-list">';
         topReread.forEach((item, idx) => {
             const b = item.book;
-            const coverUrl = tempCoverDataUrls[b.importOrder] || generatePlaceholderDataUrl(b.title);
+            const coverUrl = tempCoverDataUrls[b.importOrder];
             html += `<div class="review-book-card" style="animation-delay: ${0.1 * idx}s;">
                 <img src="${coverUrl}" alt="Cover" class="book-cover">
                 <div class="review-book-info">
@@ -228,7 +213,7 @@ async function generateYearReview(year) {
     html += '<div class="review-section"><h3>🎨 Your Reading Collage</h3>';
     html += '<div class="review-collage">';
     finishedBooks.forEach((b, idx) => {
-        const coverUrl = tempCoverDataUrls[b.importOrder] || generatePlaceholderDataUrl(b.title);
+        const coverUrl = tempCoverDataUrls[b.importOrder];
         html += `<div class="collage-item" style="animation-delay: ${0.02 * idx}s;">
             <img src="${coverUrl}" alt="${escapeHtml(b.title)}" title="${escapeHtml(b.title)}">
         </div>`;
@@ -317,8 +302,7 @@ async function captureCleanPanel() {
         if (img.complete) return Promise.resolve();
         return new Promise(resolve => {
             img.onload = resolve;
-            img.onerror = resolve; // Continue even if image fails
-            // Timeout fallback
+            img.onerror = resolve;
             setTimeout(resolve, 3000);
         });
     }));
@@ -327,7 +311,7 @@ async function captureCleanPanel() {
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const canvas = await html2canvas(panel, {
-        scale: 2, // High quality
+        scale: 2,
         backgroundColor: "#ffffff",
         logging: false,
         useCORS: true,
@@ -366,108 +350,6 @@ async function exportReviewAsPNG() {
     } catch (e) {
         console.error("PNG export error:", e);
         alert("PNG export failed. Please try again or contact support if the issue persists.");
-        exportBtn.textContent = originalText;
-        exportBtn.disabled = false;
-    }
-}
-
-async function exportReviewAsPDF() {
-    const exportBtn = document.getElementById("exportReviewPDF");
-    const originalText = exportBtn.textContent;
-    
-    try {
-        exportBtn.textContent = "Generating PDF...";
-        exportBtn.disabled = true;
-        
-        const canvas = await captureCleanPanel();
-        const imgData = canvas.toDataURL("image/png");
-        
-        // Use jsPDF with proper orientation
-        const pdf = new jsPDF.jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4',
-            compress: true
-        });
-        
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const margin = 0;
-        const availableWidth = pdfWidth - (2 * margin);
-
-        const imgWidth = canvas.width;
-        const imgHeight = canvas.height;
-        const ratio = availableWidth / imgWidth;
-        const scaledHeight = imgHeight * ratio;
-
-        let yPosition = margin;
-        let remainingHeight = scaledHeight;
-        let sourceY = 0;
-
-        // First page
-        const firstPageHeight = Math.min(remainingHeight, pdfHeight - margin);
-        const firstPageSourceHeight = firstPageHeight / ratio;
-        
-        pdf.addImage(
-            imgData, 
-            'PNG', 
-            margin, 
-            yPosition, 
-            availableWidth, 
-            firstPageHeight,
-            undefined,
-            'FAST'
-        );
-
-        remainingHeight -= firstPageHeight;
-        sourceY += firstPageSourceHeight;
-
-        // Additional pages if needed
-        while (remainingHeight > 0) {
-            pdf.addPage();
-            const pageHeight = Math.min(remainingHeight, pdfHeight - margin);
-            
-            // Create a cropped version of the canvas for this page
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = imgWidth;
-            tempCanvas.height = pageHeight / ratio;
-            const tempCtx = tempCanvas.getContext('2d');
-            
-            tempCtx.drawImage(
-                canvas,
-                0, sourceY,
-                imgWidth, tempCanvas.height,
-                0, 0,
-                imgWidth, tempCanvas.height
-            );
-            
-            const pageImgData = tempCanvas.toDataURL('image/png');
-            pdf.addImage(
-                pageImgData,
-                'PNG',
-                margin,
-                margin,
-                availableWidth,
-                pageHeight,
-                undefined,
-                'FAST'
-            );
-            
-            remainingHeight -= pageHeight;
-            sourceY += tempCanvas.height;
-        }
-
-        const year = document.getElementById("reviewYearSelect").value;
-        pdf.save(`Year-in-Review-${year}.pdf`);
-        
-        exportBtn.textContent = "✓ Downloaded!";
-        setTimeout(() => {
-            exportBtn.textContent = originalText;
-            exportBtn.disabled = false;
-        }, 2000);
-    } catch (e) {
-        console.error("PDF export error:", e);
-        alert("PDF export failed. The PNG export is a great alternative!");
         exportBtn.textContent = originalText;
         exportBtn.disabled = false;
     }
