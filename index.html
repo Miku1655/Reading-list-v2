@@ -798,22 +798,49 @@
 </div>
 
     
-<div id="yearReviewModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); justify-content:center; align-items:flex-start; overflow-y:auto; z-index:1000; padding:20px 0;">
-    <div id="yearReviewPanel" style="background:#fff; color:#000; max-width:900px; width:95%; margin:auto; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.5); overflow:hidden;">
-        <div id="reviewHeader" style="padding:20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:#f8f8f8;">
+
+<div id="yearReviewModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); justify-content:center; align-items:flex-start; overflow-y:auto; z-index:1000; padding:20px 0;">
+    <div id="yearReviewPanel" style="background:#fff; color:#000; max-width:900px; width:95%; margin:auto; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,0.3); overflow:hidden;">
+        
+        <!-- Header Section -->
+        <div id="reviewHeader" style="padding:20px 30px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
             <div>
-                <h2 style="margin:0;">Year in Review</h2>
-                <select id="reviewYearSelect" style="font-size:1em; padding:6px; margin-top:8px;"></select>
+                <h2 style="margin:0; font-size:1.5em; color:#2d3748;">Year in Review</h2>
+                <select id="reviewYearSelect" 
+                        onchange="generateYearReview(parseInt(this.value))" 
+                        style="font-size:1em; padding:8px 16px; margin-top:10px; border:2px solid #e2e8f0; border-radius:8px; background:#fff; cursor:pointer;">
+                </select>
             </div>
-            <button id="closeYearReview" style="font-size:1.5em; background:none; border:none; cursor:pointer;">×</button>
+            <button id="closeYearReview" 
+                    onclick="document.getElementById('yearReviewModal').style.display='none'; document.getElementById('yearReviewModal').classList.remove('modal-visible');"
+                    style="font-size:1.8em; background:rgba(0,0,0,0.05); border:none; cursor:pointer; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; transition:all 0.3s ease;"
+                    aria-label="Close Year Review">
+                ×
+            </button>
         </div>
-        <div id="yearReviewContent" style="padding:20px; min-height:60vh;"></div>
-        <div id="reviewFooter" style="padding:20px; border-top:1px solid #eee; text-align:center; background:#f8f8f8;">
-            <button id="exportReviewPNG" style="padding:10px 20px; margin:0 10px;">Export as PNG</button>
-            <button id="exportReviewPDF" style="padding:10px 20px; margin:0 10px;">Export as PDF</button>
+        
+        <!-- Content Area -->
+        <div id="yearReviewContent" style="padding:0; min-height:60vh; background:linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);">
+            <!-- Content will be dynamically generated here -->
         </div>
+        
+        <!-- Footer with Export Buttons -->
+        <div id="reviewFooter" style="padding:24px 30px; border-top:1px solid #e2e8f0; text-align:center; background:#f8f9fa; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+            <button id="exportReviewPNG" 
+                    onclick="exportReviewAsPNG()" 
+                    style="padding:14px 32px; margin:0; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:#fff; border:none; border-radius:10px; font-size:1em; font-weight:600; cursor:pointer; box-shadow:0 4px 15px rgba(102,126,234,0.3); transition:all 0.3s ease;">
+                📥 Export as PNG
+            </button>
+            <button id="exportReviewPDF" 
+                    onclick="exportReviewAsPDF()" 
+                    style="padding:14px 32px; margin:0; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:#fff; border:none; border-radius:10px; font-size:1em; font-weight:600; cursor:pointer; box-shadow:0 4px 15px rgba(102,126,234,0.3); transition:all 0.3s ease;">
+                📄 Export as PDF
+            </button>
+        </div>
+        
     </div>
 </div>
+ 
 <!-- JavaScript files – order matters a bit -->
 <script src="js/config.js"></script>
 <script src="js/state.js"></script>
