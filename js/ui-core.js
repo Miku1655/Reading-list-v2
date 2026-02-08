@@ -76,9 +76,9 @@ function switchTab(name) {
     if (!constellationCanvas) initConstellation();
     renderConstellation();
 }
-    
-    if (name === "bookshelf") {
-    renderBookshelf();
+   
+    if (name === "quiz") {
+    renderQuiz();
 }
     
     if (name === "stats") {
@@ -116,8 +116,8 @@ function renderAll() {
     renderMap();
 }
     
-    if (document.getElementById("tab-bookshelf")?.classList.contains("active")) {
-    renderBookshelf();
+    if (document.getElementById("tab-quiz")?.classList.contains("active")) {
+    renderQuiz();
 }
     
     // Goal progress (only if list tab active)
