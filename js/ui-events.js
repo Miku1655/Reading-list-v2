@@ -347,7 +347,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (localStorage.getItem(TAB_KEY) === "constellation") {
         setTimeout(initConstellation, 100); // give time for canvas to exist
     }
-    initBookshelfEvents();
 });
 
 document.getElementById("addChallenge")?.addEventListener("click", addChallenge);
