@@ -92,12 +92,6 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             document.getElementById("profileNick").value = profile.nick || "";
             document.getElementById("profileBio").value = profile.bio || "";
             if (profile.picture) document.getElementById("profilePic").src = profile.picture;
-            bookshelfShelves = data.bookshelfShelves || [];
-            bookshelfSettings = data.bookshelfSettings || { maxPagesPerShelf: 8000, justify: false, customEditEnabled: false };
-
-            // Sync settings to checkbox
-            document.getElementById("bookshelfCustomEdit").checked = bookshelfSettings.customEditEnabled;
-            document.getElementById("bookshelfJustify").checked = bookshelfSettings.justify;
                        
             saveBooksToLocal();
             localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
