@@ -988,65 +988,16 @@ tr:hover { background: #1f1f1f; }
 
 
 
-#bookshelfContainer {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    gap: 60px;
-    padding: 20px 16px;
-    scroll-behavior: smooth;
+#quizPrompt {
+    transition: all 0.3s ease;
 }
 
-.bookshelf-shelf {
-    flex: 0 0 auto;
-    width: 1000px;
-    min-width: 800px;
-    max-width: 1600px;
-    background: linear-gradient(to bottom, #8B4513, #A0522D 20%, #8B4513);
-    border-radius: 8px;
-    box-shadow: 0 12px 24px rgba(0,0,0,0.6), inset 0 2px 6px rgba(255,255,255,0.08);
-    position: relative;
-    padding-top: 40px;
-    min-height: 400px;
-    box-sizing: border-box;
-    overflow: hidden;
+#quizPrompt strong {
+    font-size: 1.4em;
+    color: #fff;
 }
 
-.books-row {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-end;
-    padding: 60px 20px 80px 20px;
-    gap: 8px;
-    overflow-x: visible !important;
-    overflow-x: clip;
-    flex-wrap: nowrap;
-    min-height: 360px;
-}
-
-.book-spine {
-    flex: 0 0 auto;
-    min-width: 40px;
-    transition: transform 0.18s ease;
-}
-
-.book-spine:hover {
-    transform: translateY(-18px) scale(1.09);
-    z-index: 10;
-}
-
-/* Optional: scrollbar styling for modern look */
-#bookshelfContainer::-webkit-scrollbar {
-    height: 12px;
-}
-#bookshelfContainer::-webkit-scrollbar-thumb {
-    background: #555;
-    border-radius: 6px;
-}
-
-.shelfBoard {
-    height: 20px !important;
-    background: linear-gradient(to bottom, #5c2f0a, #3a1c00);
+#quizPrompt em {
+    color: #bbb;
+    font-size: 1.1em;
 }
