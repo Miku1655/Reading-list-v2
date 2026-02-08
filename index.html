@@ -28,7 +28,6 @@
     <button class="tab" data-tab="challenges">Challenges</button>
     <button class="tab" data-tab="world-map">World Map</button>
     <button class="tab" data-tab="constellation">Constellation</button>
-    <button class="tab" data-tab="bookshelf">Bookshelf</button>
     <button class="tab" data-tab="quotes">Quotes</button>
     <button class="tab" data-tab="options">Options</button>
 </div>
@@ -600,30 +599,6 @@
         <div id="constellationTooltip" style="position:absolute; display:none; background:rgba(0,0,0,0.85); color:#eee; padding:8px 12px; border-radius:6px; border:1px solid #444; pointer-events:none; max-width:280px; font-size:0.9em; box-shadow:0 2px 10px rgba(0,0,0,0.7);"></div>
     </div>
 </section>
-
- <section id="tab-bookshelf" class="tab-content">
-    <div style="padding:16px; display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
-        <button id="autoArrangeBookshelf">Auto Arrange</button>
-        <button id="resetBookshelfArrangement">Reset Arrangement</button>
-        <label><input type="checkbox" id="bookshelfJustify"> Justify / Spread widths when under capacity</label>
-        <label style="margin-left:16px;">
-            Max pages per shelf: 
-            <input type="number" id="maxPagesShelf" min="5000" step="1000" value="15000" style="width:120px;">
-        </label>
-        <span id="bookshelfStats" style="margin-left:auto; color:#aaa;"></span>
-    </div>
-    <div id="bookshelfContainer" style="
-        display: flex;
-        flex-direction: row;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        overflow-y: hidden;
-        padding: 20px 16px;
-        gap: 24px;              
-        scroll-behavior: smooth;
-        min-height: 80vh;
-    "></div>
-</section>
  
 <section id="tab-quotes" class="tab-content">
     <h2>Quotes & Highlights</h2>
@@ -851,7 +826,6 @@
 <script src="js/ui-events.js"></script>
 <script src="js/ui-year-review.js"></script>
 <script src="js/constellation.js"></script>
-<script src="js/render-bookshelf.js"></script>
  
 </body>
 </html>
