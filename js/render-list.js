@@ -69,6 +69,22 @@ function filterBooksByQuery(list, query) {
                     const lc = (book.language || "").toLowerCase();
                     match = match && lc.includes(val.toLowerCase());
                 }
+            } else if ((m = term.match(/^read([<>=!]+)?(\d{4})$/i))) {
+                let op = m[1] || "=";
+                const num = Number(m[2]);
+                const readYears = (book.reads || [])
+                    .filter(r => r.finished != null)
+                    .map(r => new Date(r.finished).getFullYear());
+                if (readYears.length === 0) { match = false; continue; }
+                const satisfies = year => {
+                    if (op === ">") return year > num;
+                    if (op === ">=") return year >= num;
+                    if (op === "<") return year < num;
+                    if (op === "<=") return year <= num;
+                    if (op === "!=" ) return year !== num;
+                    return year === num; // = or ==
+                };
+                match = match && readYears.some(satisfies);
             } else if ((m = term.match(/^country?:?(.*)$/i))) {
                 const val = m[1];
                 if (val === "" || val === "none") {
