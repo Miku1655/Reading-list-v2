@@ -162,7 +162,8 @@ html += '</div>';
         html += "none";
     } else {
         Object.keys(perYear).sort((a, b) => b - a).forEach(y => {
-            html += `${y}: ${perYear[y].books} books, ${perYear[y].pages} pages<br>`;
+            const avg = perYear[y].books > 0 ? Math.round(perYear[y].pages / perYear[y].books) : 0;
+            html += `${y}: ${perYear[y].books} books, ${perYear[y].pages} pages, av. ${avg} pages<br>`;
         });
     }
     html += '</div></div>';
