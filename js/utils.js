@@ -54,8 +54,9 @@ function calculateReadingSpeeds() {
         if (!book.reads || book.pages <= 0) return;
         book.reads.forEach(read => {
             if (read.started !== null && read.finished !== null && read.finished >= read.started) {
-                const daysDiff = (read.finished - read.started) / msPerDay;
-                const days = Math.floor(daysDiff) + 1; // inclusive: same day = 1 day
+                const startDay = new Date(read.started).setHours(0, 0, 0, 0);
+                const endDay = new Date(read.finished).setHours(0, 0, 0, 0);
+                const days = Math.round((endDay - startDay) / msPerDay) + 1;
 
                 if (days >= 1) {
                     validReads.push({
