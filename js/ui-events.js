@@ -312,17 +312,18 @@ document.getElementById("fetchCoverBtn").addEventListener("click", async () => {
 // Search info
 document.getElementById("filterInfo").addEventListener("click", () => {
     alert(`Search syntax:
-• Normal words → title / author / series / notes
-• rated>3 rated=0 (unrated) rated>=4 etc.
-• pages>300 pages<=100 pages=500
-• year>=-50 year<10 year=-500 (negative = BC)
-• cover=true/false or cover=1/0
-• lang:english, language:jap, lang:none
-• country:japan, country:usa, country:none
-• genre:fantasy, genre:mystery, genre:none
-• tag:mood, tag:prize, tag:none
-• added:2024, added>2023-06-01, added:none
-Combine with spaces (AND).`);
+- Normal words → title / author / series / notes
+- rated=4, rated>3, rated<=2, rated=0 (unrated)
+- pages=500, pages>300, pages<=100
+- year=2020, year>=-50, year<0 (negative = BC)
+- cover=true / cover=false
+- read=2026, read>2020, read<=2024
+- lang:english, lang:jap, lang:none
+- country:japan, country:none
+- genre:fantasy, genre:none
+- tag:mood, tag:none
+- added:2024, added>2023-06-01, added:none
+Combine terms with spaces (AND).`);
 });
 // Auth buttons
 document.getElementById("signInBtn").addEventListener("click", () => {
