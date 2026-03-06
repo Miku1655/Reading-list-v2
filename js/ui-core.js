@@ -63,6 +63,10 @@ function switchTab(name) {
     if (name === "quotes") {
         renderQuotes();
     }
+
+    if (name === "battle") {
+        renderBattle?.();
+    }
     
     if (name === "timeline") {
         renderTimeline();
@@ -119,6 +123,10 @@ function renderAll() {
     if (document.getElementById("tab-quiz")?.classList.contains("active")) {
     renderQuiz();
 }
+
+    if (document.getElementById("tab-battle")?.classList.contains("active")) {
+        renderBattle?.();
+    }
     
     // Goal progress (only if list tab active)
     if (document.getElementById("tab-list")?.classList.contains("active")) {
