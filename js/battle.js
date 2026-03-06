@@ -332,7 +332,7 @@ document.addEventListener("keydown", battleKeyHandler);
 function getRankedBooks() {
     return Object.entries(battleData.bookStats)
         .map(([id, stat]) => ({ id: Number(id), stat }))
-        .filter(e => getBookById(e.id) !== null)
+        .filter(e => e.stat !== null && e.stat !== undefined && getBookById(e.id) !== null)
         .sort((a, b) => b.stat.totalPoints - a.stat.totalPoints);
 }
 
