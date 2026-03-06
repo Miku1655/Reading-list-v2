@@ -54,6 +54,7 @@ document.getElementById("saveCloudBtn").addEventListener("click", () => {
         bookshelfSettings: bookshelfSettings,
         battleData: JSON.parse(localStorage.getItem(BATTLE_KEY) || "{}"),
         battleRankingLimit: localStorage.getItem(BATTLE_LIMIT_KEY) || "20",
+        battleComplexMode: localStorage.getItem(BATTLE_COMPLEX_KEY) || "off",
         settings: {
             showNumbers: document.getElementById("showNumbers").checked,
             minAuthorBooks: minAuthorBooks,
@@ -94,6 +95,7 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             document.getElementById("profileNick").value = profile.nick || "";
             document.getElementById("profileBio").value = profile.bio || "";
             if (profile.picture) document.getElementById("profilePic").src = profile.picture;
+            if (data.battleComplexMode) localStorage.setItem(BATTLE_COMPLEX_KEY, data.battleComplexMode);
 
             saveBooksToLocal();
             localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
