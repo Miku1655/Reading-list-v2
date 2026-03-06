@@ -24,13 +24,13 @@ let battleView = "play";
 function loadBattleData() {
     const raw    = localStorage.getItem(BATTLE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    // Safe migration – ensure all keys exist
     battleData = {
         sessions:  parsed.sessions  || [],
         bookStats: parsed.bookStats || {},
         blacklist: parsed.blacklist || []
     };
     battleRankingLimit = Number(localStorage.getItem(BATTLE_LIMIT_KEY)) || DEFAULT_RANKING_LIMIT;
+    migrateBookStats(); // silently upgrade old totalPoints → rating
 }
 
 function saveBattleData() {
@@ -73,36 +73,70 @@ function fmtDate(ts) {
 }
 
 // ============================================================
-//  SCORING  (logarithmic – points stay manageable at scale)
+//  SCORING  (Elo-style live rating)
 //
-//  Formula:  points = roundWeight × (1 + log2(opponentWins + 1))
+//  Each book has a `rating` on a scale of 0 → 10 × totalEligible.
+//  Midpoint (neutral start) = 5 × totalEligible.
 //
-//  roundWeight = roundIndex (1-based linear).  For a 30-book
-//  session the final is worth 29 base vs. 1 for round 1 –
-//  strong late-game reward without explosion.
+//  Per duel:
+//    K            = 32 (base sensitivity)
+//    roundWeight  = roundIndex / totalRounds  (0→1, finals ≈ 2×)
+//    effectiveK   = K × (1 + roundWeight)
+//    expected     = winnerRating / (winnerRating + loserRating)
+//    winnerGain   = effectiveK × (1 - expected)   [big gain vs strong]
+//    loserLoss    = effectiveK × expected          [small loss vs strong]
 //
-//  opponentBonus = 1 + log2(opponentWins + 1).  A book with
-//  0 wins gives bonus 1.0; 3 wins → ~2.6; 10 wins → ~4.5;
-//  50 wins → ~6.7.  Grows meaningfully but never goes crazy.
+//  Floor = 1 (ratings never reach zero).
+//  saveBattleData() after every update so nothing is lost.
 //
-//  Loser consolation: 20% of the points the winner earns
-//  (reduced from 40% – was too generous).
-//
-//  saveBattleData() after every award so nothing is lost on
-//  accidental tab switches.
+//  Migration: any book with old-style `totalPoints` but no `rating`
+//  is silently migrated to the neutral midpoint on first load.
 // ============================================================
-function awardPoints(winnerId, loserId, roundIndex) {
+
+function getEloMidpoint() {
+    const total = books.filter(b =>
+        b.exclusiveShelf === "read" || b.exclusiveShelf === "currently-reading"
+    ).length;
+    return Math.max(50, 5 * total);
+}
+
+function getEloMax() {
+    return getEloMidpoint() * 2;
+}
+
+function migrateBookStats() {
+    // Called inside loadBattleData – converts old totalPoints → rating
+    const mid = getEloMidpoint();
+    let changed = false;
+    Object.values(battleData.bookStats).forEach(stat => {
+        if (stat && stat.rating === undefined) {
+            stat.rating = mid;
+            changed = true;
+        }
+    });
+    if (changed) saveBattleData();
+}
+
+function awardPoints(winnerId, loserId, roundIndex, totalRounds) {
     const ws = ensureBookStat(winnerId);
     const ls = ensureBookStat(loserId);
 
-    const opponentBonus = 1 + Math.log2(ls.wins + 1);
-    const points        = Math.round(roundIndex * opponentBonus);
-    const consolation   = Math.round(points * 0.2);
+    const K           = 32;
+    const roundWeight = totalRounds > 0 ? roundIndex / totalRounds : 1;
+    const effectiveK  = K * (1 + roundWeight);
 
-    ws.totalPoints += points;
-    ws.wins        += 1;
-    ls.totalPoints += consolation;
-    ls.losses      += 1;
+    const wRating  = ws.rating;
+    const lRating  = ls.rating;
+    const expected = wRating / (wRating + lRating);   // 0→1
+
+    const winnerGain = effectiveK * (1 - expected);
+    const loserLoss  = effectiveK * expected;
+
+    ws.rating = Math.min(getEloMax(), Math.round(ws.rating + winnerGain));
+    ls.rating = Math.max(1,           Math.round(ls.rating - loserLoss));
+
+    ws.wins   += 1;
+    ls.losses += 1;
 
     saveBattleData();
 }
@@ -110,14 +144,17 @@ function awardPoints(winnerId, loserId, roundIndex) {
 function ensureBookStat(id) {
     if (!battleData.bookStats[id]) {
         battleData.bookStats[id] = {
-            totalPoints:  0,
-            wins:         0,
-            losses:       0,
-            appearances:  0,
-            sessionWins:  0
+            rating:      getEloMidpoint(),
+            wins:        0,
+            losses:      0,
+            appearances: 0,
+            sessionWins: 0
         };
     }
-    return battleData.bookStats[id];
+    // Migrate old entry that has totalPoints but no rating
+    const stat = battleData.bookStats[id];
+    if (stat.rating === undefined) stat.rating = getEloMidpoint();
+    return stat;
 }
 
 // ============================================================
@@ -235,6 +272,7 @@ function chooseSide(winnerId) {
     const loserId = pair.find(id => id !== winnerId);
 
     battleSession.roundIndex++;
+    const totalRounds = battleSession.pool.length + battleSession.rounds.length - 1;
     battleSession.rounds.push({
         winner:     winnerId,
         loser:      loserId,
@@ -242,7 +280,7 @@ function chooseSide(winnerId) {
         durationMs: duration
     });
 
-    awardPoints(winnerId, loserId, battleSession.roundIndex); // saves internally
+    awardPoints(winnerId, loserId, battleSession.roundIndex, totalRounds);
 
     battleSession.pool = battleSession.pool.filter(id => id !== loserId);
 
@@ -333,7 +371,7 @@ function getRankedBooks() {
     return Object.entries(battleData.bookStats)
         .map(([id, stat]) => ({ id: Number(id), stat }))
         .filter(e => e.stat !== null && e.stat !== undefined && getBookById(e.id) !== null)
-        .sort((a, b) => b.stat.totalPoints - a.stat.totalPoints);
+        .sort((a, b) => b.stat.rating - a.stat.rating);
 }
 
 // ============================================================
@@ -389,7 +427,7 @@ function renderBattlePlay() {
 
         el.innerHTML = `
             <div class="battle-lobby">
-                <h2>BookDuel</h2>
+                <h2>⚔ BookDuel</h2>
                 <p class="battle-lobby-sub">Choose between two books — keep picking your favourite until one champion remains.</p>
                 <div class="battle-pool-info">
                     📚 ${pool.length} book${pool.length !== 1 ? 's' : ''} in pool
@@ -482,7 +520,7 @@ function renderBattleWinner(winnerId, session) {
                 ${runnerUp ? `<div class="battle-summary-row"><span>Runner-up</span><strong>${runnerUp.title}</strong></div>` : ""}
                 ${fastest  ? `<div class="battle-summary-row"><span>Fastest pick</span><strong>${fmtMs(fastest.durationMs)}</strong></div>` : ""}
                 ${slowest  ? `<div class="battle-summary-row"><span>Slowest pick</span><strong>${fmtMs(slowest.durationMs)}</strong></div>` : ""}
-                <div class="battle-summary-row"><span>Winner's total Duel Points</span><strong>${stat.totalPoints || 0}</strong></div>
+                <div class="battle-summary-row"><span>Winner's Duel Rating</span><strong>${stat.rating || getEloMidpoint()} / ${getEloMax()}</strong></div>
                 <div class="battle-summary-row"><span>Winner's session wins</span><strong>${stat.sessionWins || 0}</strong></div>
             </div>
             <div style="display:flex; gap:12px; justify-content:center; margin-top:24px; flex-wrap:wrap;">
@@ -504,6 +542,8 @@ function renderBattleRankings() {
     const ranked  = getRankedBooks();
     const limited = ranked.slice(0, battleRankingLimit);
     const medals  = ["🥇","🥈","🥉"];
+    const eloMax  = getEloMax();
+    const eloMid  = getEloMidpoint();
 
     if (ranked.length === 0) {
         el.innerHTML = `<p style="color:#aaa; margin:40px; text-align:center;">No rankings yet — play a session first!</p>`;
@@ -513,11 +553,12 @@ function renderBattleRankings() {
     let html = `
         <h2 style="margin-bottom:4px;">📖 BookDuel Rankings</h2>
         <p style="color:#888; margin-bottom:20px; font-size:0.9em;">
-            Top ${Math.min(battleRankingLimit, ranked.length)} books &nbsp;·&nbsp; accumulated Duel Points across all sessions
+            Top ${Math.min(battleRankingLimit, ranked.length)} books &nbsp;·&nbsp;
+            Rating scale: 0 – ${eloMax.toLocaleString()} &nbsp;·&nbsp; Neutral midpoint: ${eloMid.toLocaleString()}
         </p>
         <div class="battle-rankings-table">
             <div class="battle-rank-header">
-                <span>#</span><span>Book</span><span>Points</span><span>Win%</span><span>Wins</span><span>Sessions</span><span>🏆</span>
+                <span>#</span><span>Book</span><span>Rating</span><span>Win%</span><span>Wins</span><span>Sessions</span><span>🏆</span>
             </div>`;
 
     limited.forEach((entry, i) => {
@@ -533,6 +574,11 @@ function renderBattleRankings() {
         const crown      = s.sessionWins > 0 ? "👑".repeat(Math.min(s.sessionWins, 5)) : "–";
         const undefeated = s.losses === 0 && s.wins > 0 ? `<span class="battle-badge badge-undefeated">Undefeated</span>` : "";
         const veteran    = s.appearances >= 5           ? `<span class="battle-badge badge-veteran">Veteran</span>`    : "";
+        const ratingPct  = Math.round((s.rating / eloMax) * 100);
+        const ratingDisp = `<div class="battle-rating-cell">
+            <span class="battle-rating-num">${s.rating.toLocaleString()}</span>
+            <div class="battle-rating-bar-track"><div class="battle-rating-bar-fill" style="width:${ratingPct}%"></div></div>
+        </div>`;
 
         html += `
         <div class="battle-rank-row ${i < 3 ? 'top-three' : ''}">
@@ -545,7 +591,7 @@ function renderBattleRankings() {
                     <span>${undefeated}${veteran}</span>
                 </span>
             </span>
-            <span class="battle-rank-pts">${s.totalPoints.toLocaleString()}</span>
+            <span class="battle-rank-pts">${ratingDisp}</span>
             <span>${winPct}%</span>
             <span>${s.wins}</span>
             <span>${s.appearances}</span>
