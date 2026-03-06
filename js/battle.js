@@ -389,7 +389,7 @@ function renderBattlePlay() {
 
         el.innerHTML = `
             <div class="battle-lobby">
-                <h2>⚔ BookDuel</h2>
+                <h2>BookDuel</h2>
                 <p class="battle-lobby-sub">Choose between two books — keep picking your favourite until one champion remains.</p>
                 <div class="battle-pool-info">
                     📚 ${pool.length} book${pool.length !== 1 ? 's' : ''} in pool
