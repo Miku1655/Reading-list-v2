@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/stats-timeline.css">
+    <link rel="stylesheet" href="css/battle.css">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -30,6 +31,7 @@
     <button class="tab" data-tab="constellation">Constellation</button>
     <button class="tab" data-tab="quiz">Quiz</button>
     <button class="tab" data-tab="quotes">Quotes</button>
+    <button class="tab" data-tab="battle">⚔ Duel</button>
     <button class="tab" data-tab="options">Options</button>
 </div>
 
@@ -658,6 +660,13 @@
     
     <div id="quotesContainer"></div>
 </section>
+
+<section id="tab-battle" class="tab-content">
+    <div id="battleSubNav"></div>
+    <div id="battlePlayView"></div>
+    <div id="battleRankingsView" style="display:none;"></div>
+    <div id="battleStatsView" style="display:none;"></div>
+</section>
  
 <section id="tab-options" class="tab-content">
     <h3>Import / Export</h3>
@@ -697,10 +706,19 @@
         <button id="loadCloudBtn">Load from Cloud (overwrite local)</button>
     </div>
     <hr style="border:1px solid #333; margin:16px 0;">
+    <hr style="border:1px solid #333; margin:16px 0;">
+    <h3>BookDuel Settings</h3>
+    <label>
+        Max books shown in Rankings:
+        <input type="number" id="battleRankingLimitInput" min="1" max="500" value="20" style="width:80px;">
+        <button id="saveBattleLimit">Save</button>
+    </label><br><br>
+    <button id="resetBattleData" class="danger">Reset all BookDuel data (rankings, stats, history)</button>
+    <hr style="border:1px solid #333; margin:16px 0;">
     <h3>Manage Shelves</h3>
     <div id="shelfManager"></div>
     <hr style="border:1px solid #333; margin:16px 0;">
-    Version 1.17 – quiz tab
+    Version 1.18 – battle (would you rather) tab!
 </section>
 
 <div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); justify-content:center; align-items:center; z-index:1000;">
@@ -842,6 +860,7 @@
 <script src="js/render-quiz.js"></script>
 <script src="js/render-timeline.js"></script>
 <script src="js/render-map.js"></script>
+<script src="js/battle.js"></script>
 <script src="js/challenges.js"></script>
 <script src="js/covers.js"></script>
 <script src="js/year-review.js"></script>
