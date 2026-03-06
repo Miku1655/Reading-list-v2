@@ -3,13 +3,15 @@
 //  File: js/battle.js
 // ============================================================
 
-const BATTLE_KEY        = "reading_battle_data";
-const BATTLE_LIMIT_KEY  = "reading_battle_ranking_limit";
+const BATTLE_KEY            = "reading_battle_data";
+const BATTLE_LIMIT_KEY      = "reading_battle_ranking_limit";
+const BATTLE_COMPLEX_KEY    = "reading_battle_complex";   // "off"|"2"|"3"
 const DEFAULT_RANKING_LIMIT = 20;
 
 // ---------- persistent state ----------
-let battleData = null;
+let battleData         = null;
 let battleRankingLimit = DEFAULT_RANKING_LIMIT;
+let battleComplexMode  = "off";   // "off" | "2" | "3"
 
 // ---------- live session (in-memory only, survives tab switches) ----------
 let battleSession  = null;
@@ -30,11 +32,17 @@ function loadBattleData() {
         blacklist: parsed.blacklist || []
     };
     battleRankingLimit = Number(localStorage.getItem(BATTLE_LIMIT_KEY)) || DEFAULT_RANKING_LIMIT;
+    battleComplexMode  = localStorage.getItem(BATTLE_COMPLEX_KEY) || "off";
     migrateBookStats(); // silently upgrade old totalPoints → rating
 }
 
 function saveBattleData() {
     localStorage.setItem(BATTLE_KEY, JSON.stringify(battleData));
+}
+
+function saveBattleComplexMode(val) {
+    battleComplexMode = val;
+    localStorage.setItem(BATTLE_COMPLEX_KEY, val);
 }
 
 function resetBattleData() {
@@ -235,12 +243,13 @@ function unblacklistSeries(series) {
 }
 
 // ============================================================
-//  SESSION LOGIC
+//  SESSION LOGIC — CLASSIC MODE
 // ============================================================
 function startNewSession() {
     const pool = getBattlePool();
-    if (pool.length < 2) {
-        alert("You need at least 2 eligible (non-blacklisted read/currently-reading) books to play!");
+    const minBooks = battleComplexMode === "off" ? 2 : (Number(battleComplexMode) + 1);
+    if (pool.length < minBooks) {
+        alert(`You need at least ${minBooks} eligible books to play!`);
         return;
     }
 
@@ -248,7 +257,13 @@ function startNewSession() {
     shuffled.forEach(b => ensureBookStat(b.importOrder).appearances++);
     saveBattleData();
 
+    if (battleComplexMode !== "off") {
+        startComplexSession(shuffled);
+        return;
+    }
+
     battleSession = {
+        mode:       "classic",
         pool:       shuffled.map(b => b.importOrder),
         roundIndex: 0,
         startedAt:  Date.now(),
@@ -264,7 +279,7 @@ function pickNextPair() {
 }
 
 function chooseSide(winnerId) {
-    if (!battleSession) return;
+    if (!battleSession || battleSession.mode !== "classic") return;
     const now      = Date.now();
     const duration = duelStartTime ? now - duelStartTime : null;
 
@@ -300,6 +315,7 @@ function finishSession() {
         date:     Date.now(),
         poolSize: battleSession.rounds.length + 1,
         winner:   winnerId,
+        mode:     "classic",
         rounds:   battleSession.rounds.slice()
     };
 
@@ -311,40 +327,195 @@ function finishSession() {
 }
 
 function abandonSession() {
-    if (!confirm("Abandon this session? Progress will be lost but points already awarded this session remain.")) return;
+    if (!confirm("Abandon this session? Progress will be lost but Elo changes already made this session remain.")) return;
     battleSession = null;
     duelStartTime = null;
     renderBattlePlay();
 }
 
 // ============================================================
+//  SESSION LOGIC — COMPLEX MODE
+//  shelf = ordered array of importOrder ids (slot 0 = best)
+//  queue = remaining books yet to be shown as challengers
+// ============================================================
+function startComplexSession(shuffled) {
+    const slots   = Number(battleComplexMode); // 2 or 3
+    const ids     = shuffled.map(b => b.importOrder);
+    // First N books fill the shelf, rest become challengers
+    const shelf   = ids.slice(0, slots);
+    const queue   = ids.slice(slots);
+
+    // Award initial Elo within shelf: slot 0 beats slot 1, slot 1 beats slot 2
+    const totalRounds = ids.length - 1;
+    for (let i = 0; i < shelf.length - 1; i++) {
+        awardPoints(shelf[i], shelf[i + 1], i + 1, totalRounds);
+    }
+
+    battleSession = {
+        mode:       "complex",
+        slots,
+        shelf,          // current shelf, index 0 = best
+        queue,          // books not yet seen
+        roundIndex:  shelf.length - 1,
+        startedAt:   Date.now(),
+        rounds:      [],
+        totalBooks:  ids.length
+    };
+
+    duelStartTime = Date.now();
+    renderBattlePlay();
+}
+
+// slotIndex: 0-based index to insert challenger into, or -1 for reject
+function complexChoose(slotIndex) {
+    if (!battleSession || battleSession.mode !== "complex") return;
+
+    const now        = Date.now();
+    const duration   = duelStartTime ? now - duelStartTime : null;
+    const challenger = battleSession.queue[0];
+    const shelf      = battleSession.shelf;
+    const slots      = battleSession.slots;
+    const totalRounds = battleSession.totalBooks - 1;
+
+    battleSession.roundIndex++;
+
+    if (slotIndex === -1) {
+        // Reject: challenger loses to weakest shelf book (last slot)
+        const weakest = shelf[shelf.length - 1];
+        awardPoints(weakest, challenger, battleSession.roundIndex, totalRounds);
+        battleSession.rounds.push({
+            action: "reject", challenger, shelfSnapshot: [...shelf],
+            durationMs: duration, roundIndex: battleSession.roundIndex
+        });
+    } else {
+        // Challenger beats everyone from slotIndex onward (they were above or equal)
+        // Challenger loses to everyone above slotIndex
+        for (let i = slotIndex; i < shelf.length; i++) {
+            awardPoints(challenger, shelf[i], battleSession.roundIndex, totalRounds);
+        }
+        for (let i = 0; i < slotIndex; i++) {
+            awardPoints(shelf[i], challenger, battleSession.roundIndex, totalRounds);
+        }
+
+        // Bump chain: insert challenger at slotIndex, last book gets eliminated
+        const eliminated = shelf[shelf.length - 1];
+        const newShelf   = [
+            ...shelf.slice(0, slotIndex),
+            challenger,
+            ...shelf.slice(slotIndex, slots - 1)  // everything shifts down, last drops off
+        ];
+
+        battleSession.rounds.push({
+            action: "swap", slotIndex, challenger, eliminated,
+            shelfSnapshot: [...shelf],
+            durationMs: duration, roundIndex: battleSession.roundIndex
+        });
+
+        battleSession.shelf = newShelf;
+    }
+
+    // Remove challenger from queue
+    battleSession.queue = battleSession.queue.slice(1);
+
+    if (battleSession.queue.length === 0) {
+        finishComplexSession();
+    } else {
+        duelStartTime = Date.now();
+        renderBattlePlay();
+    }
+}
+
+function finishComplexSession() {
+    const shelf    = battleSession.shelf;
+    const winnerId = shelf[0];
+
+    // Final Elo pass: enforce shelf order
+    const totalRounds = battleSession.totalBooks - 1;
+    for (let i = 0; i < shelf.length - 1; i++) {
+        awardPoints(shelf[i], shelf[i + 1], totalRounds, totalRounds);
+    }
+
+    ensureBookStat(winnerId).sessionWins++;
+
+    const sessionRecord = {
+        date:     Date.now(),
+        poolSize: battleSession.totalBooks,
+        winner:   winnerId,
+        shelf:    [...shelf],
+        mode:     "complex",
+        slots:    battleSession.slots,
+        rounds:   battleSession.rounds.slice()
+    };
+
+    battleData.sessions.push(sessionRecord);
+    saveBattleData();
+
+    renderComplexWinner(sessionRecord);
+    battleSession = null;
+}
+
+// ============================================================
 //  KEYBOARD SUPPORT
-//  ← Left arrow  = choose left card (first book in pair)
-//  → Right arrow = choose right card (second book in pair)
-//  Only fires when the duel arena is active.
+//
+//  Classic mode:
+//    ←  = left card    →  = right card
+//
+//  Complex 2-slot:
+//    ←  = swap slot 1  →  = swap slot 2   ↓ = reject
+//
+//  Complex 3-slot:
+//    ←  = swap slot 1 (bump chain)
+//    ↑  = swap slot 2
+//    →  = swap slot 3
+//    ↓  = reject
 // ============================================================
 function battleKeyHandler(e) {
     if (!battleSession) return;
     if (battleView !== "play") return;
-    // Don't steal keys from inputs/textareas
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
-    if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        const [idA] = pickNextPair();
-        flashCard("left");
-        chooseSide(idA);
-    } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        const [, idB] = pickNextPair();
-        flashCard("right");
-        chooseSide(idB);
+    if (battleSession.mode === "classic") {
+        if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            flashCard("left");
+            chooseSide(pickNextPair()[0]);
+        } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            flashCard("right");
+            chooseSide(pickNextPair()[1]);
+        }
+        return;
+    }
+
+    // Complex mode
+    if (battleSession.mode === "complex") {
+        const slots = battleSession.slots;
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            flashComplexSlot("reject");
+            complexChoose(-1);
+        } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            flashComplexSlot(0);
+            complexChoose(0);
+        } else if (slots === 2 && e.key === "ArrowRight") {
+            e.preventDefault();
+            flashComplexSlot(1);
+            complexChoose(1);
+        } else if (slots === 3 && e.key === "ArrowUp") {
+            e.preventDefault();
+            flashComplexSlot(1);
+            complexChoose(1);
+        } else if (slots === 3 && e.key === "ArrowRight") {
+            e.preventDefault();
+            flashComplexSlot(2);
+            complexChoose(2);
+        }
     }
 }
 
 function flashCard(side) {
-    // Brief visual feedback so user knows the keypress registered
     const arena = document.querySelector(".battle-arena");
     if (!arena) return;
     const cards = arena.querySelectorAll(".battle-card");
@@ -361,7 +532,26 @@ function flashCard(side) {
     }
 }
 
-// Register once globally; the handler checks battleSession/battleView internally
+function flashComplexSlot(slotIndexOrReject) {
+    if (slotIndexOrReject === "reject") {
+        const btn = document.querySelector(".complex-reject-btn");
+        if (btn) {
+            btn.style.background = "#5a2a2a";
+            setTimeout(() => { if (btn) btn.style.background = ""; }, 120);
+        }
+        return;
+    }
+    const slots = document.querySelectorAll(".complex-shelf-slot");
+    const el    = slots[slotIndexOrReject];
+    if (el) {
+        el.style.borderColor = "#5cb85c";
+        el.style.background  = "#1e2a1e";
+        setTimeout(() => {
+            if (el) { el.style.borderColor = ""; el.style.background = ""; }
+        }, 120);
+    }
+}
+
 document.addEventListener("keydown", battleKeyHandler);
 
 // ============================================================
@@ -422,13 +612,16 @@ function renderBattlePlay() {
     if (!el) return;
 
     if (!battleSession) {
-        const pool        = getBattlePool();
-        const blCount     = (battleData.blacklist || []).length;
+        const pool    = getBattlePool();
+        const blCount = (battleData.blacklist || []).length;
+        const modeLabel = battleComplexMode === "off"
+            ? "Classic — pick your favourite until one champion remains."
+            : `Complex (${battleComplexMode} slots) — judge each challenger against your shelf.`;
 
         el.innerHTML = `
             <div class="battle-lobby">
                 <h2>⚔ BookDuel</h2>
-                <p class="battle-lobby-sub">Choose between two books — keep picking your favourite until one champion remains.</p>
+                <p class="battle-lobby-sub">${modeLabel}</p>
                 <div class="battle-pool-info">
                     📚 ${pool.length} book${pool.length !== 1 ? 's' : ''} in pool
                     ${blCount > 0 ? `<span class="battle-pool-blacklisted">&nbsp;·&nbsp; ${blCount} blacklisted</span>` : ""}
@@ -446,6 +639,12 @@ function renderBattlePlay() {
         return;
     }
 
+    if (battleSession.mode === "complex") {
+        renderComplexPlay(el);
+        return;
+    }
+
+    // Classic mode
     const pool     = battleSession.pool;
     const total    = battleSession.rounds.length + pool.length;
     const done     = battleSession.rounds.length;
@@ -468,6 +667,129 @@ function renderBattlePlay() {
         </div>
         <p class="battle-hint">Tap a book to choose it, or use ← → arrow keys.</p>
         <button class="battle-abandon-btn" onclick="abandonSession()">✕ Abandon session</button>
+    `;
+}
+
+function renderComplexPlay(el) {
+    const sess      = battleSession;
+    const slots     = sess.slots;
+    const shelf     = sess.shelf;
+    const challenger = sess.queue[0];
+    const book      = getBookById(challenger);
+    const done      = sess.rounds.length;
+    const total     = sess.totalBooks - slots; // total decisions to make
+    const progress  = total > 0 ? Math.round((done / total) * 100) : 100;
+
+    if (!book) return;
+
+    const keyHint = slots === 2
+        ? "← slot 1 &nbsp; → slot 2 &nbsp; ↓ reject"
+        : "← slot 1 &nbsp; ↑ slot 2 &nbsp; → slot 3 &nbsp; ↓ reject";
+
+    const cover = book.coverUrl
+        ? `<img src="${book.coverUrl}" class="battle-cover" alt="cover" onerror="this.style.display='none'">`
+        : `<div class="battle-cover-placeholder">📖</div>`;
+    const stars = book.rating > 0
+        ? `<div class="battle-stars">${"★".repeat(book.rating)}${"☆".repeat(5 - book.rating)}</div>`
+        : "";
+
+    let shelfHtml = "";
+    shelf.forEach((id, i) => {
+        const sb     = getBookById(id);
+        const scover = sb?.coverUrl
+            ? `<img src="${sb.coverUrl}" class="battle-shelf-thumb" alt="" onerror="this.style.display='none'">`
+            : `<div class="battle-shelf-thumb-placeholder">📖</div>`;
+        const sstars = sb?.rating > 0
+            ? `<div class="battle-stars" style="font-size:0.75em">${"★".repeat(sb.rating)}${"☆".repeat(5 - sb.rating)}</div>`
+            : "";
+        const slotLabel = ["🥇","🥈","🥉"][i] || `#${i+1}`;
+        shelfHtml += `
+            <div class="complex-shelf-slot" onclick="complexChoose(${i})">
+                <div class="complex-slot-label">${slotLabel} Slot ${i + 1}</div>
+                ${scover}
+                <div class="complex-slot-info">
+                    <strong>${sb?.title || "?"}</strong>
+                    <small>${sb?.author || ""}</small>
+                    ${sstars}
+                </div>
+                <div class="complex-slot-hint">swap in here</div>
+            </div>`;
+    });
+
+    el.innerHTML = `
+        <div class="battle-progress-bar-wrap">
+            <div class="battle-progress-label">Challenger ${done + 1} of ${total} &nbsp;·&nbsp; ${sess.queue.length} remaining</div>
+            <div class="battle-progress-track"><div class="battle-progress-fill" style="width:${progress}%"></div></div>
+        </div>
+        <div class="complex-arena">
+            <div class="complex-challenger">
+                <div class="complex-challenger-label">⚔ Challenger</div>
+                ${cover}
+                <div class="battle-card-info">
+                    <div class="battle-card-title">${book.title}</div>
+                    <div class="battle-card-author">${book.author || ""}</div>
+                    ${stars}
+                </div>
+            </div>
+            <div class="complex-shelf">
+                <div class="complex-shelf-label">Your Shelf</div>
+                <div class="complex-shelf-slots">
+                    ${shelfHtml}
+                </div>
+                <button class="complex-reject-btn" onclick="complexChoose(-1)">✕ Reject challenger</button>
+            </div>
+        </div>
+        <p class="battle-hint">${keyHint}</p>
+        <button class="battle-abandon-btn" onclick="abandonSession()">✕ Abandon session</button>
+    `;
+}
+
+function renderComplexWinner(session) {
+    const el = document.getElementById("battlePlayView");
+    if (!el) return;
+
+    const shelf   = session.shelf;
+    const podium  = ["🥇","🥈","🥉"];
+
+    let podiumHtml = "";
+    shelf.forEach((id, i) => {
+        const b = getBookById(id);
+        const cover = b?.coverUrl
+            ? `<img src="${b.coverUrl}" class="battle-winner-cover" style="width:80px;height:120px;" alt="" onerror="this.style.display='none'">`
+            : `<div style="font-size:3em;">📖</div>`;
+        podiumHtml += `
+            <div class="complex-podium-entry">
+                <div style="font-size:2em;">${podium[i] || `#${i+1}`}</div>
+                ${cover}
+                <strong>${b?.title || "?"}</strong>
+                <small style="color:#aaa;">${b?.author || ""}</small>
+            </div>`;
+    });
+
+    const timed   = session.rounds.filter(r => r.durationMs != null && r.durationMs > 0);
+    const fastest = timed.slice().sort((a, b) => a.durationMs - b.durationMs)[0];
+    const slowest = timed.slice().sort((a, b) => b.durationMs - a.durationMs)[0];
+    const swaps   = session.rounds.filter(r => r.action === "swap").length;
+    const rejects = session.rounds.filter(r => r.action === "reject").length;
+
+    el.innerHTML = `
+        <div class="battle-winner-screen">
+            <div class="battle-winner-crown">🏆</div>
+            <h2>Session Complete — Your Top ${shelf.length}</h2>
+            <div class="complex-podium">${podiumHtml}</div>
+            <div class="battle-session-summary">
+                <div class="battle-summary-row"><span>Books judged</span><strong>${session.poolSize}</strong></div>
+                <div class="battle-summary-row"><span>Swaps made</span><strong>${swaps}</strong></div>
+                <div class="battle-summary-row"><span>Rejected</span><strong>${rejects}</strong></div>
+                ${fastest ? `<div class="battle-summary-row"><span>Fastest decision</span><strong>${fmtMs(fastest.durationMs)}</strong></div>` : ""}
+                ${slowest ? `<div class="battle-summary-row"><span>Slowest decision</span><strong>${fmtMs(slowest.durationMs)}</strong></div>` : ""}
+            </div>
+            <div style="display:flex; gap:12px; justify-content:center; margin-top:24px; flex-wrap:wrap;">
+                <button class="battle-start-btn" onclick="startNewSession()">▶ Play Again</button>
+                <button onclick="switchBattleView('rankings')" style="padding:10px 24px;">🏆 See Rankings</button>
+                <button onclick="switchBattleView('stats')"    style="padding:10px 24px;">📊 Full Stats</button>
+            </div>
+        </div>
     `;
 }
 
@@ -860,16 +1182,23 @@ function renderBattleStats() {
         <div class="battle-stats-section">
             <h3>📋 Session History</h3>
             <table class="battle-stats-table">
-                <thead><tr><th>Date</th><th>Pool</th><th>Rounds</th><th>Champion</th></tr></thead>
+                <thead><tr><th>Date</th><th>Mode</th><th>Pool</th><th>Rounds</th><th>Champion / Shelf</th></tr></thead>
                 <tbody>`;
 
     sessions.slice().reverse().forEach(sess => {
-        const w = getBookById(sess.winner);
+        const w       = getBookById(sess.winner);
+        const modeTag = sess.mode === "complex"
+            ? `<span style="color:#aaa;font-size:0.8em;">Complex ${sess.slots}s</span>`
+            : `<span style="color:#aaa;font-size:0.8em;">Classic</span>`;
+        const podium  = sess.shelf
+            ? sess.shelf.map(id => { const b = getBookById(id); return b ? b.title : "?"; }).join(" › ")
+            : (w ? w.title : sess.winner);
         html += `<tr>
             <td>${fmtDate(sess.date)}</td>
+            <td>${modeTag}</td>
             <td>${sess.poolSize}</td>
             <td>${sess.rounds.length}</td>
-            <td>👑 ${w ? w.title : sess.winner}</td>
+            <td>👑 ${podium}</td>
         </tr>`;
     });
 
@@ -902,4 +1231,9 @@ function highlightCard(title, main, sub) {
 function saveBattleRankingLimit(val) {
     battleRankingLimit = Math.max(1, Number(val) || DEFAULT_RANKING_LIMIT);
     localStorage.setItem(BATTLE_LIMIT_KEY, String(battleRankingLimit));
+}
+
+// called from ui-events.js when options inputs change
+function saveBattleComplexSetting(val) {
+    saveBattleComplexMode(val);
 }
