@@ -368,3 +368,7 @@ document.getElementById("saveBattleLimit")?.addEventListener("click", () => {
 document.getElementById("resetBattleData")?.addEventListener("click", () => {
     resetBattleData();
 });
+
+document.getElementById("battleComplexMode")?.addEventListener("change", e => {
+    saveBattleComplexSetting(e.target.value);
+});
