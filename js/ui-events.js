@@ -354,3 +354,13 @@ document.getElementById("addChallenge")?.addEventListener("click", addChallenge)
 document.getElementById("challengeYearly")?.addEventListener("change", e => {
     document.getElementById("challengeYearLabel").style.display = e.target.checked ? "inline" : "none";
 });
+
+document.getElementById("saveBattleLimit")?.addEventListener("click", () => {
+    const val = document.getElementById("battleRankingLimitInput").value;
+    saveBattleRankingLimit(val);
+    alert("Ranking limit saved!");
+});
+
+document.getElementById("resetBattleData")?.addEventListener("click", () => {
+    resetBattleData();
+});
