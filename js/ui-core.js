@@ -43,6 +43,8 @@ function switchTab(name) {
     if (name === "options") {
         renderShelfManager();
         updateCoversCount();
+        document.getElementById("battleRankingLimitInput").value =
+        localStorage.getItem("reading_battle_ranking_limit") || 20;
     }
     
     if (name === "profile") {
