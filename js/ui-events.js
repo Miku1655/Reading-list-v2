@@ -52,6 +52,8 @@ document.getElementById("saveCloudBtn").addEventListener("click", () => {
         shelfColors: shelfColors,
         bookshelfShelves: bookshelfShelves,
         bookshelfSettings: bookshelfSettings,
+        battleData: JSON.parse(localStorage.getItem(BATTLE_KEY) || "{}"),
+        battleRankingLimit: localStorage.getItem(BATTLE_LIMIT_KEY) || "20",
         settings: {
             showNumbers: document.getElementById("showNumbers").checked,
             minAuthorBooks: minAuthorBooks,
@@ -77,7 +79,7 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             shelfColors = data.shelfColors || {};
             challenges = data.challenges || [];
             challenges.forEach(c => {
-                if (!c.id) c.id = Date.now() + Math.random(); // ensure unique ID
+                if (!c.id) c.id = Date.now() + Math.random();
             });
             const settings = data.settings || {};
             document.getElementById("showNumbers").checked = settings.showNumbers ?? true;
@@ -92,12 +94,14 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             document.getElementById("profileNick").value = profile.nick || "";
             document.getElementById("profileBio").value = profile.bio || "";
             if (profile.picture) document.getElementById("profilePic").src = profile.picture;
-                       
+
             saveBooksToLocal();
             localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
             localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
             localStorage.setItem(SHELF_COLORS_KEY, JSON.stringify(shelfColors));
             saveChallengesToLocal();
+            if (data.battleData) localStorage.setItem(BATTLE_KEY, JSON.stringify(data.battleData));
+            if (data.battleRankingLimit) localStorage.setItem(BATTLE_LIMIT_KEY, data.battleRankingLimit);
             renderAll();
             alert("Loaded from cloud successfully!");
         })
