@@ -73,26 +73,38 @@ function fmtDate(ts) {
 }
 
 // ============================================================
-//  SCORING
-//  Each win: roundIndex × max(1, opponentCurrentPoints)
-//  Loser consolation: 40%.
-//  saveBattleData() called after EVERY award – nothing lost on
+//  SCORING  (logarithmic – points stay manageable at scale)
+//
+//  Formula:  points = roundWeight × (1 + log2(opponentWins + 1))
+//
+//  roundWeight = roundIndex (1-based linear).  For a 30-book
+//  session the final is worth 29 base vs. 1 for round 1 –
+//  strong late-game reward without explosion.
+//
+//  opponentBonus = 1 + log2(opponentWins + 1).  A book with
+//  0 wins gives bonus 1.0; 3 wins → ~2.6; 10 wins → ~4.5;
+//  50 wins → ~6.7.  Grows meaningfully but never goes crazy.
+//
+//  Loser consolation: 20% of the points the winner earns
+//  (reduced from 40% – was too generous).
+//
+//  saveBattleData() after every award so nothing is lost on
 //  accidental tab switches.
 // ============================================================
 function awardPoints(winnerId, loserId, roundIndex) {
     const ws = ensureBookStat(winnerId);
     const ls = ensureBookStat(loserId);
 
-    const opponentPts = Math.max(1, ls.totalPoints);
-    const points      = roundIndex * opponentPts;
-    const consolation = Math.round(points * 0.4);
+    const opponentBonus = 1 + Math.log2(ls.wins + 1);
+    const points        = Math.round(roundIndex * opponentBonus);
+    const consolation   = Math.round(points * 0.2);
 
     ws.totalPoints += points;
     ws.wins        += 1;
     ls.totalPoints += consolation;
     ls.losses      += 1;
 
-    saveBattleData(); // persist immediately
+    saveBattleData();
 }
 
 function ensureBookStat(id) {
@@ -268,6 +280,53 @@ function abandonSession() {
 }
 
 // ============================================================
+//  KEYBOARD SUPPORT
+//  ← Left arrow  = choose left card (first book in pair)
+//  → Right arrow = choose right card (second book in pair)
+//  Only fires when the duel arena is active.
+// ============================================================
+function battleKeyHandler(e) {
+    if (!battleSession) return;
+    if (battleView !== "play") return;
+    // Don't steal keys from inputs/textareas
+    const tag = document.activeElement?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const [idA] = pickNextPair();
+        flashCard("left");
+        chooseSide(idA);
+    } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const [, idB] = pickNextPair();
+        flashCard("right");
+        chooseSide(idB);
+    }
+}
+
+function flashCard(side) {
+    // Brief visual feedback so user knows the keypress registered
+    const arena = document.querySelector(".battle-arena");
+    if (!arena) return;
+    const cards = arena.querySelectorAll(".battle-card");
+    const idx   = side === "left" ? 0 : 1;
+    if (cards[idx]) {
+        cards[idx].style.borderColor = "#5cb85c";
+        cards[idx].style.background  = "#1e2a1e";
+        setTimeout(() => {
+            if (cards[idx]) {
+                cards[idx].style.borderColor = "";
+                cards[idx].style.background  = "";
+            }
+        }, 120);
+    }
+}
+
+// Register once globally; the handler checks battleSession/battleView internally
+document.addEventListener("keydown", battleKeyHandler);
+
+// ============================================================
 //  RANKING
 // ============================================================
 function getRankedBooks() {
@@ -369,7 +428,7 @@ function renderBattlePlay() {
             <div class="battle-vs">VS</div>
             ${renderBookCard(bookB, idB)}
         </div>
-        <p class="battle-hint">Tap the book you prefer to keep it alive.</p>
+        <p class="battle-hint">Tap a book to choose it, or use ← → arrow keys.</p>
         <button class="battle-abandon-btn" onclick="abandonSession()">✕ Abandon session</button>
     `;
 }
