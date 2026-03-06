@@ -1,0 +1,354 @@
+/* ============================================================
+   BookDuel – css/battle.css
+   ============================================================ */
+
+/* ---------- Sub-navigation ---------- */
+.battle-subnav {
+    padding: 7px 18px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #aaa;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.95em;
+    transition: background 0.15s, color 0.15s;
+}
+.battle-subnav:hover { background: #2a2a2a; color: #eee; }
+.battle-subnav.active { background: #2d2d2d; color: #fff; border-color: #555; }
+
+#battleSubNav {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+/* ---------- Lobby ---------- */
+.battle-lobby {
+    text-align: center;
+    padding: 40px 20px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+.battle-lobby h2 { font-size: 2em; margin-bottom: 8px; }
+.battle-lobby-sub { color: #aaa; margin-bottom: 20px; font-size: 1.05em; }
+.battle-pool-info {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px 20px;
+    display: inline-block;
+    margin-bottom: 24px;
+    color: #ccc;
+}
+.battle-start-btn {
+    padding: 12px 36px;
+    font-size: 1.15em;
+    background: #2a5a2a;
+    color: #eee;
+    border: 1px solid #3a7a3a;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-left: 0 !important;
+}
+.battle-start-btn:hover { background: #357a35; }
+.battle-warn { color: #c66; margin-top: 16px; }
+
+/* ---------- Progress bar ---------- */
+.battle-progress-bar-wrap { margin-bottom: 20px; }
+.battle-progress-label { font-size: 0.85em; color: #888; margin-bottom: 4px; }
+.battle-progress-track {
+    width: 100%;
+    height: 6px;
+    background: #2a2a2a;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.battle-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3a7a3a, #5cb85c);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+/* ---------- Arena ---------- */
+.battle-arena {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    justify-content: center;
+    margin: 0 auto;
+    max-width: 900px;
+}
+
+.battle-vs {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6em;
+    font-weight: 700;
+    color: #666;
+    padding: 0 16px;
+    flex-shrink: 0;
+}
+
+.battle-card {
+    flex: 1;
+    max-width: 380px;
+    background: #1a1a1a;
+    border: 2px solid #333;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s, background 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px;
+    text-align: center;
+    user-select: none;
+}
+.battle-card:hover {
+    border-color: #5cb85c;
+    background: #1e2a1e;
+    transform: translateY(-4px);
+}
+.battle-card:active { transform: scale(0.97); }
+
+.battle-cover {
+    width: 130px;
+    height: 190px;
+    object-fit: cover;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    margin-bottom: 14px;
+}
+.battle-cover-placeholder {
+    width: 130px;
+    height: 190px;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3em;
+    margin-bottom: 14px;
+    color: #555;
+}
+
+.battle-card-info { width: 100%; }
+.battle-card-title {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #eee;
+    line-height: 1.3;
+    margin-bottom: 4px;
+}
+.battle-card-author { color: #888; font-size: 0.9em; margin-bottom: 6px; }
+.battle-stars { color: #ffd700; font-size: 0.95em; letter-spacing: 1px; }
+
+.battle-hint { text-align: center; color: #555; margin: 14px 0 0; font-size: 0.9em; }
+.battle-abandon-btn {
+    display: block;
+    margin: 16px auto 0;
+    background: transparent;
+    border: 1px solid #4a2a2a;
+    color: #884444;
+    font-size: 0.85em;
+    padding: 5px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+.battle-abandon-btn:hover { background: #2a1010; color: #c66; }
+
+/* ---------- Winner screen ---------- */
+.battle-winner-screen {
+    text-align: center;
+    padding: 30px 20px;
+    max-width: 560px;
+    margin: 0 auto;
+    animation: battleFadeIn 0.5s ease;
+}
+@keyframes battleFadeIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.battle-winner-crown { font-size: 3.5em; margin-bottom: 4px; }
+.battle-winner-screen h2 { font-size: 1.6em; margin-bottom: 16px; color: #ffd700; }
+.battle-winner-cover {
+    width: 160px;
+    height: 230px;
+    object-fit: cover;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    margin-bottom: 16px;
+}
+.battle-winner-title { font-size: 1.4em; font-weight: 700; color: #eee; margin-bottom: 4px; }
+.battle-winner-author { color: #aaa; margin-bottom: 20px; }
+
+.battle-session-summary {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 0 auto 20px;
+    max-width: 400px;
+}
+.battle-summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid #2a2a2a;
+    font-size: 0.9em;
+    color: #ccc;
+}
+.battle-summary-row:last-child { border-bottom: none; }
+.battle-summary-row strong { color: #eee; }
+
+/* ---------- Rankings ---------- */
+.battle-rankings-table { width: 100%; }
+.battle-rank-header,
+.battle-rank-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 90px 60px 50px 60px 60px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 0.9em;
+}
+.battle-rank-header {
+    color: #888;
+    font-size: 0.82em;
+    text-transform: uppercase;
+    border-bottom: 1px solid #333;
+    margin-bottom: 4px;
+}
+.battle-rank-row {
+    border-bottom: 1px solid #1e1e1e;
+    transition: background 0.15s;
+}
+.battle-rank-row:hover { background: #1a1a1a; }
+.battle-rank-row.top-three { background: #1c1e1a; }
+
+.battle-rank-num { font-size: 1.1em; text-align: center; }
+.battle-rank-pts { font-weight: 700; color: #8bc34a; }
+.battle-rank-book {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.battle-rank-thumb {
+    width: 36px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.battle-rank-thumb-placeholder {
+    width: 36px;
+    height: 50px;
+    background: #252525;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+    flex-shrink: 0;
+}
+
+/* Badges */
+.battle-badge {
+    display: inline-block;
+    font-size: 0.72em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-right: 4px;
+    margin-top: 2px;
+    vertical-align: middle;
+}
+.badge-undefeated { background: #2a4a1a; color: #8bc34a; border: 1px solid #3a6a2a; }
+.badge-veteran    { background: #1a2a4a; color: #64b5f6; border: 1px solid #2a4a6a; }
+
+/* ---------- Stats ---------- */
+.battle-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+}
+.battle-stat-card {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 18px 12px;
+    text-align: center;
+}
+.battle-stat-icon { font-size: 1.8em; margin-bottom: 6px; }
+.battle-stat-value { font-size: 1.7em; font-weight: 700; color: #fff; }
+.battle-stat-label { font-size: 0.78em; color: #888; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.battle-stats-section {
+    background: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+}
+.battle-stats-section h3 { margin: 0 0 14px; font-size: 1em; color: #ccc; }
+
+.battle-stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88em;
+}
+.battle-stats-table th {
+    text-align: left;
+    color: #666;
+    font-weight: normal;
+    border-bottom: 1px solid #2a2a2a;
+    padding: 4px 8px;
+    font-size: 0.82em;
+    text-transform: uppercase;
+}
+.battle-stats-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid #1e1e1e;
+    color: #ccc;
+}
+.battle-stats-table tr:last-child td { border-bottom: none; }
+.battle-time-fast { color: #5cb85c; font-weight: 600; }
+.battle-time-slow { color: #e67e22; font-weight: 600; }
+
+.battle-highlights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+}
+.battle-highlight-card {
+    background: #1a1a1a;
+    border: 1px solid #2e2e2e;
+    border-radius: 8px;
+    padding: 14px 16px;
+}
+.battle-highlight-title { font-size: 0.78em; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.battle-highlight-main { font-size: 1em; font-weight: 700; color: #eee; margin-bottom: 4px; }
+.battle-highlight-sub { font-size: 0.82em; color: #888; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 640px) {
+    .battle-arena { flex-direction: column; align-items: center; }
+    .battle-vs { padding: 10px 0; font-size: 1.3em; }
+    .battle-card { max-width: 100%; width: 100%; }
+
+    .battle-rank-header,
+    .battle-rank-row {
+        grid-template-columns: 36px 1fr 70px 50px;
+    }
+    .battle-rank-header span:nth-child(5),
+    .battle-rank-header span:nth-child(6),
+    .battle-rank-header span:nth-child(7),
+    .battle-rank-row span:nth-child(5),
+    .battle-rank-row span:nth-child(6),
+    .battle-rank-row span:nth-child(7) { display: none; }
+}
