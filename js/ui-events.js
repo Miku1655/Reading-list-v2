@@ -366,11 +366,12 @@ document.getElementById("saveBattleLimit")?.addEventListener("click", () => {
     saveBattleRankingLimit(val);
     alert("Ranking limit saved!");
 });
-
 document.getElementById("resetBattleData")?.addEventListener("click", () => {
-    resetBattleData();
+    resetBattleStats();
 });
-
+document.getElementById("resetBattleBlacklist")?.addEventListener("click", () => {
+    resetBlacklist();
+});
 document.getElementById("battleComplexMode")?.addEventListener("change", e => {
     saveBattleComplexSetting(e.target.value);
 });
