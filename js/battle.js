@@ -223,7 +223,7 @@ function migrateBookStats() {
 function ensureBookStat(id) {
     if (!battleData.bookStats[id]) {
         battleData.bookStats[id] = {
-            rating:           getEloStart(),
+            rating:           getEloMidpoint(),  // start at neutral midpoint, not low
             wins:             0,
             losses:           0,
             appearances:      0,
@@ -237,7 +237,7 @@ function ensureBookStat(id) {
         };
     }
     const s = battleData.bookStats[id];
-    if (s.rating          === undefined) s.rating          = getEloStart();
+    if (s.rating          === undefined) s.rating          = getEloMidpoint();
     if (s.interactions    === undefined) s.interactions    = (s.wins || 0) + (s.losses || 0);
     if (s.lastSeenSession === undefined) s.lastSeenSession = 0;
     if (s.decayWeight     === undefined) s.decayWeight     = 0;
@@ -249,22 +249,35 @@ function ensureBookStat(id) {
 // ============================================================
 //  CORE ELO
 //
+//  Uses standard logistic expected-value formula (chess Elo, divisor 400)
+//  instead of linear ratio — this correctly handles all rating magnitudes
+//  and ensures the winner always rates higher than the loser over time.
+//
 //  kScale     : external multiplier (pool mode, calibration, etc.)
-//  poolCeiling: session ceiling — dampens winner gains above it
-//               so low-tier session winners can't rocket to global top
+//  poolCeiling: only dampens when session pool is genuinely low-tier
+//               (pool average < 60% of global midpoint). Ignores ceiling
+//               for strong sessions so top performers aren't throttled.
 // ============================================================
+
+// Standard logistic Elo expected value
+function eloExpected(ratingA, ratingB) {
+    return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+}
+
+// Provisional K: new books move faster but not explosively (2× / 1.5×, not 3× / 2×)
 function provisionalMx(stat) {
     const n = stat.interactions;
-    if (n <  5) return 3.0;
-    if (n < 10) return 2.0;
+    if (n <  5) return 2.0;
+    if (n < 10) return 1.5;
     return 1.0;
 }
 
+// Top-vs-top: high-Elo duels are high-stakes
 function topMatchupMx(ws, ls) {
     return (ws.rating > getEloMax() * 0.65 && ls.rating > getEloMax() * 0.65) ? 1.8 : 1.0;
 }
 
-function applyElo(winnerId, loserId, roundIndex, totalRounds, kScale = 1.0, poolCeiling = null) {
+function applyElo(winnerId, loserId, roundIndex, totalRounds, kScale = 1.0, poolCeiling = null, poolAvg = null) {
     const ws = ensureBookStat(winnerId);
     const ls = ensureBookStat(loserId);
 
@@ -278,7 +291,9 @@ function applyElo(winnerId, loserId, roundIndex, totalRounds, kScale = 1.0, pool
 
     const winnerK = baseK * provisionalMx(ws) * topMatchupMx(ws, ls);
     const loserK  = baseK * provisionalMx(ls) * topMatchupMx(ws, ls);
-    const expected = ws.rating / (ws.rating + ls.rating);
+
+    // Standard logistic expected value (correct Elo formula)
+    const expected = eloExpected(ws.rating, ls.rating);
 
     const loserPlayed  = ls.wins + ls.losses;
     const loserWinRate = loserPlayed > 0 ? ls.wins / loserPlayed : 0.5;
@@ -286,15 +301,19 @@ function applyElo(winnerId, loserId, roundIndex, totalRounds, kScale = 1.0, pool
 
     let winnerGain = winnerK * (1 - expected);
 
-    // Pool ceiling dampening: winner can't leap far above session's tier ceiling
-    if (poolCeiling !== null && ws.rating > poolCeiling) {
+    // Pool ceiling dampening — ONLY for genuinely low-tier sessions.
+    // If the pool average is above 60% of midpoint, the session has real
+    // competition and we must not throttle legitimate winners.
+    const mid = getEloMidpoint();
+    const isLowTierSession = poolAvg !== null && poolAvg < mid * 0.6;
+    if (isLowTierSession && poolCeiling !== null && ws.rating > poolCeiling) {
         const overshoot = (ws.rating - poolCeiling) / Math.max(1, poolCeiling);
-        const damp      = Math.max(0.15, 1 - overshoot * 1.2);
+        const damp      = Math.max(0.3, 1 - overshoot * 1.0);
         winnerGain     *= damp;
     }
 
     ws.rating = Math.min(getEloMax(), Math.round(ws.rating + winnerGain));
-    ls.rating = Math.max(1,           Math.round(ls.rating - loserK * expected * chronicMx));
+    ls.rating = Math.max(1,           Math.round(ls.rating - loserK * (1 - expected) * chronicMx));
 
     ws.wins         += 1;
     ls.losses       += 1;
@@ -306,15 +325,15 @@ function applyElo(winnerId, loserId, roundIndex, totalRounds, kScale = 1.0, pool
 }
 
 // Saves immediately — used in classic mode per-round
-function awardPoints(winnerId, loserId, roundIndex, totalRounds, poolCeiling = null) {
-    applyElo(winnerId, loserId, roundIndex, totalRounds, 1.0, poolCeiling);
+function awardPoints(winnerId, loserId, roundIndex, totalRounds, poolCeiling = null, poolAvg = null) {
+    applyElo(winnerId, loserId, roundIndex, totalRounds, 1.0, poolCeiling, poolAvg);
     saveBattleData();
 }
 
 // ============================================================
 //  REJECT ELO (complex mode)
 // ============================================================
-function applyRejectElo(shelf, challenger, durationMs, roundIndex, totalRounds, poolCeiling = null) {
+function applyRejectElo(shelf, challenger, durationMs, roundIndex, totalRounds, poolCeiling = null, poolAvg = null) {
     const cs    = ensureBookStat(challenger);
     const kMx   = getSessionConfig().kMx;
 
@@ -333,7 +352,7 @@ function applyRejectElo(shelf, challenger, durationMs, roundIndex, totalRounds, 
     const kScale = timeMod * shelfStrMod * kMx;
 
     opponents.forEach(shelfId => {
-        applyElo(shelfId, challenger, roundIndex, totalRounds, kScale, poolCeiling);
+        applyElo(shelfId, challenger, roundIndex, totalRounds, kScale, poolCeiling, poolAvg);
     });
 }
 
@@ -588,7 +607,12 @@ function startNewSession() {
     const boundaries  = computeTierBoundaries(allBooks);
     const targetSize  = Math.min(allBooks.length, cfg.size);
     const sampled     = samplePool(allBooks, targetSize, battleFocus, boundaries);
-    const poolCeiling = computePoolCeiling(sampled.map(b => b.importOrder));
+    const sampledIds  = sampled.map(b => b.importOrder);
+    const poolCeiling = computePoolCeiling(sampledIds);
+    const poolAvg     = sampledIds.reduce((sum, id) => {
+        const s = battleData.bookStats[id];
+        return sum + (s ? s.rating : getEloMidpoint());
+    }, 0) / Math.max(1, sampledIds.length);
 
     sampled.forEach(b => {
         ensureBookStat(b.importOrder).appearances++;
@@ -597,7 +621,7 @@ function startNewSession() {
     saveBattleData();
 
     if (slots > 0) {
-        beginComplexSetup(sampled, slots, poolCeiling);
+        beginComplexSetup(sampled, slots, poolCeiling, poolAvg);
         return;
     }
 
@@ -606,6 +630,7 @@ function startNewSession() {
         pool:         sampled.map(b => b.importOrder),
         poolMode:     battlePoolMode,
         poolCeiling,
+        poolAvg,
         roundIndex:   0,
         startedAt:    Date.now(),
         rounds:       []
@@ -633,7 +658,7 @@ function chooseSide(winnerId) {
     const totalRounds = battleSession.pool.length + battleSession.rounds.length - 1;
     battleSession.rounds.push({ winner: winnerId, loser: loserId, roundIndex: battleSession.roundIndex, durationMs: duration });
     markSeen(winnerId); markSeen(loserId);
-    applyElo(winnerId, loserId, battleSession.roundIndex, totalRounds, kMx, battleSession.poolCeiling);
+    applyElo(winnerId, loserId, battleSession.roundIndex, totalRounds, kMx, battleSession.poolCeiling, battleSession.poolAvg);
     saveBattleData();
     battleSession.pool = battleSession.pool.filter(id => id !== loserId);
 
@@ -667,12 +692,13 @@ function abandonSession() {
 // ============================================================
 //  COMPLEX: SETUP PHASE
 // ============================================================
-function beginComplexSetup(sampled, slots, poolCeiling) {
+function beginComplexSetup(sampled, slots, poolCeiling, poolAvg) {
     battleSession = {
         mode:         "complex-setup",
         slots,
         poolMode:     battlePoolMode,
         poolCeiling,
+        poolAvg,
         shelf:        sampled.slice(0, slots).map(b => b.importOrder),
         queue:        sampled.slice(slots).map(b => b.importOrder),
         totalBooks:   sampled.length,
@@ -698,13 +724,13 @@ function shelfMoveDown(index) {
 
 function confirmComplexSetup() {
     if (!battleSession || battleSession.mode !== "complex-setup") return;
-    const { shelf, queue, slots, totalBooks, poolCeiling } = battleSession;
+    const { shelf, queue, slots, totalBooks, poolCeiling, poolAvg } = battleSession;
     const totalRounds = totalBooks - 1;
     const kMx = getSessionConfig().kMx;
 
     for (let i = 0; i < shelf.length - 1; i++) {
         markSeen(shelf[i]); markSeen(shelf[i + 1]);
-        applyElo(shelf[i], shelf[i + 1], i + 1, totalRounds, kMx, poolCeiling);
+        applyElo(shelf[i], shelf[i + 1], i + 1, totalRounds, kMx, poolCeiling, poolAvg);
     }
     saveBattleData();
 
@@ -712,6 +738,7 @@ function confirmComplexSetup() {
         mode: "complex", slots,
         poolMode: battleSession.poolMode,
         poolCeiling,
+        poolAvg,
         shelf: [...shelf], queue: [...queue],
         roundIndex: shelf.length - 1,
         startedAt: Date.now(), rounds: [], totalBooks
@@ -734,12 +761,13 @@ function complexChoose(slotIndex) {
     const totalRounds = battleSession.totalBooks - 1;
     const kMx         = getSessionConfig().kMx;
     const ceiling     = battleSession.poolCeiling;
+    const poolAvg     = battleSession.poolAvg;
 
     battleSession.roundIndex++;
 
     if (slotIndex === -1) {
         markSeen(challenger);
-        applyRejectElo(shelf, challenger, duration, battleSession.roundIndex, totalRounds, ceiling);
+        applyRejectElo(shelf, challenger, duration, battleSession.roundIndex, totalRounds, ceiling, poolAvg);
         battleSession.rounds.push({
             action: "reject", challenger, shelfSnapshot: [...shelf],
             durationMs: duration, roundIndex: battleSession.roundIndex
@@ -747,11 +775,11 @@ function complexChoose(slotIndex) {
     } else {
         for (let i = slotIndex; i < shelf.length; i++) {
             markSeen(challenger); markSeen(shelf[i]);
-            applyElo(challenger, shelf[i], battleSession.roundIndex, totalRounds, kMx, ceiling);
+            applyElo(challenger, shelf[i], battleSession.roundIndex, totalRounds, kMx, ceiling, poolAvg);
         }
         for (let i = 0; i < slotIndex; i++) {
             markSeen(shelf[i]); markSeen(challenger);
-            applyElo(shelf[i], challenger, battleSession.roundIndex, totalRounds, kMx, ceiling);
+            applyElo(shelf[i], challenger, battleSession.roundIndex, totalRounds, kMx, ceiling, poolAvg);
         }
         const eliminated = shelf[shelf.length - 1];
         battleSession.shelf = [
@@ -779,16 +807,17 @@ function finishComplexSession() {
     const totalRounds = battleSession.totalBooks - 1;
     const kMx         = getSessionConfig().kMx;
     const ceiling     = battleSession.poolCeiling;
+    const poolAvg     = battleSession.poolAvg;
 
     for (let i = 0; i < shelf.length - 1; i++) {
-        applyElo(shelf[i], shelf[i + 1], totalRounds, totalRounds, kMx, ceiling);
+        applyElo(shelf[i], shelf[i + 1], totalRounds, totalRounds, kMx, ceiling, poolAvg);
     }
 
     battleSession.rounds
         .filter(r => r.action === "reject")
         .forEach(r => applyRejectElo(
             r.shelfSnapshot || shelf, r.challenger, r.durationMs,
-            totalRounds, totalRounds, ceiling
+            totalRounds, totalRounds, ceiling, poolAvg
         ));
 
     ensureBookStat(winnerId).sessionWins++;
@@ -881,6 +910,21 @@ function startCalibration() {
     if (queue.length === 0) { alert("No eligible books to calibrate!"); return; }
     battleSession = startCalibTarget(queue[0], queue.slice(1));
     duelStartTime = Date.now();
+    switchBattleView("play");
+    renderBattlePlay();
+}
+
+// Launch calibration for one specific book, skipping the queue
+function startCalibSingle(importOrder) {
+    if (battleSession) {
+        if (!confirm("This will interrupt your current session. Continue?")) return;
+    }
+    applyDecay();
+    // Build remaining queue from low-evidence books, excluding the target
+    const queue = buildCalibQueue().filter(id => id !== importOrder);
+    battleSession = startCalibTarget(importOrder, queue);
+    duelStartTime = Date.now();
+    switchBattleView("play");
     renderBattlePlay();
 }
 
@@ -1530,7 +1574,7 @@ function renderBattleRankings() {
         </p>
         <div class="battle-rankings-table">
             <div class="battle-rank-header">
-                <span>#</span><span>Book</span><span>Rating</span><span>Win%</span><span>Evidence</span><span>Sessions</span><span>🏆</span>
+                <span>#</span><span>Book</span><span>Rating</span><span>Win%</span><span>Evidence</span><span>Sessions</span><span>🏆</span><span></span>
             </div>`;
 
     limited.forEach((entry, i) => {
@@ -1574,6 +1618,7 @@ function renderBattleRankings() {
             </span>
             <span>${s.appearances}</span>
             <span>${crown}</span>
+            <span><button class="rank-calib-btn" onclick="startCalibSingle(${entry.id})" title="Recalibrate this book">🔬</button></span>
         </div>`;
     });
 
