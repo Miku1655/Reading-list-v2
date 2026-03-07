@@ -89,13 +89,33 @@ function fmtDate(ts) {
 }
 
 // ============================================================
-//  SCORING  (Elo-style live rating)
+//  SCORING  — full combined Elo system
 //
-//  Scale: 0 to 10 x totalEligible. Midpoint = 5 x totalEligible.
-//  K = 64. roundWeight = roundIndex / totalRounds (finals ~2x).
-//  lossMultiplier = 1.5 if loser win rate < 25% (chronic losers sink faster).
+//  Scale: 0 → eloMax = 10 × totalEligible.
+//  Midpoint = 5 × totalEligible.  New books start at 30% of scale.
+//
+//  K = 64 base.  Final K is multiplied by:
+//    • roundWeight   : 1 + roundIndex/totalRounds  (finals ≈ 2×)
+//    • provisionalMx : 3× for first 5 interactions, 2× for 6-10
+//    • topMatchupMx  : 1.8× when BOTH books are above 65% of scale
+//    • chronicLoserMx: 1.5× when loser win-rate < 25%
+//
+//  Reject modifiers (complex mode only):
+//    • timeMod       : fast reject = full loss, slow = reduced
+//                      clamp(ms, 200, 3000) → 1.0 … 0.3
+//    • shelfStrMod   : weak shelf (low avg Elo) = milder loss
+//                      clamp(shelfAvg/eloMax, 0.3, 1.0)
+//    • shadowSlot    : if challenger Elo > shelf avg, only loses to
+//                      top half of shelf (it was borderline)
+//
+//  Decay: on session start, books absent for 3+ sessions get
+//    rating nudged toward midpoint by 1.5% per missed session
+//    (capped at 10 missed sessions), but only if they haven't
+//    been seen in the last 24 h.
+//
 //  applyElo() does NOT save — callers batch-save for efficiency.
 // ============================================================
+
 function getEloMidpoint() {
     const total = books.filter(b =>
         b.exclusiveShelf === "read" || b.exclusiveShelf === "currently-reading"
@@ -103,60 +123,152 @@ function getEloMidpoint() {
     return Math.max(50, 5 * total);
 }
 
-function getEloMax() {
-    return getEloMidpoint() * 2;
-}
+function getEloMax() { return getEloMidpoint() * 2; }
+
+function getEloStart() { return Math.round(getEloMidpoint() * 0.6); } // 30% of scale
 
 function migrateBookStats() {
     const mid = getEloMidpoint();
     let changed = false;
     Object.values(battleData.bookStats).forEach(stat => {
-        if (stat && stat.rating === undefined) {
-            stat.rating = mid;
-            changed = true;
-        }
+        if (!stat) return;
+        if (stat.rating === undefined) { stat.rating = mid; changed = true; }
+        if (stat.interactions === undefined) { stat.interactions = stat.wins + stat.losses; changed = true; }
+        if (stat.lastSeenSession === undefined) { stat.lastSeenSession = 0; changed = true; }
     });
     if (changed) saveBattleData();
-}
-
-function applyElo(winnerId, loserId, roundIndex, totalRounds) {
-    const ws = ensureBookStat(winnerId);
-    const ls = ensureBookStat(loserId);
-
-    const K           = 64;
-    const roundWeight = totalRounds > 0 ? roundIndex / totalRounds : 1;
-    const effectiveK  = K * (1 + roundWeight);
-    const expected    = ws.rating / (ws.rating + ls.rating);
-
-    const loserPlayed      = ls.wins + ls.losses;
-    const loserWinRate     = loserPlayed > 0 ? ls.wins / loserPlayed : 0.5;
-    const lossMultiplier   = loserWinRate < 0.25 ? 1.5 : 1.0;
-
-    ws.rating = Math.min(getEloMax(), Math.round(ws.rating + effectiveK * (1 - expected)));
-    ls.rating = Math.max(1,           Math.round(ls.rating - effectiveK * expected * lossMultiplier));
-    ws.wins   += 1;
-    ls.losses += 1;
-}
-
-// Public single-duel wrapper — saves immediately (classic mode per-round)
-function awardPoints(winnerId, loserId, roundIndex, totalRounds) {
-    applyElo(winnerId, loserId, roundIndex, totalRounds);
-    saveBattleData();
 }
 
 function ensureBookStat(id) {
     if (!battleData.bookStats[id]) {
         battleData.bookStats[id] = {
-            rating:      getEloMidpoint(),
-            wins:        0,
-            losses:      0,
-            appearances: 0,
-            sessionWins: 0
+            rating:          getEloStart(),
+            wins:            0,
+            losses:          0,
+            appearances:     0,
+            sessionWins:     0,
+            interactions:    0,   // total Elo-affecting events
+            lastSeenSession: battleData.sessions.length
         };
     }
     const stat = battleData.bookStats[id];
-    if (stat.rating === undefined) stat.rating = getEloMidpoint();
+    if (stat.rating       === undefined) stat.rating          = getEloStart();
+    if (stat.interactions === undefined) stat.interactions     = stat.wins + stat.losses;
+    if (stat.lastSeenSession === undefined) stat.lastSeenSession = 0;
     return stat;
+}
+
+// Provisional K multiplier — new books are volatile
+function provisionalMx(stat) {
+    const n = stat.interactions;
+    if (n <  5) return 3.0;
+    if (n < 10) return 2.0;
+    return 1.0;
+}
+
+// Top-matchup multiplier — high-Elo duels are high-stakes
+function topMatchupMx(ws, ls) {
+    const threshold = getEloMax() * 0.65;
+    return (ws.rating > threshold && ls.rating > threshold) ? 1.8 : 1.0;
+}
+
+// Core Elo update — no save, no reject logic
+function applyElo(winnerId, loserId, roundIndex, totalRounds, kScale = 1.0) {
+    const ws = ensureBookStat(winnerId);
+    const ls = ensureBookStat(loserId);
+
+    const K           = 64;
+    const roundWeight = totalRounds > 0 ? roundIndex / totalRounds : 1;
+    const baseK       = K * (1 + roundWeight) * kScale;
+
+    const winnerK = baseK * provisionalMx(ws) * topMatchupMx(ws, ls);
+    const loserK  = baseK * provisionalMx(ls) * topMatchupMx(ws, ls);
+
+    const expected = ws.rating / (ws.rating + ls.rating);
+
+    const loserPlayed  = ls.wins + ls.losses;
+    const loserWinRate = loserPlayed > 0 ? ls.wins / loserPlayed : 0.5;
+    const chronicMx    = loserWinRate < 0.25 ? 1.5 : 1.0;
+
+    ws.rating = Math.min(getEloMax(), Math.round(ws.rating + winnerK * (1 - expected)));
+    ls.rating = Math.max(1,           Math.round(ls.rating - loserK  * expected * chronicMx));
+
+    ws.wins         += 1;
+    ls.losses       += 1;
+    ws.interactions += 1;
+    ls.interactions += 1;
+}
+
+// Public wrapper — saves immediately (used in classic mode per-round)
+function awardPoints(winnerId, loserId, roundIndex, totalRounds) {
+    applyElo(winnerId, loserId, roundIndex, totalRounds);
+    saveBattleData();
+}
+
+// ── Reject Elo (complex mode) ──────────────────────────────
+// shelf      : current shelf array of importOrder ids
+// challenger : the rejected book's importOrder
+// durationMs : how long the user took to decide
+// roundIndex / totalRounds : for roundWeight
+function applyRejectElo(shelf, challenger, durationMs, roundIndex, totalRounds) {
+    const eloMax     = getEloMax();
+    const cs         = ensureBookStat(challenger);
+
+    // Time modifier: fast reject = full signal, slow = mild
+    const ms      = Math.max(200, Math.min(3000, durationMs || 200));
+    const timeMod = 1.0 - 0.7 * ((ms - 200) / 2800); // 1.0 → 0.3
+
+    // Shelf strength modifier: strong shelf = strong signal
+    const shelfRatings = shelf.map(id => ensureBookStat(id).rating);
+    const shelfAvg     = shelfRatings.reduce((a, b) => a + b, 0) / shelfRatings.length;
+    const shelfStrMod  = Math.max(0.3, Math.min(1.0, shelfAvg / eloMax));
+
+    // Shadow slot: if challenger is better than shelf avg, it's borderline —
+    // only loses to top half of shelf.  Otherwise loses to all.
+    const isBorderline = cs.rating > shelfAvg;
+    const opponents    = isBorderline
+        ? shelf.slice(0, Math.ceil(shelf.length / 2))
+        : shelf;
+
+    const kScale = timeMod * shelfStrMod;
+
+    opponents.forEach(shelfId => {
+        applyElo(shelfId, challenger, roundIndex, totalRounds, kScale);
+    });
+}
+
+// ── Decay ──────────────────────────────────────────────────
+// Called at session start. Books absent for 3+ sessions drift
+// toward midpoint by 1.5% per missed session (max 10 sessions).
+// Only fires if book hasn't been seen in the last 24 h.
+function applyDecay() {
+    const mid         = getEloMidpoint();
+    const sessionIdx  = battleData.sessions.length; // current session count before this one
+    const now         = Date.now();
+    const oneDayMs    = 86400000;
+    let changed       = false;
+
+    Object.values(battleData.bookStats).forEach(stat => {
+        if (!stat) return;
+        const missed = sessionIdx - (stat.lastSeenSession || 0);
+        if (missed < 3) return;
+        // Don't decay if seen recently (active player just switching modes)
+        if (stat.lastSeenAt && (now - stat.lastSeenAt) < oneDayMs) return;
+        const effectiveMissed = Math.min(missed, 10);
+        const decayRate = 1 - (0.015 * effectiveMissed); // e.g. 10 missed → 85% of distance preserved
+        stat.rating = Math.round(mid + (stat.rating - mid) * decayRate);
+        stat.rating = Math.max(1, Math.min(getEloMax(), stat.rating));
+        changed = true;
+    });
+
+    if (changed) saveBattleData();
+}
+
+// Mark a book as seen in this session (for decay tracking)
+function markSeen(id) {
+    const stat = ensureBookStat(id);
+    stat.lastSeenSession = battleData.sessions.length;
+    stat.lastSeenAt      = Date.now();
 }
 
 // ============================================================
@@ -241,8 +353,14 @@ function startNewSession() {
         return;
     }
 
+    // Decay stale books before this session starts
+    applyDecay();
+
     const shuffled = pool.slice().sort(() => Math.random() - 0.5);
-    shuffled.forEach(b => ensureBookStat(b.importOrder).appearances++);
+    shuffled.forEach(b => {
+        ensureBookStat(b.importOrder).appearances++;
+        markSeen(b.importOrder);
+    });
     saveBattleData();
 
     if (slots > 0) {
@@ -275,6 +393,7 @@ function chooseSide(winnerId) {
     battleSession.roundIndex++;
     const totalRounds = battleSession.pool.length + battleSession.rounds.length - 1;
     battleSession.rounds.push({ winner: winnerId, loser: loserId, roundIndex: battleSession.roundIndex, durationMs: duration });
+    markSeen(winnerId); markSeen(loserId);
     awardPoints(winnerId, loserId, battleSession.roundIndex, totalRounds);
     battleSession.pool = battleSession.pool.filter(id => id !== loserId);
 
@@ -343,6 +462,7 @@ function confirmComplexSetup() {
 
     // Award initial Elo within shelf: slot 0 beats slot 1 beats …
     for (let i = 0; i < shelf.length - 1; i++) {
+        markSeen(shelf[i]); markSeen(shelf[i + 1]);
         applyElo(shelf[i], shelf[i + 1], i + 1, totalRounds);
     }
     saveBattleData();
@@ -378,8 +498,9 @@ function complexChoose(slotIndex) {
     battleSession.roundIndex++;
 
     if (slotIndex === -1) {
-        // All shelf books beat the challenger
-        shelf.forEach(shelfId => applyElo(shelfId, challenger, battleSession.roundIndex, totalRounds));
+        // Smart reject: time + shelf strength + shadow slot via applyRejectElo
+        markSeen(challenger);
+        applyRejectElo(shelf, challenger, duration, battleSession.roundIndex, totalRounds);
         battleSession.rounds.push({
             action: "reject", challenger,
             shelfSnapshot: [...shelf],
@@ -388,10 +509,12 @@ function complexChoose(slotIndex) {
     } else {
         // Challenger beats slots from slotIndex onward
         for (let i = slotIndex; i < shelf.length; i++) {
+            markSeen(challenger); markSeen(shelf[i]);
             applyElo(challenger, shelf[i], battleSession.roundIndex, totalRounds);
         }
         // Challenger loses to slots above slotIndex
         for (let i = 0; i < slotIndex; i++) {
+            markSeen(shelf[i]); markSeen(challenger);
             applyElo(shelf[i], challenger, battleSession.roundIndex, totalRounds);
         }
         const eliminated = shelf[shelf.length - 1];
@@ -425,12 +548,17 @@ function finishComplexSession() {
         applyElo(shelf[i], shelf[i + 1], totalRounds, totalRounds);
     }
 
-    // Each shelf book beats every rejected book
-    const rejectedIds = battleSession.rounds
-        .filter(r => r.action === "reject").map(r => r.challenger);
-    rejectedIds.forEach(rejId => {
-        shelf.forEach(shelfId => applyElo(shelfId, rejId, totalRounds, totalRounds));
-    });
+    // Each shelf book beats every rejected book (re-apply using stored duration + shelf snapshot)
+    battleSession.rounds
+        .filter(r => r.action === "reject")
+        .forEach(r => {
+            applyRejectElo(
+                r.shelfSnapshot || shelf,
+                r.challenger,
+                r.durationMs,
+                totalRounds, totalRounds
+            );
+        });
 
     ensureBookStat(winnerId).sessionWins++;
     saveBattleData();
