@@ -810,3 +810,137 @@
     width: 28px;
     height: 28px;
 }
+
+/* ============================================================
+   LOBBY MODE GRID
+   ============================================================ */
+
+.lobby-mode-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 8px;
+    margin: 16px 0;
+    max-width: 520px;
+}
+
+.lobby-mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 12px 8px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    color: #ccc;
+}
+
+.lobby-mode-btn:hover { background: #222; border-color: #555; }
+.lobby-mode-btn.active { background: #1e2d1e; border-color: #5cb85c; color: #8bc34a; }
+.lobby-mode-calib.active { background: #1e1e2d; border-color: #7c7cff; color: #aaaaff; }
+
+.lobby-mode-emoji { font-size: 1.5em; }
+.lobby-mode-label { font-size: 0.85em; font-weight: bold; }
+.lobby-mode-size  { font-size: 0.72em; color: #666; }
+
+.lobby-config-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 12px 0;
+}
+
+.lobby-config-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.lobby-config-item label {
+    font-size: 0.78em;
+    color: #777;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.lobby-pool-info {
+    font-size: 0.88em;
+    color: #888;
+    margin: 8px 0 16px;
+}
+
+/* ============================================================
+   EVIDENCE BARS (rankings)
+   ============================================================ */
+
+.evidence-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 80px;
+}
+
+.evidence-bar-track {
+    height: 4px;
+    background: #2a2a2a;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.evidence-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s;
+}
+
+.evidence-label {
+    font-size: 0.72em;
+}
+
+/* ============================================================
+   CALIBRATION
+   ============================================================ */
+
+.calib-reasoning {
+    background: #141420;
+    border: 1px solid #2a2a4a;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 0 auto 16px;
+    max-width: 640px;
+    font-size: 0.85em;
+    line-height: 1.5;
+}
+
+.calib-reason-row {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    flex-wrap: wrap;
+    padding: 4px 0;
+    border-bottom: 1px solid #1e1e30;
+    color: #bbb;
+}
+
+.calib-reason-row:last-child { border-bottom: none; }
+
+.calib-reason-row > span:first-child {
+    color: #777;
+    min-width: 140px;
+    flex-shrink: 0;
+}
+
+.calib-target-badge {
+    display: inline-block;
+    background: #1e1e3a;
+    color: #9999ff;
+    border: 1px solid #3a3a6a;
+    border-radius: 4px;
+    font-size: 0.72em;
+    padding: 2px 6px;
+    margin-top: 4px;
+}
