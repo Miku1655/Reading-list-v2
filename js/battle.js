@@ -165,90 +165,91 @@ function evidenceLabel(score) {
     return                   { label: "Confident",   color: "#2ecc71" };
 }
 
-// Tighten bounds after a duel using the point estimates + a conservative margin.
-// After A beats B at their current ratings:
-//   A.lo = max(A.lo, B.rating - MARGIN)   — A is at least near B's level
-//   B.hi = min(B.hi, A.rating + MARGIN)   — B is at most near A's level
+// ============================================================
+//  BOUNDS + RATING INTEGRATION
 //
-// Using ratings (not lo/hi) prevents the 1→1 collapse: lo starts at 1 for most
-// books, so using winner.lo as the cap would immediately set loser.hi = 1.
-// The margin keeps bounds conservative — a single duel is noisy evidence.
-const BOUNDS_MARGIN = 150;  // rating points of conservatism per duel
+//  Every duel nudges lo/hi bounds, scaled by opponent's evidence:
+//    Low evidence opponent  → tiny nudge (we don't trust their position)
+//    High evidence opponent → larger nudge (their position is reliable)
+//
+//  nudgeFraction = 0.03 + 0.12 × opponentEvidence²
+//    → ranges from ~3% (unknown opponent) to ~15% (confident opponent)
+//    of the gap between current bound and opponent's rating.
+//
+//  Rating anchoring:
+//    Below "Established" (<70% evidence): rating = pure Elo point estimate
+//    At "Established" (≥70% evidence):   rating = midpoint of [lo, hi]
+//    This means well-calibrated books' rankings are driven by proven range,
+//    not accumulated Elo drift.
+// ============================================================
 
-function updateBounds(winnerId, loserId) {
-    const ws = battleData.bookStats[winnerId];
-    const ls = battleData.bookStats[loserId];
+function nudgeBounds(winnerId, loserId) {
+    const ws  = battleData.bookStats[winnerId];
+    const ls  = battleData.bookStats[loserId];
     if (!ws || !ls) return;
 
-    const eloMax = getEloMax();
+    const eloMax    = getEloMax();
+    const wEvidence = getEvidenceScore(ws);
+    const lEvidence = getEvidenceScore(ls);
 
-    // Winner is at least near loser's level
-    const newWinnerLo = Math.max(1, (ls.rating ?? 1) - BOUNDS_MARGIN);
-    ws.lo = Math.max(ws.lo ?? 1, newWinnerLo);
-    ws.lo = Math.min(ws.lo, ws.hi ?? eloMax);
+    // Nudge fraction: how much of the gap to close, based on opponent's evidence
+    const winnerNudge = 0.03 + 0.12 * (lEvidence ** 2);  // loser's evidence matters for winner's lo
+    const loserNudge  = 0.03 + 0.12 * (wEvidence ** 2);  // winner's evidence matters for loser's hi
 
-    // Loser is at most near winner's level
-    const newLoserHi = Math.min(eloMax, (ws.rating ?? eloMax) + BOUNDS_MARGIN);
-    ls.hi = Math.min(ls.hi ?? eloMax, newLoserHi);
-    ls.hi = Math.max(ls.hi, ls.lo ?? 1);
+    // Winner's lo rises toward loser's rating (winner is at least near loser's level)
+    const wLo = ws.lo ?? 1;
+    const gap_wLo = (ls.rating ?? 0) - wLo;
+    if (gap_wLo > 0) ws.lo = Math.round(wLo + gap_wLo * winnerNudge);
 
-    // Compress bounds toward rating based on win rate.
-    // An undefeated book's lo converges to its rating.
-    // A book with 0 wins keeps lo=1. Formula:
-    //   lo = max(lo, rating - MARGIN × (1 - winRate) × provisionalFactor)
-    //   hi = min(hi, rating + MARGIN × winRate × provisionalFactor)  [for losers]
-    // provisionalFactor damps the effect until we have enough data (≥10 interactions).
-    compressBoundsTowardRating(winnerId);
-    compressBoundsTowardRating(loserId);
+    // Loser's hi falls toward winner's rating (loser is at most near winner's level)
+    const lHi = ls.hi ?? eloMax;
+    const gap_lHi = lHi - (ws.rating ?? eloMax);
+    if (gap_lHi > 0) ls.hi = Math.round(lHi - gap_lHi * loserNudge);
+
+    // Clamp
+    ws.lo = Math.max(1, Math.min(ws.lo, ws.hi ?? eloMax));
+    ls.hi = Math.max(ls.lo ?? 1, Math.min(ls.hi, eloMax));
+
+    // Anchor rating to range midpoint once evidence is strong enough
+    anchorRatingToRange(ws);
+    anchorRatingToRange(ls);
 }
 
-function compressBoundsTowardRating(id) {
-    const s = battleData.bookStats[id];
-    if (!s) return;
-    const eloMax  = getEloMax();
-    const played  = (s.wins || 0) + (s.losses || 0);
-    if (played === 0) return;
-
-    const winRate = s.wins / played;
-    // Provisional factor: ramp from 0.3 → 1.0 over first 15 interactions
-    const provisional = Math.min(1.0, 0.3 + (played / 15) * 0.7);
-    const margin = BOUNDS_MARGIN * provisional;
-
-    // lo rises as win rate rises — undefeated → lo = rating
-    const newLo = Math.max(1, Math.round(s.rating - margin * (1 - winRate)));
-    s.lo = Math.max(s.lo ?? 1, newLo);
-
-    // hi falls as loss rate rises — never won → hi = rating
-    const newHi = Math.min(eloMax, Math.round(s.rating + margin * winRate));
-    s.hi = Math.min(s.hi ?? eloMax, newHi);
-
-    // Safety
-    s.lo = Math.min(s.lo, s.hi);
+function anchorRatingToRange(stat) {
+    if (!stat) return;
+    const evidence = getEvidenceScore(stat);
+    if (evidence >= 0.7) {
+        // Confident: rating = midpoint of proven range
+        stat.rating = Math.round(((stat.lo ?? 1) + (stat.hi ?? getEloMax())) / 2);
+    }
+    // Below 0.7: leave rating as pure Elo — it's still the best estimate we have
 }
 
-// Apply a draw: ratings are close — narrow both ranges toward each other's rating
+// Apply a draw in calibration: both books declared same level
 function applyDrawBounds(idA, idB) {
     const sa = battleData.bookStats[idA];
     const sb = battleData.bookStats[idB];
     if (!sa || !sb) return;
 
     const eloMax = getEloMax();
-    const margin = BOUNDS_MARGIN;
-
-    // Both books are near each other's rating
+    // Treat draw as if both have high evidence of being at the same level —
+    // use a strong nudge toward each other's rating
     const center = Math.round((sa.rating + sb.rating) / 2);
-    sa.lo = Math.max(sa.lo ?? 1,     center - margin);
-    sa.hi = Math.min(sa.hi ?? eloMax, center + margin);
-    sb.lo = Math.max(sb.lo ?? 1,     center - margin);
-    sb.hi = Math.min(sb.hi ?? eloMax, center + margin);
+    const band   = 400;
+    sa.lo = Math.max(sa.lo ?? 1,      center - band);
+    sa.hi = Math.min(sa.hi ?? eloMax, center + band);
+    sb.lo = Math.max(sb.lo ?? 1,      center - band);
+    sb.hi = Math.min(sb.hi ?? eloMax, center + band);
     sa.lo = Math.min(sa.lo, sa.hi);
     sb.lo = Math.min(sb.lo, sb.hi);
 
-    // Elo draw: both move toward each other
+    // Small Elo nudge toward each other
     const expA = eloExpected(sa.rating, sb.rating);
-    const K    = 32; // smaller K for draws — less confident signal
+    const K    = 32;
     sa.rating  = Math.max(1, Math.min(eloMax, Math.round(sa.rating + K * (0.5 - expA))));
     sb.rating  = Math.max(1, Math.min(eloMax, Math.round(sb.rating + K * (0.5 - (1 - expA)))));
+    anchorRatingToRange(sa);
+    anchorRatingToRange(sb);
     sa.interactions = (sa.interactions || 0) + 1;
     sb.interactions = (sb.interactions || 0) + 1;
 }
@@ -292,33 +293,34 @@ function migrateBookStats() {
     let changed = false;
 
     // ── Step 1: Detect & rescale from old dynamic scale ──────────────────
-    // Old scale was eloMax = 5 * bookCount * 2. Detect it from the highest
-    // existing rating — if no rating exceeds 3000 we may still need to rescale
-    // if the old max was much lower (ratings all compressed in e.g. 0–500).
-    // Strategy: find the old eloMax by looking at stored data for a scale hint,
-    // or infer it as 2× the highest rating seen (conservative).
     const allStats = Object.values(battleData.bookStats).filter(Boolean);
-    if (allStats.length > 0 && !battleData._scaleMigrated) {
+    if (allStats.length > 0) {
         const maxRating = Math.max(...allStats.map(s => s.rating ?? 0).filter(r => r > 0));
-        // Only rescale if the current max looks like it's on a different scale.
-        // If maxRating is already in a reasonable 0-3000 range (>500) and close
-        // to 3000, no rescale needed. If it's way below 3000, rescale.
-        if (maxRating > 0 && maxRating < 2000) {
-            // Infer old max: use the stored bookCount-based scale if available,
-            // otherwise treat the observed max as ~80th percentile of old scale
-            const oldMax = battleData._oldEloMax ||
-                Math.max(500, Math.round(maxRating / 0.75)); // assume top book was at ~75% of old scale
-            const scale = NEW_MAX / oldMax;
+        const needsRescale = maxRating > 0 && maxRating < 2400 && !battleData._scaleMigrated3k;
+
+        if (needsRescale) {
+            // Infer old max: treat observed max as ~80th percentile of old scale
+            const oldMax = Math.max(500, Math.round(maxRating / 0.8));
+            const scale  = NEW_MAX / oldMax;
             allStats.forEach(stat => {
-                if (stat.rating !== undefined) stat.rating = Math.round(Math.min(NEW_MAX, stat.rating * scale));
-                if (stat.lo     !== undefined) stat.lo     = Math.round(Math.min(NEW_MAX, stat.lo * scale));
-                if (stat.hi     !== undefined) stat.hi     = Math.round(Math.min(NEW_MAX, stat.hi * scale));
+                if (stat.rating !== undefined) stat.rating = Math.max(1, Math.min(NEW_MAX, Math.round(stat.rating * scale)));
+                if (stat.lo     !== undefined) stat.lo     = Math.max(1, Math.min(NEW_MAX, Math.round(stat.lo * scale)));
+                if (stat.hi     !== undefined) stat.hi     = Math.max(1, Math.min(NEW_MAX, Math.round(stat.hi * scale)));
+                // After rescale ensure lo ≤ hi
+                if (stat.lo !== undefined && stat.hi !== undefined) stat.lo = Math.min(stat.lo, stat.hi);
+        // Reset any collapsed bounds (lo===hi) — artifact of previous broken logic.
+        // Wide open is honest; calibration will narrow them deliberately.
+        if (stat.lo !== undefined && stat.hi !== undefined && stat.hi - stat.lo < 50) {
+            stat.lo = 1;
+            stat.hi = NEW_MAX;
+        }
             });
-            battleData._scaleMigrated = true;
+            battleData._scaleMigrated3k = true;
+            // Clear old flag so we don't double-apply
+            delete battleData._scaleMigrated;
             changed = true;
-        } else if (maxRating >= 2000) {
-            // Already on a reasonable scale, just mark as migrated
-            battleData._scaleMigrated = true;
+        } else if (!battleData._scaleMigrated3k) {
+            battleData._scaleMigrated3k = true;
             changed = true;
         }
     }
@@ -347,11 +349,14 @@ function migrateBookStats() {
         stat.lo     = Math.max(1,  Math.min(NEW_MAX, stat.lo ?? 1));
         stat.hi     = Math.max(1,  Math.min(NEW_MAX, stat.hi ?? NEW_MAX));
         stat.lo     = Math.min(stat.lo, stat.hi);
+        // Reset any tight/collapsed bounds — these are artifacts of broken prior logic.
+        // Only calibration should narrow bounds; anything < 500 wide is suspect.
+        if (stat.hi - stat.lo < 500 && (stat.interactions ?? 0) < 20) {
+            stat.lo = 1;
+            stat.hi = NEW_MAX;
+            changed = true;
+        }
     });
-
-    // Apply win-rate compression to all existing books so undefeated books
-    // get their lo pushed up to near their rating immediately
-    Object.keys(battleData.bookStats).forEach(id => compressBoundsTowardRating(Number(id)));
 
     if (changed) saveBattleData();
 }
@@ -459,8 +464,9 @@ function applyElo(winnerId, loserId, roundIndex, totalRounds, kScale = 1.0, pool
     ws.interactions += 1;
     ls.interactions += 1;
 
-    // Tighten uncertainty bounds based on duel outcome
-    updateBounds(winnerId, loserId);
+    // Nudge bounds based on duel outcome (scaled by opponent's evidence)
+    // then anchor rating to range midpoint if evidence is strong enough
+    nudgeBounds(winnerId, loserId);
 }
 
 // Saves immediately — used in classic mode per-round
@@ -1341,6 +1347,7 @@ function calibChoose(winnerId) {
     tStat.lo = Math.max(tStat.lo ?? 1, sess.lo);
     tStat.hi = Math.min(tStat.hi ?? getEloMax(), sess.hi);
     tStat.lo = Math.min(tStat.lo, tStat.hi); // safety clamp
+    anchorRatingToRange(tStat);
     saveBattleData();
 
     sess.probesDone++;
