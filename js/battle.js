@@ -117,16 +117,16 @@ function fmtDate(ts) {
 }
 
 // ============================================================
-//  ELO SCALE
+//  ELO SCALE — fixed 0–3000, midpoint 1500 (chess-style)
+//
+//  Previously dynamic (5 × bookCount), which caused scale inflation
+//  as books were added: existing ratings didn't rescale, so the
+//  distribution compressed toward the bottom over time.
+//  Fixed scale means ratings are stable and intuitive.
 // ============================================================
-function getEloMidpoint() {
-    const total = books.filter(b =>
-        b.exclusiveShelf === "read" || b.exclusiveShelf === "currently-reading"
-    ).length;
-    return Math.max(50, 5 * total);
-}
-function getEloMax()   { return getEloMidpoint() * 2; }
-function getEloStart() { return Math.round(getEloMidpoint() * 0.6); } // 30% of scale
+function getEloMidpoint() { return 1500; }
+function getEloMax()      { return 3000; }
+function getEloStart()    { return  750; } // 25% — books earn their way up
 
 // ============================================================
 //  BOUNDS SYSTEM  (lo / hi uncertainty range)
@@ -255,39 +255,75 @@ function getEloTier(rating, boundaries) {
 //  MIGRATION
 // ============================================================
 function migrateBookStats() {
-    const eloMax = getEloMax();
+    const NEW_MAX = 3000;
     let changed = false;
-    Object.values(battleData.bookStats).forEach(stat => {
+
+    // ── Step 1: Detect & rescale from old dynamic scale ──────────────────
+    // Old scale was eloMax = 5 * bookCount * 2. Detect it from the highest
+    // existing rating — if no rating exceeds 3000 we may still need to rescale
+    // if the old max was much lower (ratings all compressed in e.g. 0–500).
+    // Strategy: find the old eloMax by looking at stored data for a scale hint,
+    // or infer it as 2× the highest rating seen (conservative).
+    const allStats = Object.values(battleData.bookStats).filter(Boolean);
+    if (allStats.length > 0 && !battleData._scaleMigrated) {
+        const maxRating = Math.max(...allStats.map(s => s.rating ?? 0).filter(r => r > 0));
+        // Only rescale if the current max looks like it's on a different scale.
+        // If maxRating is already in a reasonable 0-3000 range (>500) and close
+        // to 3000, no rescale needed. If it's way below 3000, rescale.
+        if (maxRating > 0 && maxRating < 2000) {
+            // Infer old max: use the stored bookCount-based scale if available,
+            // otherwise treat the observed max as ~80th percentile of old scale
+            const oldMax = battleData._oldEloMax ||
+                Math.max(500, Math.round(maxRating / 0.75)); // assume top book was at ~75% of old scale
+            const scale = NEW_MAX / oldMax;
+            allStats.forEach(stat => {
+                if (stat.rating !== undefined) stat.rating = Math.round(Math.min(NEW_MAX, stat.rating * scale));
+                if (stat.lo     !== undefined) stat.lo     = Math.round(Math.min(NEW_MAX, stat.lo * scale));
+                if (stat.hi     !== undefined) stat.hi     = Math.round(Math.min(NEW_MAX, stat.hi * scale));
+            });
+            battleData._scaleMigrated = true;
+            changed = true;
+        } else if (maxRating >= 2000) {
+            // Already on a reasonable scale, just mark as migrated
+            battleData._scaleMigrated = true;
+            changed = true;
+        }
+    }
+
+    // ── Step 2: Field defaults ────────────────────────────────────────────
+    allStats.forEach(stat => {
         if (!stat) return;
-        if (stat.rating          === undefined) { stat.rating          = getEloMidpoint(); changed = true; }
+        if (stat.rating          === undefined) { stat.rating          = getEloStart(); changed = true; }
         if (stat.interactions    === undefined) { stat.interactions    = (stat.wins || 0) + (stat.losses || 0); changed = true; }
-        if (stat.lastSeenSession === undefined) { stat.lastSeenSession = 0;    changed = true; }
-        if (stat.decayWeight     === undefined) { stat.decayWeight     = 0;    changed = true; }
-        if (stat.tiersEncountered=== undefined) { stat.tiersEncountered= [];   changed = true; }
-        // Migrate to bounds system: existing books with interactions get a moderate range,
-        // fresh books (no interactions) get full open range so they sort to the bottom
+        if (stat.lastSeenSession === undefined) { stat.lastSeenSession = 0;      changed = true; }
+        if (stat.decayWeight     === undefined) { stat.decayWeight     = 0;      changed = true; }
+        if (stat.tiersEncountered=== undefined) { stat.tiersEncountered= [];     changed = true; }
         if (stat.lo              === undefined) {
             const n = stat.interactions || 0;
             if (n === 0) {
-                stat.lo = 1;
-                stat.hi = eloMax;
+                stat.lo = 1; stat.hi = NEW_MAX;
             } else {
-                // Estimate range from existing data — tighter for well-played books
-                const spread = Math.max(100, eloMax * Math.max(0.1, 0.9 - n * 0.04));
-                stat.lo = Math.max(1,       Math.round(stat.rating - spread / 2));
-                stat.hi = Math.min(eloMax,  Math.round(stat.rating + spread / 2));
+                const spread = Math.max(200, NEW_MAX * Math.max(0.1, 0.8 - n * 0.03));
+                stat.lo = Math.max(1,        Math.round(stat.rating - spread / 2));
+                stat.hi = Math.min(NEW_MAX,  Math.round(stat.rating + spread / 2));
             }
             changed = true;
         }
+        // Clamp to new scale
+        stat.rating = Math.max(1,  Math.min(NEW_MAX, stat.rating ?? getEloStart()));
+        stat.lo     = Math.max(1,  Math.min(NEW_MAX, stat.lo ?? 1));
+        stat.hi     = Math.max(1,  Math.min(NEW_MAX, stat.hi ?? NEW_MAX));
+        stat.lo     = Math.min(stat.lo, stat.hi);
     });
+
     if (changed) saveBattleData();
 }
 
 function ensureBookStat(id) {
-    const eloMax = getEloMax();
+    const eloMax = getEloMax(); // always 3000
     if (!battleData.bookStats[id]) {
         battleData.bookStats[id] = {
-            rating:           Math.round(eloMax * 0.25), // start low — books earn upward, not drift from midpoint
+            rating:           getEloStart(), // 750 — earn upward, not drift from midpoint
             lo:               1,
             hi:               eloMax,
             wins:             0,
@@ -302,7 +338,7 @@ function ensureBookStat(id) {
         };
     }
     const s = battleData.bookStats[id];
-    if (s.rating          === undefined) s.rating          = Math.round(eloMax * 0.25);
+    if (s.rating          === undefined) s.rating          = getEloStart();
     if (s.lo              === undefined) { s.lo = 1; s.hi = eloMax; }
     if (s.hi              === undefined) s.hi              = eloMax;
     if (s.interactions    === undefined) s.interactions    = (s.wins || 0) + (s.losses || 0);
@@ -2018,7 +2054,7 @@ function renderBattleRankings() {
     let html = `
         <h2 style="margin-bottom:4px;">📖 BookDuel Rankings</h2>
         <p style="color:#888;margin-bottom:16px;font-size:0.9em;">
-            ${ranked.length} books ranked &nbsp;·&nbsp; Scale 0–${eloMax.toLocaleString()} &nbsp;·&nbsp; Sorted by lower-bound confidence
+            ${ranked.length} books ranked &nbsp;·&nbsp; Fixed scale 0–3000 &nbsp;·&nbsp; Sorted by rating
         </p>
         <div class="battle-rankings-table">
             <div class="battle-rank-header">
