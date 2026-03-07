@@ -230,6 +230,27 @@ function openEditModal(book = null) {
     document.getElementById("editRating").value = book?.rating || 0;
     document.getElementById("editNotes").value = book?.notes || "";
     document.getElementById("editCoverUrl").value = book?.coverUrl || "";
+    // Additional Info fields
+    document.getElementById("editIsbn").value = book?.isbn || "";
+    document.getElementById("editFormat").value = book?.format || "";
+    document.getElementById("editPublisher").value = book?.publisher || "";
+    document.getElementById("editAdditionalAuthors").value = (book?.additionalAuthors || []).join(", ");
+
+    // Alternative titles
+    const _altTitles = book?.altTitles || {};
+    document.getElementById("editAltTitlePl").value = _altTitles.pl || "";
+    document.getElementById("editAltTitleEn").value = _altTitles.en || "";
+    document.getElementById("editAltTitleJa").value = _altTitles.ja || "";
+
+    // Hide the row that matches the book's own language
+    const _updateAltVisibility = () => {
+        const lc = getBookLangCode({ language: document.getElementById("editLanguage").value });
+        document.getElementById("altTitlePl").style.display = lc === "pl" ? "none" : "";
+        document.getElementById("altTitleEn").style.display = lc === "en" ? "none" : "";
+        document.getElementById("altTitleJa").style.display = lc === "ja" ? "none" : "";
+    };
+    _updateAltVisibility();
+    document.getElementById("editLanguage").addEventListener("input", _updateAltVisibility);
     document.getElementById("editDateAdded").value = book?.dateAdded ? new Date(book.dateAdded).toISOString().split('T')[0] : "";
 
     const preview = document.getElementById("coverPreview");
@@ -437,6 +458,16 @@ renderChallengesList();
         language: document.getElementById("editLanguage").value.trim() || null,
         country: document.getElementById("editCountry").value.trim() || null,
         genre: document.getElementById("editGenre").value.trim() || null,
+        isbn: document.getElementById("editIsbn").value.trim() || null,
+        format: document.getElementById("editFormat").value.trim() || null,
+        publisher: document.getElementById("editPublisher").value.trim() || null,
+        additionalAuthors: document.getElementById("editAdditionalAuthors").value
+            .split(",").map(s => s.trim()).filter(Boolean),
+        altTitles: {
+            pl: document.getElementById("editAltTitlePl").value.trim() || null,
+            en: document.getElementById("editAltTitleEn").value.trim() || null,
+            ja: document.getElementById("editAltTitleJa").value.trim() || null,
+        },
         tags: document.getElementById("editTags").value.split(",").map(t => t.trim()).filter(Boolean),
         shelves: document.getElementById("editShelves").value.split(",").map(s => s.trim()).filter(Boolean),
         exclusiveShelf: document.getElementById("editExclusiveShelf").value,
