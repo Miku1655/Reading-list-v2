@@ -719,3 +719,94 @@
     color: #eee;
     line-height: 1.3;
 }
+
+/* ============================================================
+   COMPLEX SETUP SCREEN
+   ============================================================ */
+
+.complex-setup-screen {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+.setup-shelf-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.setup-shelf-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px 12px;
+    transition: background 0.15s;
+}
+
+.setup-shelf-row:hover {
+    background: #222;
+}
+
+.setup-slot-label {
+    font-size: 1.3em;
+    min-width: 28px;
+    text-align: center;
+}
+
+.setup-book-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.setup-book-info strong {
+    font-size: 0.9em;
+    color: #eee;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.setup-book-info small {
+    font-size: 0.78em;
+    color: #888;
+}
+
+.setup-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.setup-btn {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    color: #aaa;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, color 0.12s;
+}
+
+.setup-btn:hover {
+    background: #3a5a3a;
+    color: #8bc34a;
+    border-color: #5a7a5a;
+}
+
+.setup-btn-placeholder {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+}
