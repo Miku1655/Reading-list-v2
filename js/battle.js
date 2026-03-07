@@ -1575,20 +1575,37 @@ function renderBattleSubNav() {
         <button onclick="switchBattleView('rankings')"  class="battle-subnav ${battleView==='rankings'  ?'active':''}">🏆 Rankings</button>
         <button onclick="switchBattleView('stats')"     class="battle-subnav ${battleView==='stats'     ?'active':''}">📊 Stats</button>
         <button onclick="switchBattleView('blacklist')" class="battle-subnav ${battleView==='blacklist' ?'active':''}">🚫 Blacklist${blCount > 0 ? ` (${blCount})` : ''}</button>
+        <button onclick="switchBattleView('export')"    class="battle-subnav ${battleView==='export'    ?'active':''}">📋 Export</button>
     `;
 }
 
 function switchBattleView(view) {
     battleView = view;
     renderBattleSubNav();
+
+    // Ensure export div exists (may not be in older index.html versions)
+    if (!document.getElementById("battleExportView")) {
+        const tab = document.getElementById("tab-battle");
+        if (tab) {
+            const d = document.createElement("div");
+            d.id = "battleExportView";
+            d.style.display = "none";
+            tab.appendChild(d);
+        }
+    }
+
     document.getElementById("battlePlayView").style.display      = view === "play"      ? "block" : "none";
     document.getElementById("battleRankingsView").style.display  = view === "rankings"  ? "block" : "none";
     document.getElementById("battleStatsView").style.display     = view === "stats"     ? "block" : "none";
     document.getElementById("battleBlacklistView").style.display = view === "blacklist" ? "block" : "none";
+    const exportEl = document.getElementById("battleExportView");
+    if (exportEl) exportEl.style.display = view === "export" ? "block" : "none";
+
     if (view === "play")      renderBattlePlay();
     if (view === "rankings")  renderBattleRankings();
     if (view === "stats")     renderBattleStats();
     if (view === "blacklist") renderBattleBlacklist();
+    if (view === "export")    renderBattleExport();
 }
 
 // ============================================================
@@ -2421,11 +2438,125 @@ function highlightCard(title, main, sub) {
     return `<div class="battle-highlight-card"><div class="battle-highlight-title">${title}</div><div class="battle-highlight-main">${main}</div><div class="battle-highlight-sub">${sub}</div></div>`;
 }
 
-// ============================================================
-//  OPTIONS
-// ============================================================
 function saveBattleRankingLimit(val) {
     battleRankingLimit = Math.max(1, Number(val) || DEFAULT_RANKING_LIMIT);
     localStorage.setItem(BATTLE_LIMIT_KEY, String(battleRankingLimit));
 }
 function saveBattleComplexSetting(val) { saveBattleComplexMode(val); }
+
+// ============================================================
+//  EXPORT / COPY VIEW
+// ============================================================
+
+const _exportPrefs = {
+    includeRank:   true,
+    includeTitle:  true,
+    includeAuthor: true,
+    includeRating: false,
+    includeRange:  false,
+    includeWinPct: false,
+    limit:         0,
+    onlyRanked:    true,
+};
+
+function renderBattleExport() {
+    const el = document.getElementById("battleExportView");
+    if (!el) return;
+
+    const p = _exportPrefs;
+    const ranked = getRankedBooks();
+    const played = ranked.filter(b => {
+        const s = battleData.bookStats[b.importOrder];
+        return s && (s.interactions || 0) > 0;
+    });
+
+    const pool = p.onlyRanked ? played : ranked;
+    const limited = p.limit > 0 ? pool.slice(0, p.limit) : pool;
+
+    const lines = limited.map((b, i) => {
+        const s = battleData.bookStats[b.importOrder];
+        const parts = [];
+        if (p.includeRank)   parts.push(`#${i + 1}`);
+        if (p.includeTitle)  parts.push(b.title || "Untitled");
+        if (p.includeAuthor && b.author) parts.push(`by ${b.author}`);
+        if (p.includeRating && s) parts.push(`[${Math.round(s.rating)}]`);
+        if (p.includeRange  && s) parts.push(`(${Math.round(s.lo||0)}–${Math.round(s.hi||3000)})`);
+        if (p.includeWinPct && s) {
+            const total = (s.wins||0) + (s.losses||0);
+            const pct = total > 0 ? Math.round(s.wins / total * 100) : "—";
+            parts.push(`${pct}% W`);
+        }
+        return parts.join(" · ");
+    });
+
+    const previewText = lines.join("\n") || "(nothing to show)";
+
+    const chk = (key, label) => `
+        <label class="export-option">
+            <input type="checkbox" ${p[key] ? "checked" : ""} onchange="_exportPrefs['${key}']=this.checked;renderBattleExport()">
+            ${label}
+        </label>`;
+
+    el.innerHTML = `
+        <div class="battle-blacklist-wrap" style="max-width:680px;">
+            <h3 style="margin:0 0 18px;color:#e8e8e8;">📋 Export Rankings</h3>
+
+            <div style="display:flex;gap:32px;flex-wrap:wrap;margin-bottom:20px;">
+                <div>
+                    <div style="font-size:0.75em;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Include</div>
+                    ${chk("includeRank",   "# Rank")}
+                    ${chk("includeTitle",  "Title")}
+                    ${chk("includeAuthor", "Author")}
+                    ${chk("includeRating", "Elo rating")}
+                    ${chk("includeRange",  "Range (lo–hi)")}
+                    ${chk("includeWinPct", "Win %")}
+                </div>
+                <div>
+                    <div style="font-size:0.75em;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Filter</div>
+                    ${chk("onlyRanked", "Ranked books only")}
+                    <label class="export-option" style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+                        <span style="white-space:nowrap;">Limit to top</span>
+                        <input type="number" min="0" max="9999" value="${p.limit || ""}"
+                            placeholder="all"
+                            style="width:64px;background:#1e1e1e;border:1px solid #333;color:#e8e8e8;padding:3px 6px;border-radius:4px;font-size:0.9em;"
+                            oninput="_exportPrefs.limit=parseInt(this.value)||0;renderBattleExport()">
+                        <span style="color:#666;">places &nbsp;(0 = all)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div style="font-size:0.75em;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">
+                Preview &nbsp;<span style="color:#555;text-transform:none;">${limited.length} book${limited.length !== 1 ? "s" : ""}</span>
+            </div>
+            <textarea id="exportPreviewArea" readonly
+                style="width:100%;box-sizing:border-box;min-height:260px;background:#141414;border:1px solid #2a2a2a;
+                       color:#ccc;font-family:monospace;font-size:0.85em;padding:12px;border-radius:6px;
+                       resize:vertical;line-height:1.6;"
+            >${previewText}</textarea>
+
+            <div style="margin-top:12px;display:flex;align-items:center;gap:12px;">
+                <button onclick="exportCopyText()"
+                    style="padding:10px 28px;background:#2a4a2a;border:1px solid #4a7a4a;
+                           color:#8bc88b;border-radius:6px;cursor:pointer;font-size:0.95em;font-weight:600;">
+                    📋 Copy to clipboard
+                </button>
+                <span id="exportCopyConfirm" style="color:#5cb85c;font-size:0.85em;opacity:0;transition:opacity 0.4s;"></span>
+            </div>
+        </div>`;
+}
+
+function exportCopyText() {
+    const area = document.getElementById("exportPreviewArea");
+    if (!area) return;
+    const confirm = document.getElementById("exportCopyConfirm");
+    const show = () => {
+        if (confirm) { confirm.textContent = "✓ Copied!"; confirm.style.opacity = "1"; setTimeout(() => { confirm.style.opacity = "0"; }, 2000); }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(area.value).then(show).catch(() => { area.select(); document.execCommand("copy"); show(); });
+    } else {
+        area.select();
+        document.execCommand("copy");
+        show();
+    }
+}
