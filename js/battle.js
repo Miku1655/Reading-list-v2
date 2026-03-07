@@ -2457,6 +2457,7 @@ const _exportPrefs = {
     includeWinPct: false,
     limit:         0,
     onlyRanked:    true,
+    titleLang:     "original",   // ← NEW
 };
 
 function renderBattleExport() {
@@ -2478,7 +2479,15 @@ function renderBattleExport() {
     const lines = limited.map(({ book: b, stat: s }, i) => {
         const parts = [];
         if (p.includeRank)   parts.push(`#${i + 1}`);
-        if (p.includeTitle)  parts.push(b.title || "Untitled");
+        if (p.includeTitle) {
+               const _bookLang = getBookLangCode(b);
+               let _exportTitle = b.title || "Untitled";
+               if (p.titleLang !== "original" && _bookLang !== p.titleLang) {
+                   const _alt = (b.altTitles || {})[p.titleLang];
+                   if (_alt && _alt.trim()) _exportTitle = _alt.trim();
+               }
+               parts.push(_exportTitle);
+           }
         if (p.includeAuthor && b.author) parts.push(`by ${b.author}`);
         if (p.includeRating && s) parts.push(`[${Math.round(s.rating)}]`);
         if (p.includeRange  && s) parts.push(`(${Math.round(s.lo || 0)}–${Math.round(s.hi || 3000)})`);
@@ -2522,6 +2531,19 @@ function renderBattleExport() {
                             style="width:64px;background:#1e1e1e;border:1px solid #333;color:#e8e8e8;padding:3px 6px;border-radius:4px;font-size:0.9em;"
                             oninput="_exportPrefs.limit=parseInt(this.value)||0;renderBattleExport()">
                         <span style="color:#666;">places &nbsp;(0 = all)</span>
+                    </label>
+                </div>
+                <div>
+                    <div style="font-size:0.75em;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Title Language</div>
+                    <label class="export-option" style="display:flex;align-items:center;gap:8px;">
+                        <select onchange="_exportPrefs.titleLang=this.value;renderBattleExport()"
+                            style="background:#1e1e1e;border:1px solid #333;color:#e8e8e8;padding:4px 8px;border-radius:4px;font-size:0.9em;">
+                            <option value="original" ${p.titleLang==='original'?'selected':''}>Original</option>
+                            <option value="pl" ${p.titleLang==='pl'?'selected':''}>🇵🇱 Polish</option>
+                            <option value="en" ${p.titleLang==='en'?'selected':''}>🇬🇧 English</option>
+                            <option value="ja" ${p.titleLang==='ja'?'selected':''}>🇯🇵 Japanese</option>
+                        </select>
+                        <span style="color:#666;white-space:nowrap;">where available</span>
                     </label>
                 </div>
             </div>
