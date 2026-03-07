@@ -45,8 +45,6 @@ function switchTab(name) {
         updateCoversCount();
         document.getElementById("battleRankingLimitInput").value =
         localStorage.getItem("reading_battle_ranking_limit") || 20;
-        document.getElementById("battleComplexMode").value =
-        localStorage.getItem("reading_battle_complex") || "off";
     }
     
     if (name === "profile") {
