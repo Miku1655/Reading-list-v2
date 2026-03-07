@@ -191,6 +191,39 @@ function updateBounds(winnerId, loserId) {
     const newLoserHi = Math.min(eloMax, (ws.rating ?? eloMax) + BOUNDS_MARGIN);
     ls.hi = Math.min(ls.hi ?? eloMax, newLoserHi);
     ls.hi = Math.max(ls.hi, ls.lo ?? 1);
+
+    // Compress bounds toward rating based on win rate.
+    // An undefeated book's lo converges to its rating.
+    // A book with 0 wins keeps lo=1. Formula:
+    //   lo = max(lo, rating - MARGIN × (1 - winRate) × provisionalFactor)
+    //   hi = min(hi, rating + MARGIN × winRate × provisionalFactor)  [for losers]
+    // provisionalFactor damps the effect until we have enough data (≥10 interactions).
+    compressBoundsTowardRating(winnerId);
+    compressBoundsTowardRating(loserId);
+}
+
+function compressBoundsTowardRating(id) {
+    const s = battleData.bookStats[id];
+    if (!s) return;
+    const eloMax  = getEloMax();
+    const played  = (s.wins || 0) + (s.losses || 0);
+    if (played === 0) return;
+
+    const winRate = s.wins / played;
+    // Provisional factor: ramp from 0.3 → 1.0 over first 15 interactions
+    const provisional = Math.min(1.0, 0.3 + (played / 15) * 0.7);
+    const margin = BOUNDS_MARGIN * provisional;
+
+    // lo rises as win rate rises — undefeated → lo = rating
+    const newLo = Math.max(1, Math.round(s.rating - margin * (1 - winRate)));
+    s.lo = Math.max(s.lo ?? 1, newLo);
+
+    // hi falls as loss rate rises — never won → hi = rating
+    const newHi = Math.min(eloMax, Math.round(s.rating + margin * winRate));
+    s.hi = Math.min(s.hi ?? eloMax, newHi);
+
+    // Safety
+    s.lo = Math.min(s.lo, s.hi);
 }
 
 // Apply a draw: ratings are close — narrow both ranges toward each other's rating
@@ -315,6 +348,10 @@ function migrateBookStats() {
         stat.hi     = Math.max(1,  Math.min(NEW_MAX, stat.hi ?? NEW_MAX));
         stat.lo     = Math.min(stat.lo, stat.hi);
     });
+
+    // Apply win-rate compression to all existing books so undefeated books
+    // get their lo pushed up to near their rating immediately
+    Object.keys(battleData.bookStats).forEach(id => compressBoundsTowardRating(Number(id)));
 
     if (changed) saveBattleData();
 }
