@@ -2464,30 +2464,31 @@ function renderBattleExport() {
     if (!el) return;
 
     const p = _exportPrefs;
-    const ranked = getRankedBooks();
-    const played = ranked.filter(b => {
-        const s = battleData.bookStats[b.importOrder];
-        return s && (s.interactions || 0) > 0;
-    });
+    // getRankedBooks returns [{id, stat}] — resolve full book objects here
+    const ranked = getRankedBooks().map(e => ({
+        book: getBookById(e.id),
+        stat: e.stat
+    })).filter(e => e.book);
 
-    const pool = p.onlyRanked ? played : ranked;
+    const pool = p.onlyRanked
+        ? ranked.filter(e => (e.stat.interactions || 0) > 0)
+        : ranked;
     const limited = p.limit > 0 ? pool.slice(0, p.limit) : pool;
 
-    const lines = limited.map((b, i) => {
-        const s = battleData.bookStats[b.importOrder];
+    const lines = limited.map(({ book: b, stat: s }, i) => {
         const parts = [];
         if (p.includeRank)   parts.push(`#${i + 1}`);
         if (p.includeTitle)  parts.push(b.title || "Untitled");
         if (p.includeAuthor && b.author) parts.push(`by ${b.author}`);
         if (p.includeRating && s) parts.push(`[${Math.round(s.rating)}]`);
-        if (p.includeRange  && s) parts.push(`(${Math.round(s.lo||0)}–${Math.round(s.hi||3000)})`);
+        if (p.includeRange  && s) parts.push(`(${Math.round(s.lo || 0)}–${Math.round(s.hi || 3000)})`);
         if (p.includeWinPct && s) {
-            const total = (s.wins||0) + (s.losses||0);
+            const total = (s.wins || 0) + (s.losses || 0);
             const pct = total > 0 ? Math.round(s.wins / total * 100) : "—";
             parts.push(`${pct}% W`);
         }
         return parts.join(" · ");
-    });
+    }).filter(line => line.trim());
 
     const previewText = lines.join("\n") || "(nothing to show)";
 
