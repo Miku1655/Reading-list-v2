@@ -165,59 +165,57 @@ function evidenceLabel(score) {
     return                   { label: "Confident",   color: "#2ecc71" };
 }
 
-// Tighten bounds after a duel.
-// After A beats B:
-//   A.lo rises to B.lo  — A is above whatever floor B had
-//   B.hi falls to A.lo  — B is below A's confirmed floor (conservative, not volatile rating)
-// Using A.lo (not A.rating) prevents B.hi from being pinned to a moving target
-// and collapsing the range to a point.
+// Tighten bounds after a duel using the point estimates + a conservative margin.
+// After A beats B at their current ratings:
+//   A.lo = max(A.lo, B.rating - MARGIN)   — A is at least near B's level
+//   B.hi = min(B.hi, A.rating + MARGIN)   — B is at most near A's level
+//
+// Using ratings (not lo/hi) prevents the 1→1 collapse: lo starts at 1 for most
+// books, so using winner.lo as the cap would immediately set loser.hi = 1.
+// The margin keeps bounds conservative — a single duel is noisy evidence.
+const BOUNDS_MARGIN = 150;  // rating points of conservatism per duel
+
 function updateBounds(winnerId, loserId) {
     const ws = battleData.bookStats[winnerId];
     const ls = battleData.bookStats[loserId];
     if (!ws || !ls) return;
 
     const eloMax = getEloMax();
-    const wLo = ws.lo ?? 1;
-    const lLo = ls.lo ?? 1;
-    const lHi = ls.hi ?? eloMax;
 
-    // Winner's floor rises to at least loser's floor
-    ws.lo = Math.max(wLo, lLo);
-    ws.lo = Math.min(ws.lo, ws.hi ?? eloMax); // keep lo ≤ hi
+    // Winner is at least near loser's level
+    const newWinnerLo = Math.max(1, (ls.rating ?? 1) - BOUNDS_MARGIN);
+    ws.lo = Math.max(ws.lo ?? 1, newWinnerLo);
+    ws.lo = Math.min(ws.lo, ws.hi ?? eloMax);
 
-    // Loser's ceiling falls to winner's confirmed floor (not volatile point estimate)
-    ls.hi = Math.min(lHi, ws.lo);
-    ls.hi = Math.max(ls.hi, ls.lo ?? 1);       // keep hi ≥ lo
+    // Loser is at most near winner's level
+    const newLoserHi = Math.min(eloMax, (ws.rating ?? eloMax) + BOUNDS_MARGIN);
+    ls.hi = Math.min(ls.hi ?? eloMax, newLoserHi);
+    ls.hi = Math.max(ls.hi, ls.lo ?? 1);
 }
 
-// Apply a draw: both books declared equal — overlap their ranges
-// No Elo change. Both lo values rise to max(loA,loB), both hi values fall to min(hiA,hiB).
+// Apply a draw: ratings are close — narrow both ranges toward each other's rating
 function applyDrawBounds(idA, idB) {
     const sa = battleData.bookStats[idA];
     const sb = battleData.bookStats[idB];
     if (!sa || !sb) return;
 
     const eloMax = getEloMax();
-    const newLo  = Math.max(sa.lo ?? 1,    sb.lo ?? 1);
-    const newHi  = Math.min(sa.hi ?? eloMax, sb.hi ?? eloMax);
+    const margin = BOUNDS_MARGIN;
 
-    // Only apply if it actually tightens something
-    if (newLo < newHi) {
-        sa.lo = Math.max(sa.lo ?? 1,    newLo);
-        sa.hi = Math.min(sa.hi ?? eloMax, newHi);
-        sb.lo = Math.max(sb.lo ?? 1,    newLo);
-        sb.hi = Math.min(sb.hi ?? eloMax, newHi);
-        // Safety clamp
-        sa.lo = Math.min(sa.lo, sa.hi);
-        sb.lo = Math.min(sb.lo, sb.hi);
-    }
-    // Elo: apply a draw (both get 0 net movement — standard draw in logistic Elo)
+    // Both books are near each other's rating
+    const center = Math.round((sa.rating + sb.rating) / 2);
+    sa.lo = Math.max(sa.lo ?? 1,     center - margin);
+    sa.hi = Math.min(sa.hi ?? eloMax, center + margin);
+    sb.lo = Math.max(sb.lo ?? 1,     center - margin);
+    sb.hi = Math.min(sb.hi ?? eloMax, center + margin);
+    sa.lo = Math.min(sa.lo, sa.hi);
+    sb.lo = Math.min(sb.lo, sb.hi);
+
+    // Elo draw: both move toward each other
     const expA = eloExpected(sa.rating, sb.rating);
-    const K    = 64 * CALIB_K_MX;
-    sa.rating  = Math.round(sa.rating + K * (0.5 - expA));
-    sb.rating  = Math.round(sb.rating + K * (0.5 - (1 - expA)));
-    sa.rating  = Math.max(1, Math.min(eloMax, sa.rating));
-    sb.rating  = Math.max(1, Math.min(eloMax, sb.rating));
+    const K    = 32; // smaller K for draws — less confident signal
+    sa.rating  = Math.max(1, Math.min(eloMax, Math.round(sa.rating + K * (0.5 - expA))));
+    sb.rating  = Math.max(1, Math.min(eloMax, Math.round(sb.rating + K * (0.5 - (1 - expA)))));
     sa.interactions = (sa.interactions || 0) + 1;
     sb.interactions = (sb.interactions || 0) + 1;
 }
@@ -931,8 +929,9 @@ function finishComplexSession() {
 //  Non-transitivity (A>B>C>A) is handled naturally by bounds + logistic Elo.
 // ============================================================
 
-const QCALIB_K_MX      = 1.5;
-const QCALIB_COOLDOWN  = 4;   // rounds before a pair can repeat
+const QCALIB_K_MX      = 1.2;
+const QCALIB_COOLDOWN  = 12;   // rounds before a pair can repeat — long enough to see many other pairs
+const QCALIB_MAX_ELO_CHANGE = 200; // max total Elo a book can gain/lose in one quick-calib session
 
 function scoreQCalibPair(idA, idB) {
     const sa = ensureBookStat(idA);
@@ -1001,17 +1000,25 @@ function startQuickCalib() {
     pool.forEach(b => markSeen(b.importOrder));
     saveBattleData();
 
+    // Record each book's starting rating so we can cap total movement
+    const startRatings = {};
+    pool.forEach(b => {
+        const s = battleData.bookStats[b.importOrder];
+        startRatings[b.importOrder] = s ? s.rating : getEloMidpoint();
+    });
+
     const firstPair = pickQCalibPair(pool, new Set());
     if (!firstPair) { alert("Not enough pairs to calibrate."); return; }
 
     battleSession = {
-        mode:        "quick-calib",
-        pool:        pool.map(b => b.importOrder),
-        currentPair: firstPair,
-        roundsDone:  0,
-        recentPairs: new Map(),   // pairKey → roundDone (for cooldown)
-        results:     [],
-        startedAt:   Date.now()
+        mode:         "quick-calib",
+        pool:         pool.map(b => b.importOrder),
+        currentPair:  firstPair,
+        roundsDone:   0,
+        recentPairs:  new Map(),   // pairKey → roundDone (for cooldown)
+        startRatings,             // cap Elo movement per book
+        results:      [],
+        startedAt:    Date.now()
     };
     duelStartTime = Date.now();
     switchBattleView("play");
@@ -1026,42 +1033,45 @@ function qcalibChoose(winnerId) {
     const [idA, idB] = sess.currentPair;
     const loserId  = winnerId === idA ? idB : idA;
 
-    // Apply real Elo (counts for rankings)
     markSeen(winnerId); markSeen(loserId);
-    applyElo(winnerId, loserId, sess.roundsDone + 1, sess.roundsDone + 1, QCALIB_K_MX);
-    saveBattleData();
 
-    // Record result
+    // Apply Elo but cap total movement per book for this session
+    const wStatBefore = ensureBookStat(winnerId).rating;
+    const lStatBefore = ensureBookStat(loserId).rating;
+    applyElo(winnerId, loserId, 1, 1, QCALIB_K_MX);
+
+    // Enforce per-session Elo cap — prevent a book from being nuked by repeat matchups
     const wStat = ensureBookStat(winnerId);
     const lStat = ensureBookStat(loserId);
+    const wStart = sess.startRatings[winnerId] ?? wStatBefore;
+    const lStart = sess.startRatings[loserId]  ?? lStatBefore;
+    if (wStat.rating - wStart >  QCALIB_MAX_ELO_CHANGE) wStat.rating = wStart + QCALIB_MAX_ELO_CHANGE;
+    if (lStart - lStat.rating >  QCALIB_MAX_ELO_CHANGE) lStat.rating = lStart - QCALIB_MAX_ELO_CHANGE;
+
+    saveBattleData();
+
     sess.results.push({
         winner: winnerId, loser: loserId,
         winnerRatingAfter: wStat.rating, loserRatingAfter: lStat.rating,
-        winnerLoAfter: wStat.lo, winnerHiAfter: wStat.hi,
-        loserLoAfter:  lStat.lo, loserHiAfter:  lStat.hi,
         durationMs: duration
     });
 
     sess.roundsDone++;
 
-    // Add pair to cooldown map
+    // Add pair to cooldown — expires after QCALIB_COOLDOWN more rounds
     const pairKey = [idA, idB].sort().join(",");
     sess.recentPairs.set(pairKey, sess.roundsDone);
-    // Expire old cooldowns
-    for (const [k, r] of sess.recentPairs) {
-        if (sess.roundsDone - r >= QCALIB_COOLDOWN) sess.recentPairs.delete(k);
+    // Expire cooldowns that are old enough
+    for (const [k, setAt] of sess.recentPairs) {
+        if (sess.roundsDone - setAt >= QCALIB_COOLDOWN) sess.recentPairs.delete(k);
     }
 
-    // Pick next pair
+    // Pick next pair — pass cooled set so picker avoids them
     const poolBooks = getBattlePool().filter(b => sess.pool.includes(b.importOrder));
     const cooledSet = new Set(sess.recentPairs.keys());
     const nextPair  = pickQCalibPair(poolBooks, cooledSet);
 
-    if (!nextPair) {
-        // No more useful pairs — session complete
-        qcalibFinish();
-        return;
-    }
+    if (!nextPair) { qcalibFinish(); return; }
     sess.currentPair = nextPair;
     duelStartTime    = Date.now();
     renderBattlePlay();
@@ -1074,20 +1084,23 @@ function qcalibDraw() {
 
     markSeen(idA); markSeen(idB);
     applyDrawBounds(idA, idB);
+
+    // Clamp draw Elo movement to session cap too
+    const sA = ensureBookStat(idA), sB = ensureBookStat(idB);
+    const startA = sess.startRatings[idA] ?? sA.rating;
+    const startB = sess.startRatings[idB] ?? sB.rating;
+    sA.rating = Math.max(startA - QCALIB_MAX_ELO_CHANGE, Math.min(startA + QCALIB_MAX_ELO_CHANGE, sA.rating));
+    sB.rating = Math.max(startB - QCALIB_MAX_ELO_CHANGE, Math.min(startB + QCALIB_MAX_ELO_CHANGE, sB.rating));
+
     saveBattleData();
 
-    const sA = ensureBookStat(idA), sB = ensureBookStat(idB);
-    sess.results.push({
-        winner: null, loser: null, draw: true,
-        idA, idB,
-        ratingAAfter: sA.rating, ratingBAfter: sB.rating
-    });
+    sess.results.push({ winner: null, loser: null, draw: true, idA, idB });
     sess.roundsDone++;
 
     const pairKey = [idA, idB].sort().join(",");
     sess.recentPairs.set(pairKey, sess.roundsDone);
-    for (const [k, r] of sess.recentPairs) {
-        if (sess.roundsDone - r >= QCALIB_COOLDOWN) sess.recentPairs.delete(k);
+    for (const [k, setAt] of sess.recentPairs) {
+        if (sess.roundsDone - setAt >= QCALIB_COOLDOWN) sess.recentPairs.delete(k);
     }
 
     const poolBooks = getBattlePool().filter(b => sess.pool.includes(b.importOrder));
