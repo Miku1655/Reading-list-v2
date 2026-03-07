@@ -183,34 +183,70 @@ function evidenceLabel(score) {
 //    not accumulated Elo drift.
 // ============================================================
 
+// ============================================================
+//  BOUNDS UPDATE
+//
+//  When A beats B:
+//  1. Base nudge: lo rises, hi falls — gentle when opponent is uncertain,
+//     stronger when opponent is well-known.
+//  2. Surprise factor: if the win/loss contradicts the current range
+//     (e.g. you beat someone far above your hi, or lose to someone far
+//     below your lo), the range shifts aggressively to correct itself.
+//     The range should reflect reality — a book that beats a 1500 while
+//     ranged at 600–800 is obviously misplaced.
+// ============================================================
 function nudgeBounds(winnerId, loserId) {
     const ws  = battleData.bookStats[winnerId];
     const ls  = battleData.bookStats[loserId];
     if (!ws || !ls) return;
 
     const eloMax    = getEloMax();
-    const wEvidence = getEvidenceScore(ws);
-    const lEvidence = getEvidenceScore(ls);
+    const wEv = getEvidenceScore(ws);
+    const lEv = getEvidenceScore(ls);
 
-    // Nudge fraction: how much of the gap to close, based on opponent's evidence
-    const winnerNudge = 0.03 + 0.12 * (lEvidence ** 2);  // loser's evidence matters for winner's lo
-    const loserNudge  = 0.03 + 0.12 * (wEvidence ** 2);  // winner's evidence matters for loser's hi
-
-    // Winner's lo rises toward loser's rating (winner is at least near loser's level)
     const wLo = ws.lo ?? 1;
-    const gap_wLo = (ls.rating ?? 0) - wLo;
-    if (gap_wLo > 0) ws.lo = Math.round(wLo + gap_wLo * winnerNudge);
-
-    // Loser's hi falls toward winner's rating (loser is at most near winner's level)
+    const wHi = ws.hi ?? eloMax;
+    const lLo = ls.lo ?? 1;
     const lHi = ls.hi ?? eloMax;
-    const gap_lHi = lHi - (ws.rating ?? eloMax);
-    if (gap_lHi > 0) ls.hi = Math.round(lHi - gap_lHi * loserNudge);
 
-    // Clamp
-    ws.lo = Math.max(1, Math.min(ws.lo, ws.hi ?? eloMax));
-    ls.hi = Math.max(ls.lo ?? 1, Math.min(ls.hi, eloMax));
+    // ── Winner ──────────────────────────────────────────────────────────
+    // How surprising is this win? If loser's rating is above winner's hi,
+    // the win directly contradicts the range — shift aggressively.
+    const loserRating = ls.rating ?? lLo;
+    const winnerSurprise = Math.max(0, loserRating - wHi); // how far above winner's hi the loser was
 
-    // Anchor rating to range midpoint once evidence is strong enough
+    if (winnerSurprise > 0) {
+        // Contradicting evidence: shift the whole range up toward loser's rating
+        const shift = Math.round(winnerSurprise * (0.4 + 0.4 * lEv));
+        ws.lo = Math.min(eloMax, wLo + shift);
+        ws.hi = Math.min(eloMax, wHi + shift);
+    } else {
+        // Normal case: nudge lo up within existing range
+        const nudge = 0.04 + 0.18 * (lEv ** 2);
+        const gap   = loserRating - wLo;
+        if (gap > 0) ws.lo = Math.round(wLo + gap * nudge);
+    }
+
+    // ── Loser ───────────────────────────────────────────────────────────
+    const winnerRating = ws.rating ?? wLo;
+    const loserSurprise = Math.max(0, lLo - winnerRating); // how far below loser's lo the winner was
+
+    if (loserSurprise > 0) {
+        // Contradicting evidence: shift whole range down toward winner's rating
+        const shift = Math.round(loserSurprise * (0.4 + 0.4 * wEv));
+        ls.lo = Math.max(1, lLo - shift);
+        ls.hi = Math.max(1, lHi - shift);
+    } else {
+        // Normal case: nudge hi down
+        const nudge = 0.04 + 0.18 * (wEv ** 2);
+        const gap   = lHi - winnerRating;
+        if (gap > 0) ls.hi = Math.round(lHi - gap * nudge);
+    }
+
+    // Clamp and sanity
+    ws.lo = Math.max(1,       Math.min(ws.lo ?? wLo, ws.hi ?? eloMax));
+    ls.hi = Math.max(ls.lo ?? 1, Math.min(ls.hi ?? lHi, eloMax));
+
     anchorRatingToRange(ws);
     anchorRatingToRange(ls);
 }
@@ -1352,8 +1388,11 @@ function calibChoose(winnerId) {
 
     sess.probesDone++;
 
-    if (sess.probesDone >= sess.probesMax || sess.lo >= sess.hi - 50) {
-        renderCalibResult();
+    // No auto-finish on probe count — user decides when done via "Next book" or "Stop".
+    // Only auto-advance if no usable opponents remain for this book.
+    const nextOpponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
+    if (!nextOpponent) {
+        calibNextBook();
     } else {
         duelStartTime = Date.now();
         renderBattlePlay();
@@ -1389,8 +1428,10 @@ function calibDraw() {
     sess.results.push({ opponentId, opponentRating: pivot, targetWon: null, draw: true, lo: sess.lo, hi: sess.hi });
     sess.probesDone++;
 
-    if (sess.probesDone >= sess.probesMax || sess.lo >= sess.hi - 50) {
-        renderCalibResult();
+    // Same as calibChoose — never auto-finish, only move on if no opponents left
+    const nextOpponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
+    if (!nextOpponent) {
+        calibNextBook();
     } else {
         duelStartTime = Date.now();
         renderBattlePlay();
@@ -1400,10 +1441,11 @@ function calibDraw() {
 function calibNextBook() {
     const queue = battleSession?.remainingQueue || [];
     if (queue.length === 0) {
-        battleSession = null;
-        renderBattlePlay();
+        // No more books — show final summary
+        renderCalibResult();
         return;
     }
+    // Auto-advance to next book without showing a result screen
     battleSession = startCalibTarget(queue[0], queue.slice(1));
     duelStartTime = Date.now();
     renderBattlePlay();
@@ -1438,6 +1480,7 @@ function battleKeyHandler(e) {
         if (e.key === "ArrowLeft"  || e.key === "1") { e.preventDefault(); flashCard("left");  calibChoose(pair[0]); }
         if (e.key === "ArrowRight" || e.key === "2") { e.preventDefault(); flashCard("right"); calibChoose(pair[1]); }
         if (e.key === "ArrowDown"  || e.key === " ") { e.preventDefault(); calibDraw(); }
+        if (e.key === "n" || e.key === "N") { e.preventDefault(); calibNextBook(); }
         return;
     }
 
@@ -1809,7 +1852,7 @@ function renderCalibPlay(el) {
             <div class="calib-reason-row">
                 <span>🎯 Plausible range:</span>
                 <strong>${sess.lo.toLocaleString()} – ${sess.hi.toLocaleString()}</strong>
-                <span style="color:#666;">(±${Math.round(rangeSize/2).toLocaleString()} · probe ${sess.probesDone+1} of ${sess.probesMax})</span>
+                <span style="color:#666;">(±${Math.round(rangeSize/2).toLocaleString()} · ${sess.probesDone} probe${sess.probesDone!==1?'s':''} done)</span>
             </div>
             <div class="calib-reason-row">
                 <span>🔍 Why this opponent:</span>
@@ -1825,7 +1868,7 @@ function renderCalibPlay(el) {
 
     el.innerHTML = `
         <div class="battle-progress-bar-wrap">
-            <div class="battle-progress-label">🔬 Calibration &nbsp;·&nbsp; Probe ${sess.probesDone+1} of ${sess.probesMax} &nbsp;·&nbsp; ${sess.remainingQueue.length} more books queued</div>
+            <div class="battle-progress-label">🔬 Calibrating: <em>${target.title}</em> &nbsp;·&nbsp; ${sess.remainingQueue.length} book${sess.remainingQueue.length!==1?'s':''} queued</div>
             <div class="battle-progress-track"><div class="battle-progress-fill" style="width:${pct}%"></div></div>
         </div>
         ${reasoning}
@@ -1855,8 +1898,11 @@ function renderCalibPlay(el) {
                 </div>
             </div>
         </div>
-        <p class="battle-hint">Which do you prefer? ← → or 1 2 · ↓ or Space = same level</p>
-        <button class="battle-abandon-btn" onclick="calibStop()">✕ Stop calibration</button>`;
+        <p class="battle-hint">← → or 1 2 to pick &nbsp;·&nbsp; ↓ or Space = same level &nbsp;·&nbsp; N = next book</p>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:8px;">
+            ${sess.remainingQueue.length > 0 ? `<button class="battle-abandon-btn" style="background:#1a2a1a;border-color:#3a5a3a;color:#8bc88b;" onclick="calibNextBook()">→ Next book</button>` : ''}
+            <button class="battle-abandon-btn" onclick="calibStop()">✕ Stop</button>
+        </div>`;
 }
 
 function renderCalibResult() {
