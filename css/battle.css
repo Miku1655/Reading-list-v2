@@ -1041,3 +1041,21 @@
     border-color: #6666aa;
     color: #aaaaee;
 }
+
+/* ── Export view ── */
+.export-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    color: #ccc;
+    font-size: 0.9em;
+    cursor: pointer;
+    user-select: none;
+}
+.export-option input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: #5cb85c;
+    cursor: pointer;
+}
