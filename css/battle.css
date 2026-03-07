@@ -1015,3 +1015,29 @@
     margin-top: 8px;
     width: 100%;
 }
+
+/* ── Draw / Same level button ── */
+.calib-vs-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.calib-draw-btn {
+    padding: 7px 14px;
+    background: #1a1a2a;
+    border: 1px solid #3a3a5a;
+    color: #8888cc;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.82em;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.calib-draw-btn:hover {
+    background: #22223a;
+    border-color: #6666aa;
+    color: #aaaaee;
+}
