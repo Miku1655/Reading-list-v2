@@ -989,3 +989,29 @@
     color: #aaaaff;
     background: #1a1a2e;
 }
+
+/* ── Quick Calibration ── */
+.lobby-mode-qcalib.active { background: #1e2a1e; border-color: #f1c40f; color: #f1c40f; }
+
+.qcalib-info-line {
+    text-align: center;
+    font-size: 0.85em;
+    color: #888;
+    margin: 6px 0 14px;
+    padding: 6px 16px;
+    background: #131320;
+    border: 1px solid #1e1e3a;
+    border-radius: 6px;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.qcalib-card {
+    cursor: pointer;
+}
+
+.qcalib-range-bar {
+    margin-top: 8px;
+    width: 100%;
+}
