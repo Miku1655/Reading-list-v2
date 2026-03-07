@@ -166,27 +166,60 @@ function evidenceLabel(score) {
 }
 
 // Tighten bounds after a duel.
-// Winner's lo can rise (we now know it beats at least opponent.lo-range books).
-// Loser's hi can fall (we now know it lost to opponent).
+// After A beats B:
+//   A.lo rises to B.lo  — A is above whatever floor B had
+//   B.hi falls to A.lo  — B is below A's confirmed floor (conservative, not volatile rating)
+// Using A.lo (not A.rating) prevents B.hi from being pinned to a moving target
+// and collapsing the range to a point.
 function updateBounds(winnerId, loserId) {
     const ws = battleData.bookStats[winnerId];
     const ls = battleData.bookStats[loserId];
     if (!ws || !ls) return;
 
     const eloMax = getEloMax();
+    const wLo = ws.lo ?? 1;
+    const lLo = ls.lo ?? 1;
+    const lHi = ls.hi ?? eloMax;
 
-    // Winner's lower bound rises to loser's lower bound (winner beats at least that tier)
-    const newWinnerLo = ls.lo ?? 1;
-    ws.lo = Math.max(ws.lo ?? 1, newWinnerLo);
-    // Clamp lo below hi
-    ws.lo = Math.min(ws.lo, ws.hi ?? eloMax);
+    // Winner's floor rises to at least loser's floor
+    ws.lo = Math.max(wLo, lLo);
+    ws.lo = Math.min(ws.lo, ws.hi ?? eloMax); // keep lo ≤ hi
 
-    // Loser's upper bound falls to winner's current rating (loser is below the winner)
-    // Use winner's lo as a soft cap (conservative — winner might be higher)
-    const newLoserHi = Math.max(ws.lo, ws.rating ?? eloMax);
-    ls.hi = Math.min(ls.hi ?? eloMax, newLoserHi);
-    // Clamp hi above lo
-    ls.hi = Math.max(ls.hi, ls.lo ?? 1);
+    // Loser's ceiling falls to winner's confirmed floor (not volatile point estimate)
+    ls.hi = Math.min(lHi, ws.lo);
+    ls.hi = Math.max(ls.hi, ls.lo ?? 1);       // keep hi ≥ lo
+}
+
+// Apply a draw: both books declared equal — overlap their ranges
+// No Elo change. Both lo values rise to max(loA,loB), both hi values fall to min(hiA,hiB).
+function applyDrawBounds(idA, idB) {
+    const sa = battleData.bookStats[idA];
+    const sb = battleData.bookStats[idB];
+    if (!sa || !sb) return;
+
+    const eloMax = getEloMax();
+    const newLo  = Math.max(sa.lo ?? 1,    sb.lo ?? 1);
+    const newHi  = Math.min(sa.hi ?? eloMax, sb.hi ?? eloMax);
+
+    // Only apply if it actually tightens something
+    if (newLo < newHi) {
+        sa.lo = Math.max(sa.lo ?? 1,    newLo);
+        sa.hi = Math.min(sa.hi ?? eloMax, newHi);
+        sb.lo = Math.max(sb.lo ?? 1,    newLo);
+        sb.hi = Math.min(sb.hi ?? eloMax, newHi);
+        // Safety clamp
+        sa.lo = Math.min(sa.lo, sa.hi);
+        sb.lo = Math.min(sb.lo, sb.hi);
+    }
+    // Elo: apply a draw (both get 0 net movement — standard draw in logistic Elo)
+    const expA = eloExpected(sa.rating, sb.rating);
+    const K    = 64 * CALIB_K_MX;
+    sa.rating  = Math.round(sa.rating + K * (0.5 - expA));
+    sb.rating  = Math.round(sb.rating + K * (0.5 - (1 - expA)));
+    sa.rating  = Math.max(1, Math.min(eloMax, sa.rating));
+    sb.rating  = Math.max(1, Math.min(eloMax, sb.rating));
+    sa.interactions = (sa.interactions || 0) + 1;
+    sb.interactions = (sb.interactions || 0) + 1;
 }
 
 // Keep these for tier tracking (used in pool sampling)
@@ -256,9 +289,9 @@ function ensureBookStat(id) {
     const eloMax = getEloMax();
     if (!battleData.bookStats[id]) {
         battleData.bookStats[id] = {
-            rating:           getEloMidpoint(),  // point estimate starts at midpoint
-            lo:               1,                 // but range is fully open
-            hi:               eloMax,            // — sorts to bottom until duels narrow it
+            rating:           Math.round(eloMax * 0.25), // start low — books earn upward, not drift from midpoint
+            lo:               1,
+            hi:               eloMax,
             wins:             0,
             losses:           0,
             appearances:      0,
@@ -271,7 +304,7 @@ function ensureBookStat(id) {
         };
     }
     const s = battleData.bookStats[id];
-    if (s.rating          === undefined) s.rating          = getEloMidpoint();
+    if (s.rating          === undefined) s.rating          = Math.round(eloMax * 0.25);
     if (s.lo              === undefined) { s.lo = 1; s.hi = eloMax; }
     if (s.hi              === undefined) s.hi              = eloMax;
     if (s.interactions    === undefined) s.interactions    = (s.wins || 0) + (s.losses || 0);
@@ -1034,7 +1067,38 @@ function qcalibChoose(winnerId) {
     renderBattlePlay();
 }
 
-function qcalibFinish() {
+function qcalibDraw() {
+    if (!battleSession || battleSession.mode !== "quick-calib") return;
+    const sess = battleSession;
+    const [idA, idB] = sess.currentPair;
+
+    markSeen(idA); markSeen(idB);
+    applyDrawBounds(idA, idB);
+    saveBattleData();
+
+    const sA = ensureBookStat(idA), sB = ensureBookStat(idB);
+    sess.results.push({
+        winner: null, loser: null, draw: true,
+        idA, idB,
+        ratingAAfter: sA.rating, ratingBAfter: sB.rating
+    });
+    sess.roundsDone++;
+
+    const pairKey = [idA, idB].sort().join(",");
+    sess.recentPairs.set(pairKey, sess.roundsDone);
+    for (const [k, r] of sess.recentPairs) {
+        if (sess.roundsDone - r >= QCALIB_COOLDOWN) sess.recentPairs.delete(k);
+    }
+
+    const poolBooks = getBattlePool().filter(b => sess.pool.includes(b.importOrder));
+    const cooledSet = new Set(sess.recentPairs.keys());
+    const nextPair  = pickQCalibPair(poolBooks, cooledSet);
+
+    if (!nextPair) { qcalibFinish(); return; }
+    sess.currentPair = nextPair;
+    duelStartTime    = Date.now();
+    renderBattlePlay();
+}
     const sess = battleSession;
     const el   = document.getElementById("battlePlayView");
     if (!el) return;
@@ -1200,7 +1264,42 @@ function calibChoose(winnerId) {
     }
 }
 
-function calibNextBook() {
+function calibDraw() {
+    if (!battleSession || battleSession.mode !== "calibration") return;
+    const sess     = battleSession;
+    const targetId = sess.targetId;
+    const opponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
+    if (!opponent) { calibNextBook(); return; }
+    const opponentId = opponent.importOrder;
+
+    sess.usedOpponents.add(opponentId);
+    markSeen(targetId); markSeen(opponentId);
+
+    applyDrawBounds(targetId, opponentId);
+
+    // For bisection: draw means target sits at opponent's rating — narrow both sides
+    const pivot = ensureBookStat(opponentId).rating;
+    const margin = Math.round((sess.hi - sess.lo) * 0.2); // keep small band around pivot
+    sess.lo = Math.max(sess.lo, pivot - margin);
+    sess.hi = Math.min(sess.hi, pivot + margin);
+
+    // Write back
+    const tStat = ensureBookStat(targetId);
+    tStat.lo = Math.max(tStat.lo ?? 1, sess.lo);
+    tStat.hi = Math.min(tStat.hi ?? getEloMax(), sess.hi);
+    tStat.lo = Math.min(tStat.lo, tStat.hi);
+    saveBattleData();
+
+    sess.results.push({ opponentId, opponentRating: pivot, targetWon: null, draw: true, lo: sess.lo, hi: sess.hi });
+    sess.probesDone++;
+
+    if (sess.probesDone >= sess.probesMax || sess.lo >= sess.hi - 50) {
+        renderCalibResult();
+    } else {
+        duelStartTime = Date.now();
+        renderBattlePlay();
+    }
+}
     const queue = battleSession?.remainingQueue || [];
     if (queue.length === 0) {
         // All done
@@ -1241,6 +1340,7 @@ function battleKeyHandler(e) {
         if (!pair) return;
         if (e.key === "ArrowLeft"  || e.key === "1") { e.preventDefault(); flashCard("left");  calibChoose(pair[0]); }
         if (e.key === "ArrowRight" || e.key === "2") { e.preventDefault(); flashCard("right"); calibChoose(pair[1]); }
+        if (e.key === "ArrowDown"  || e.key === " ") { e.preventDefault(); calibDraw(); }
         return;
     }
 
@@ -1249,6 +1349,7 @@ function battleKeyHandler(e) {
         if (!pair) return;
         if (e.key === "ArrowLeft"  || e.key === "1") { e.preventDefault(); flashCard("left");  qcalibChoose(pair[0]); }
         if (e.key === "ArrowRight" || e.key === "2") { e.preventDefault(); flashCard("right"); qcalibChoose(pair[1]); }
+        if (e.key === "ArrowDown"  || e.key === " ") { e.preventDefault(); qcalibDraw(); }
         return;
     }
 
@@ -1641,7 +1742,12 @@ function renderCalibPlay(el) {
                     <div class="calib-target-badge">🔬 Target</div>
                 </div>
             </div>
-            <div class="battle-vs">VS</div>
+            <div class="calib-vs-col">
+                <div class="battle-vs">VS</div>
+                <button class="calib-draw-btn" onclick="calibDraw()" title="About the same level [↓ or Space]">
+                    ↕ Same level
+                </button>
+            </div>
             <div class="battle-card" onclick="calibChoose(${opponent.importOrder})">
                 ${oCover}
                 <div class="battle-card-info">
@@ -1652,7 +1758,7 @@ function renderCalibPlay(el) {
                 </div>
             </div>
         </div>
-        <p class="battle-hint">Which do you prefer? Use ← → or 1 2 keys.</p>
+        <p class="battle-hint">Which do you prefer? ← → or 1 2 · ↓ or Space = same level</p>
         <button class="battle-abandon-btn" onclick="calibStop()">✕ Stop calibration</button>`;
 }
 
@@ -1671,10 +1777,12 @@ function renderCalibResult() {
     let probeRows = "";
     sess.results.forEach((r, i) => {
         const opp = getBookById(r.opponentId);
+        const resultColor = r.draw ? '#888' : (r.targetWon ? '#5cb85c' : '#c0392b');
+        const resultText  = r.draw ? "Draw ≈" : (r.targetWon ? "Won ✓" : "Lost ✗");
         probeRows += `<tr>
             <td>${i+1}</td>
             <td>${opp ? opp.title : "?"}</td>
-            <td style="color:${r.targetWon ? '#5cb85c' : '#c0392b'}">${r.targetWon ? "Won ✓" : "Lost ✗"}</td>
+            <td style="color:${resultColor}">${resultText}</td>
             <td style="color:#888;">${r.lo.toLocaleString()}–${r.hi.toLocaleString()}</td>
         </tr>`;
     });
@@ -1780,10 +1888,15 @@ function renderQuickCalibPlay(el) {
         <p class="qcalib-info-line">${infoLine}</p>
         <div class="battle-arena">
             ${cardHtml(bookA, idA, sA)}
-            <div class="battle-vs">VS</div>
+            <div class="calib-vs-col">
+                <div class="battle-vs">VS</div>
+                <button class="calib-draw-btn" onclick="qcalibDraw()" title="About the same level [↓ or Space]">
+                    ↕ Same level
+                </button>
+            </div>
             ${cardHtml(bookB, idB, sB)}
         </div>
-        <p class="battle-hint">Tap a book or use ← → / 1 2 keys. Stop any time.</p>
+        <p class="battle-hint">Tap a book or ← → / 1 2 · ↓ or Space = same level · Stop any time.</p>
         <button class="battle-abandon-btn" onclick="qcalibFinish()">✓ Stop &amp; save</button>`;
 }
 
