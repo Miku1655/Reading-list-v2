@@ -877,9 +877,195 @@ function finishComplexSession() {
 }
 
 // ============================================================
-//  CALIBRATION MODE
+//  QUICK CALIBRATION MODE
 //
-//  Bisection on the book's existing [lo, hi] bounds.
+//  Rapid-fire "would you rather" where every pair is chosen to
+//  maximise information gain for both books simultaneously.
+//
+//  Pair scoring:
+//    overlap    = max(0, min(A.hi,B.hi) - max(A.lo,B.lo))
+//    avgSpread  = (A.hi-A.lo + B.hi-B.lo) / 2
+//    ratingGap  = |A.rating - B.rating|
+//    score      = overlap × avgSpread / (1 + ratingGap)
+//
+//  After each duel bounds update for both books:
+//    winner.lo = max(winner.lo, loser.lo)    — winner is above loser's floor
+//    loser.hi  = min(loser.hi,  winner.rating) — loser is below winner
+//
+//  Real Elo (1.5× K) also applied — duels count for rankings.
+//  Recently-duelled pairs are cooled down for QCALIB_COOLDOWN rounds
+//  to prevent the same pair reappearing immediately.
+//  Non-transitivity (A>B>C>A) is handled naturally by bounds + logistic Elo.
+// ============================================================
+
+const QCALIB_K_MX      = 1.5;
+const QCALIB_COOLDOWN  = 4;   // rounds before a pair can repeat
+
+function scoreQCalibPair(idA, idB) {
+    const sa = ensureBookStat(idA);
+    const sb = ensureBookStat(idB);
+    const loA = sa.lo ?? 1, hiA = sa.hi ?? getEloMax();
+    const loB = sb.lo ?? 1, hiB = sb.hi ?? getEloMax();
+    const overlap   = Math.max(0, Math.min(hiA, hiB) - Math.max(loA, loB));
+    const avgSpread = ((hiA - loA) + (hiB - loB)) / 2;
+    const ratingGap = Math.abs(sa.rating - sb.rating);
+    return (overlap * avgSpread) / (1 + ratingGap);
+}
+
+function pickQCalibPair(pool, recentPairs) {
+    // Build candidate pairs sorted by score descending
+    // Only consider books with at least some overlap potential (hi > 1)
+    const eligible = pool.filter(b => {
+        const s = battleData.bookStats[b.importOrder];
+        return !s || (s.hi ?? getEloMax()) > (s.lo ?? 1) + 50; // has meaningful spread
+    });
+    if (eligible.length < 2) return pool.length >= 2 ? [pool[0].importOrder, pool[1].importOrder] : null;
+
+    let bestScore = -1, bestA = null, bestB = null;
+    // Sample top candidates to avoid O(n²) on large libraries
+    // Sort by spread descending, check top 30
+    const candidates = eligible
+        .map(b => {
+            const s = battleData.bookStats[b.importOrder];
+            return { b, spread: (s ? (s.hi ?? getEloMax()) - (s.lo ?? 1) : getEloMax()) };
+        })
+        .sort((a, b) => b.spread - a.spread)
+        .slice(0, 30)
+        .map(x => x.b);
+
+    for (let i = 0; i < candidates.length; i++) {
+        for (let j = i + 1; j < candidates.length; j++) {
+            const idA = candidates[i].importOrder;
+            const idB = candidates[j].importOrder;
+            const pairKey = [idA, idB].sort().join(",");
+            if (recentPairs.has(pairKey)) continue; // cooled down
+            const score = scoreQCalibPair(idA, idB);
+            if (score > bestScore) {
+                bestScore = score;
+                bestA = idA; bestB = idB;
+            }
+        }
+    }
+    if (!bestA) {
+        // All top pairs on cooldown — just pick highest-spread uncooled pair
+        for (let i = 0; i < eligible.length && !bestA; i++) {
+            for (let j = i + 1; j < eligible.length && !bestA; j++) {
+                const pairKey = [eligible[i].importOrder, eligible[j].importOrder].sort().join(",");
+                if (!recentPairs.has(pairKey)) {
+                    bestA = eligible[i].importOrder;
+                    bestB = eligible[j].importOrder;
+                }
+            }
+        }
+    }
+    return bestA ? [bestA, bestB] : null;
+}
+
+function startQuickCalib() {
+    const pool = getBattlePool();
+    if (pool.length < 2) { alert("Need at least 2 eligible books."); return; }
+    applyDecay();
+    pool.forEach(b => markSeen(b.importOrder));
+    saveBattleData();
+
+    const firstPair = pickQCalibPair(pool, new Set());
+    if (!firstPair) { alert("Not enough pairs to calibrate."); return; }
+
+    battleSession = {
+        mode:        "quick-calib",
+        pool:        pool.map(b => b.importOrder),
+        currentPair: firstPair,
+        roundsDone:  0,
+        recentPairs: new Map(),   // pairKey → roundDone (for cooldown)
+        results:     [],
+        startedAt:   Date.now()
+    };
+    duelStartTime = Date.now();
+    switchBattleView("play");
+    renderBattlePlay();
+}
+
+function qcalibChoose(winnerId) {
+    if (!battleSession || battleSession.mode !== "quick-calib") return;
+    const now      = Date.now();
+    const duration = duelStartTime ? now - duelStartTime : null;
+    const sess     = battleSession;
+    const [idA, idB] = sess.currentPair;
+    const loserId  = winnerId === idA ? idB : idA;
+
+    // Apply real Elo (counts for rankings)
+    markSeen(winnerId); markSeen(loserId);
+    applyElo(winnerId, loserId, sess.roundsDone + 1, sess.roundsDone + 1, QCALIB_K_MX);
+    saveBattleData();
+
+    // Record result
+    const wStat = ensureBookStat(winnerId);
+    const lStat = ensureBookStat(loserId);
+    sess.results.push({
+        winner: winnerId, loser: loserId,
+        winnerRatingAfter: wStat.rating, loserRatingAfter: lStat.rating,
+        winnerLoAfter: wStat.lo, winnerHiAfter: wStat.hi,
+        loserLoAfter:  lStat.lo, loserHiAfter:  lStat.hi,
+        durationMs: duration
+    });
+
+    sess.roundsDone++;
+
+    // Add pair to cooldown map
+    const pairKey = [idA, idB].sort().join(",");
+    sess.recentPairs.set(pairKey, sess.roundsDone);
+    // Expire old cooldowns
+    for (const [k, r] of sess.recentPairs) {
+        if (sess.roundsDone - r >= QCALIB_COOLDOWN) sess.recentPairs.delete(k);
+    }
+
+    // Pick next pair
+    const poolBooks = getBattlePool().filter(b => sess.pool.includes(b.importOrder));
+    const cooledSet = new Set(sess.recentPairs.keys());
+    const nextPair  = pickQCalibPair(poolBooks, cooledSet);
+
+    if (!nextPair) {
+        // No more useful pairs — session complete
+        qcalibFinish();
+        return;
+    }
+    sess.currentPair = nextPair;
+    duelStartTime    = Date.now();
+    renderBattlePlay();
+}
+
+function qcalibFinish() {
+    const sess = battleSession;
+    const el   = document.getElementById("battlePlayView");
+    if (!el) return;
+
+    const totalRounds = sess.roundsDone;
+    const totalMs     = sess.results.reduce((s, r) => s + (r.durationMs || 0), 0);
+    const avgMs       = totalRounds > 0 ? Math.round(totalMs / totalRounds) : 0;
+
+    // Count how many books had their range narrowed
+    const narrowed = new Set([
+        ...sess.results.map(r => r.winner),
+        ...sess.results.map(r => r.loser)
+    ]).size;
+
+    el.innerHTML = `
+        <div class="battle-winner-screen">
+            <div class="battle-winner-crown">⚡</div>
+            <h2>Quick Calibration Done</h2>
+            <div class="battle-session-summary">
+                <div class="battle-summary-row"><span>Duels played</span><strong>${totalRounds}</strong></div>
+                <div class="battle-summary-row"><span>Books updated</span><strong>${narrowed}</strong></div>
+                <div class="battle-summary-row"><span>Avg decision</span><strong>${fmtMs(avgMs)}</strong></div>
+            </div>
+            <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;flex-wrap:wrap;">
+                <button class="battle-start-btn" onclick="startQuickCalib()">⚡ Run Again</button>
+                <button onclick="switchBattleView('rankings')" style="padding:10px 24px;">🏆 Rankings</button>
+                <button onclick="calibStop()" style="padding:10px 24px;">✓ Done</button>
+            </div>
+        </div>`;
+    battleSession = null;
+}
 //  Each probe picks the opponent whose rating is closest to
 //  (lo+hi)/2, halving the range on each outcome.
 //  usedOpponents prevents the same duel appearing twice.
@@ -1058,6 +1244,14 @@ function battleKeyHandler(e) {
         return;
     }
 
+    if (battleSession.mode === "quick-calib") {
+        const pair = battleSession.currentPair;
+        if (!pair) return;
+        if (e.key === "ArrowLeft"  || e.key === "1") { e.preventDefault(); flashCard("left");  qcalibChoose(pair[0]); }
+        if (e.key === "ArrowRight" || e.key === "2") { e.preventDefault(); flashCard("right"); qcalibChoose(pair[1]); }
+        return;
+    }
+
     if (battleSession.mode === "complex") {
         const slots = battleSession.slots;
         if (e.key === " " || e.key === "Spacebar") { e.preventDefault(); flashComplexSlot("reject"); complexChoose(-1); return; }
@@ -1107,16 +1301,15 @@ document.addEventListener("keydown", battleKeyHandler);
 //  RANKING
 // ============================================================
 function getRankedBooks() {
-    const eloMax = getEloMax();
     return Object.entries(battleData.bookStats)
         .map(([id, stat]) => ({ id: Number(id), stat }))
         .filter(e => e.stat !== null && e.stat !== undefined && getBookById(e.id) !== null)
         .sort((a, b) => {
-            // Primary sort: lo bound descending — uncertain books sink
-            const loA = a.stat.lo ?? 1;
-            const loB = b.stat.lo ?? 1;
-            if (loB !== loA) return loB - loA;
-            // Tiebreak: point estimate rating
+            const aPlayed = (a.stat.interactions || 0) > 0;
+            const bPlayed = (b.stat.interactions || 0) > 0;
+            // Unplayed books always sink below played books
+            if (aPlayed !== bPlayed) return aPlayed ? -1 : 1;
+            // Both played or both unplayed: sort by point-estimate rating
             return b.stat.rating - a.stat.rating;
         });
 }
@@ -1167,6 +1360,7 @@ function renderBattlePlay() {
     if (battleSession?.mode === "complex-setup")  { renderComplexSetup(el);  return; }
     if (battleSession?.mode === "complex")         { renderComplexPlay(el);   return; }
     if (battleSession?.mode === "calibration")     { renderCalibPlay(el);     return; }
+    if (battleSession?.mode === "quick-calib")     { renderQuickCalibPlay(el); return; }
 
     if (!battleSession) { renderLobby(el); return; }
 
@@ -1232,6 +1426,12 @@ function renderLobby(el) {
                     <span class="lobby-mode-emoji">🔬</span>
                     <span class="lobby-mode-label">Calibrate</span>
                     <span class="lobby-mode-size">Low-evidence</span>
+                </button>
+                <button class="lobby-mode-btn lobby-mode-qcalib ${battleSession?.mode === 'quick-calib' ? 'active' : ''}"
+                        onclick="startQuickCalib()">
+                    <span class="lobby-mode-emoji">⚡</span>
+                    <span class="lobby-mode-label">Quick Calib</span>
+                    <span class="lobby-mode-size">Smart pairs</span>
                 </button>
             </div>
 
@@ -1513,6 +1713,78 @@ function renderBookCard(book, id) {
     const cover = book.coverUrl ? `<img src="${book.coverUrl}" class="battle-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder">📖</div>`;
     const stars = book.rating > 0 ? `<div class="battle-stars">${"★".repeat(book.rating)}${"☆".repeat(5-book.rating)}</div>` : "";
     return `<div class="battle-card" onclick="chooseSide(${id})">${cover}<div class="battle-card-info"><div class="battle-card-title">${book.title}</div><div class="battle-card-author">${book.author||""}</div>${stars}</div></div>`;
+}
+
+// ── Quick Calibration play ──
+function renderQuickCalibPlay(el) {
+    const sess    = battleSession;
+    const [idA, idB] = sess.currentPair;
+    const bookA   = getBookById(idA);
+    const bookB   = getBookById(idB);
+    if (!bookA || !bookB) { qcalibFinish(); return; }
+
+    const sA = ensureBookStat(idA);
+    const sB = ensureBookStat(idB);
+    const eloMax = getEloMax();
+
+    // Show range indicators on each card
+    function cardHtml(book, id, stat) {
+        const cover  = book.coverUrl ? `<img src="${book.coverUrl}" class="battle-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder">📖</div>`;
+        const stars  = book.rating > 0 ? `<div class="battle-stars">${"★".repeat(book.rating)}${"☆".repeat(5-book.rating)}</div>` : "";
+        const lo     = stat.lo ?? 1;
+        const hi     = stat.hi ?? eloMax;
+        const ev     = getEvidenceScore(stat);
+        const evInfo = evidenceLabel(ev);
+        const loPct  = Math.round((lo / eloMax) * 100);
+        const hiPct  = Math.round((hi / eloMax) * 100);
+        const rPct   = Math.round((stat.rating / eloMax) * 100);
+        const rangeBar = `
+            <div class="qcalib-range-bar" title="${lo.toLocaleString()}–${hi.toLocaleString()}">
+                <div class="range-bar-track" style="height:5px;">
+                    <div class="range-bar-fill" style="left:${loPct}%;width:${hiPct-loPct}%"></div>
+                    <div class="range-bar-point" style="left:${rPct}%"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.68em;color:#555;margin-top:2px;">
+                    <span>${lo.toLocaleString()}</span>
+                    <span style="color:${evInfo.color};font-size:0.9em;">${evInfo.label}</span>
+                    <span>${hi.toLocaleString()}</span>
+                </div>
+            </div>`;
+        return `
+            <div class="battle-card qcalib-card" onclick="qcalibChoose(${id})">
+                ${cover}
+                <div class="battle-card-info">
+                    <div class="battle-card-title">${book.title}</div>
+                    <div class="battle-card-author">${book.author||""}</div>
+                    ${stars}
+                    ${rangeBar}
+                </div>
+            </div>`;
+    }
+
+    // Show what this duel will resolve
+    const loAB = Math.max(sA.lo ?? 1,    sB.lo ?? 1);
+    const hiAB = Math.min(sA.hi ?? eloMax, sB.hi ?? eloMax);
+    const overlap = Math.max(0, hiAB - loAB);
+    const infoLine = overlap > 50
+        ? `Shared range: <strong>${loAB.toLocaleString()}–${hiAB.toLocaleString()}</strong> — this duel will resolve <strong>±${Math.round(overlap/2).toLocaleString()}</strong> for both`
+        : `Comparing nearby books to sharpen their bounds`;
+
+    el.innerHTML = `
+        <div class="battle-progress-bar-wrap">
+            <div class="battle-progress-label">⚡ Quick Calibration &nbsp;·&nbsp; ${sess.roundsDone} duels played &nbsp;·&nbsp; ← → or 1 2</div>
+            <div class="battle-progress-track" style="background:#1a1a2a;">
+                <div class="battle-progress-fill" style="width:100%;background:linear-gradient(90deg,#2a2a6a,#4a4aaa);opacity:0.4;"></div>
+            </div>
+        </div>
+        <p class="qcalib-info-line">${infoLine}</p>
+        <div class="battle-arena">
+            ${cardHtml(bookA, idA, sA)}
+            <div class="battle-vs">VS</div>
+            ${cardHtml(bookB, idB, sB)}
+        </div>
+        <p class="battle-hint">Tap a book or use ← → / 1 2 keys. Stop any time.</p>
+        <button class="battle-abandon-btn" onclick="qcalibFinish()">✓ Stop &amp; save</button>`;
 }
 
 function renderBattleWinner(winnerId, session) {
