@@ -129,49 +129,67 @@ function getEloMax()   { return getEloMidpoint() * 2; }
 function getEloStart() { return Math.round(getEloMidpoint() * 0.6); } // 30% of scale
 
 // ============================================================
-//  EVIDENCE SYSTEM
+//  BOUNDS SYSTEM  (lo / hi uncertainty range)
 //
-//  evidence (0→1) = weighted combination of:
-//    breadth     : distinct Elo tiers of opponents faced (0→1)
-//    volume      : interaction count, saturates at 20 (0→1)
-//    consistency : 1 - normalised rating variance over last 10 events
+//  Every book tracks a plausible range [lo, hi] alongside its
+//  point-estimate `rating`. The range only ever tightens:
 //
-//  Stored on each stat:
-//    interactions     : total Elo-affecting events
-//    tiersEncountered : array of tier ids (0-3) seen as opponents
-//    ratingHistory    : last 10 ratings after each interaction
-//    lastSeenSession  : session index when last seen
-//    lastSeenAt       : timestamp when last seen
-//    decayWeight      : accumulated weighted-session exposure for decay
+//    Winner beats opponent at R:  lo = max(lo, opponent.lo)
+//    Loser loses to opponent at R: hi = min(hi, opponent.hi)  (capped softly)
+//
+//  Fresh books: lo=1, hi=eloMax  (we know nothing)
+//  Sort key for rankings = lo  (uncertain books sink to bottom)
+//  Display: show `rating` as point estimate, (lo–hi) as range band
+//
+//  Evidence = 1 - (hi - lo) / eloMax
+//    → 0% when range is fully open, ~100% when range is tight
 // ============================================================
+
+function getBoundsSpread(stat) {
+    const lo = stat.lo ?? 1;
+    const hi = stat.hi ?? getEloMax();
+    return hi - lo;
+}
+
+// Evidence purely from range tightness — semantically correct
 function getEvidenceScore(stat) {
     if (!stat) return 0;
-    const breadthScore    = Math.min(1, ((stat.tiersEncountered || []).length) / 4);
-    const volumeScore     = Math.min(1, (stat.interactions || 0) / 20);
-    const hist            = stat.ratingHistory || [];
-    let consistencyScore  = 0.5; // default when no history
-    if (hist.length >= 3) {
-        const mean = hist.reduce((a, b) => a + b, 0) / hist.length;
-        const variance = hist.reduce((a, b) => a + (b - mean) ** 2, 0) / hist.length;
-        const normVar  = Math.sqrt(variance) / getEloMax();
-        consistencyScore = Math.max(0, 1 - normVar * 4);
-    }
-    return (breadthScore * 0.4) + (volumeScore * 0.35) + (consistencyScore * 0.25);
+    const spread = getBoundsSpread(stat);
+    return Math.max(0, 1 - spread / getEloMax());
 }
 
 function evidenceLabel(score) {
-    if (score < 0.2)  return { label: "Uncertain",   color: "#c0392b" };
-    if (score < 0.45) return { label: "Developing",  color: "#e67e22" };
-    if (score < 0.7)  return { label: "Established", color: "#f1c40f" };
+    if (score < 0.15) return { label: "Uncertain",   color: "#c0392b" };
+    if (score < 0.40) return { label: "Developing",  color: "#e67e22" };
+    if (score < 0.70) return { label: "Established", color: "#f1c40f" };
     return                   { label: "Confident",   color: "#2ecc71" };
 }
 
-function recordRatingHistory(stat) {
-    if (!stat.ratingHistory) stat.ratingHistory = [];
-    stat.ratingHistory.push(stat.rating);
-    if (stat.ratingHistory.length > 10) stat.ratingHistory.shift();
+// Tighten bounds after a duel.
+// Winner's lo can rise (we now know it beats at least opponent.lo-range books).
+// Loser's hi can fall (we now know it lost to opponent).
+function updateBounds(winnerId, loserId) {
+    const ws = battleData.bookStats[winnerId];
+    const ls = battleData.bookStats[loserId];
+    if (!ws || !ls) return;
+
+    const eloMax = getEloMax();
+
+    // Winner's lower bound rises to loser's lower bound (winner beats at least that tier)
+    const newWinnerLo = ls.lo ?? 1;
+    ws.lo = Math.max(ws.lo ?? 1, newWinnerLo);
+    // Clamp lo below hi
+    ws.lo = Math.min(ws.lo, ws.hi ?? eloMax);
+
+    // Loser's upper bound falls to winner's current rating (loser is below the winner)
+    // Use winner's lo as a soft cap (conservative — winner might be higher)
+    const newLoserHi = Math.max(ws.lo, ws.rating ?? eloMax);
+    ls.hi = Math.min(ls.hi ?? eloMax, newLoserHi);
+    // Clamp hi above lo
+    ls.hi = Math.max(ls.hi, ls.lo ?? 1);
 }
 
+// Keep these for tier tracking (used in pool sampling)
 function recordTierEncountered(stat, opponentId) {
     if (!stat.tiersEncountered) stat.tiersEncountered = [];
     const tier = getEloTier(ensureBookStat(opponentId).rating);
@@ -206,24 +224,41 @@ function getEloTier(rating, boundaries) {
 //  MIGRATION
 // ============================================================
 function migrateBookStats() {
-    const mid = getEloMidpoint();
+    const eloMax = getEloMax();
     let changed = false;
     Object.values(battleData.bookStats).forEach(stat => {
         if (!stat) return;
-        if (stat.rating          === undefined) { stat.rating          = mid;  changed = true; }
+        if (stat.rating          === undefined) { stat.rating          = getEloMidpoint(); changed = true; }
         if (stat.interactions    === undefined) { stat.interactions    = (stat.wins || 0) + (stat.losses || 0); changed = true; }
         if (stat.lastSeenSession === undefined) { stat.lastSeenSession = 0;    changed = true; }
         if (stat.decayWeight     === undefined) { stat.decayWeight     = 0;    changed = true; }
         if (stat.tiersEncountered=== undefined) { stat.tiersEncountered= [];   changed = true; }
-        if (stat.ratingHistory   === undefined) { stat.ratingHistory   = [];   changed = true; }
+        // Migrate to bounds system: existing books with interactions get a moderate range,
+        // fresh books (no interactions) get full open range so they sort to the bottom
+        if (stat.lo              === undefined) {
+            const n = stat.interactions || 0;
+            if (n === 0) {
+                stat.lo = 1;
+                stat.hi = eloMax;
+            } else {
+                // Estimate range from existing data — tighter for well-played books
+                const spread = Math.max(100, eloMax * Math.max(0.1, 0.9 - n * 0.04));
+                stat.lo = Math.max(1,       Math.round(stat.rating - spread / 2));
+                stat.hi = Math.min(eloMax,  Math.round(stat.rating + spread / 2));
+            }
+            changed = true;
+        }
     });
     if (changed) saveBattleData();
 }
 
 function ensureBookStat(id) {
+    const eloMax = getEloMax();
     if (!battleData.bookStats[id]) {
         battleData.bookStats[id] = {
-            rating:           getEloMidpoint(),  // start at neutral midpoint, not low
+            rating:           getEloMidpoint(),  // point estimate starts at midpoint
+            lo:               1,                 // but range is fully open
+            hi:               eloMax,            // — sorts to bottom until duels narrow it
             wins:             0,
             losses:           0,
             appearances:      0,
@@ -232,17 +267,17 @@ function ensureBookStat(id) {
             lastSeenSession:  battleData.sessions.length,
             lastSeenAt:       0,
             decayWeight:      0,
-            tiersEncountered: [],
-            ratingHistory:    []
+            tiersEncountered: []
         };
     }
     const s = battleData.bookStats[id];
     if (s.rating          === undefined) s.rating          = getEloMidpoint();
+    if (s.lo              === undefined) { s.lo = 1; s.hi = eloMax; }
+    if (s.hi              === undefined) s.hi              = eloMax;
     if (s.interactions    === undefined) s.interactions    = (s.wins || 0) + (s.losses || 0);
     if (s.lastSeenSession === undefined) s.lastSeenSession = 0;
     if (s.decayWeight     === undefined) s.decayWeight     = 0;
     if (s.tiersEncountered=== undefined) s.tiersEncountered= [];
-    if (s.ratingHistory   === undefined) s.ratingHistory   = [];
     return s;
 }
 
@@ -320,8 +355,8 @@ function applyElo(winnerId, loserId, roundIndex, totalRounds, kScale = 1.0, pool
     ws.interactions += 1;
     ls.interactions += 1;
 
-    recordRatingHistory(ws);
-    recordRatingHistory(ls);
+    // Tighten uncertainty bounds based on duel outcome
+    updateBounds(winnerId, loserId);
 }
 
 // Saves immediately — used in classic mode per-round
@@ -844,22 +879,16 @@ function finishComplexSession() {
 // ============================================================
 //  CALIBRATION MODE
 //
-//  Bisection algorithm: for each target book, pick opponents at
-//  the midpoint of a shrinking [lo, hi] range to locate its true Elo.
-//
-//  State per target:
-//    targetId   : importOrder of book being calibrated
-//    lo / hi    : current plausible range
-//    probesDone : number of bisection steps completed
-//    probesMax  : max steps before moving to next book (5)
-//    results    : [{opponentId, targetWon, ratingBefore}]
+//  Bisection on the book's existing [lo, hi] bounds.
+//  Each probe picks the opponent whose rating is closest to
+//  (lo+hi)/2, halving the range on each outcome.
+//  usedOpponents prevents the same duel appearing twice.
 // ============================================================
-const CALIB_PROBES_PER_BOOK = 5;
-const CALIB_K_MX = 1.5; // calibration duels are more informative
+const CALIB_PROBES_PER_BOOK = 6;
+const CALIB_K_MX = 1.5;
 
 function buildCalibQueue() {
     const pool = getBattlePool();
-    // Sort by evidence score ascending (lowest evidence first)
     return pool
         .map(b => {
             const stat = battleData.bookStats[b.importOrder];
@@ -870,13 +899,11 @@ function buildCalibQueue() {
 }
 
 function startCalibTarget(targetId, remainingQueue) {
-    const stat  = ensureBookStat(targetId);
+    const stat   = ensureBookStat(targetId);
     const eloMax = getEloMax();
-    // Plausible range starts wide for uncertain books, narrows with evidence
-    const evidenceW = getEvidenceScore(stat);
-    const halfRange = eloMax * Math.max(0.15, 0.5 - evidenceW * 0.35);
-    const lo = Math.max(1, Math.round(stat.rating - halfRange));
-    const hi = Math.min(eloMax, Math.round(stat.rating + halfRange));
+    // Use the book's actual uncertainty range as the bisection range
+    const lo = stat.lo ?? 1;
+    const hi = stat.hi ?? eloMax;
 
     return {
         mode:          "calibration",
@@ -885,20 +912,23 @@ function startCalibTarget(targetId, remainingQueue) {
         probesDone:    0,
         probesMax:     CALIB_PROBES_PER_BOOK,
         results:       [],
+        usedOpponents: new Set(),   // prevent duplicate duels
         remainingQueue,
         startedAt:     Date.now()
     };
 }
 
-function pickCalibOpponent(lo, hi, targetId) {
-    // Find book whose rating is closest to the midpoint of [lo, hi]
+function pickCalibOpponent(lo, hi, targetId, usedOpponents) {
     const mid  = Math.round((lo + hi) / 2);
-    const pool = getBattlePool().filter(b => b.importOrder !== targetId);
+    const pool = getBattlePool().filter(b =>
+        b.importOrder !== targetId &&
+        !(usedOpponents && usedOpponents.has(b.importOrder))
+    );
     if (pool.length === 0) return null;
     return pool
         .map(b => {
             const s = battleData.bookStats[b.importOrder];
-            const r = s ? s.rating : getEloStart();
+            const r = s ? s.rating : getEloMidpoint();
             return { b, dist: Math.abs(r - mid) };
         })
         .sort((a, b) => a.dist - b.dist)[0].b;
@@ -934,44 +964,49 @@ function calibChoose(winnerId) {
     const duration = duelStartTime ? now - duelStartTime : null;
     const sess     = battleSession;
     const targetId = sess.targetId;
-    const opponentId = winnerId === targetId
-        ? pickCalibOpponent(sess.lo, sess.hi, targetId)?.importOrder
-        : winnerId;
 
-    // Which one actually won?
+    // Resolve the current opponent from the rendered pair
+    const opponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
+    if (!opponent) { calibNextBook(); return; }
+    const opponentId = opponent.importOrder;
+
+    sess.usedOpponents.add(opponentId);
+
     const actualWinner = winnerId;
     const actualLoser  = actualWinner === targetId ? opponentId : targetId;
-    if (!actualLoser) { renderBattlePlay(); return; }
+    const targetWon    = actualWinner === targetId;
 
-    const targetWon = actualWinner === targetId;
-
-    // Record the result context
-    const oppStat = ensureBookStat(opponentId || actualLoser);
+    const oppStat = ensureBookStat(opponentId);
     sess.results.push({
-        opponentId: opponentId || actualLoser,
+        opponentId,
         opponentRating: oppStat.rating,
         targetWon,
         durationMs: duration,
         lo: sess.lo, hi: sess.hi
     });
 
-    // Apply Elo with high K (calibration is informative)
-    markSeen(targetId); markSeen(actualLoser);
+    // Apply Elo
+    markSeen(targetId); markSeen(opponentId);
     applyElo(actualWinner, actualLoser, sess.probesDone + 1, CALIB_PROBES_PER_BOOK, CALIB_K_MX);
     saveBattleData();
 
-    // Narrow the bisection range
-    const opponentRating = oppStat.rating;
+    // Narrow the bisection range using the opponent's rating as the pivot
+    const pivot = oppStat.rating;
     if (targetWon) {
-        sess.lo = opponentRating; // target is above opponent
+        sess.lo = Math.max(sess.lo, pivot);  // target is above pivot
     } else {
-        sess.hi = opponentRating; // target is below opponent
+        sess.hi = Math.min(sess.hi, pivot);  // target is below pivot
     }
+    // Also write the narrowed range back to the stat so it persists
+    const tStat = ensureBookStat(targetId);
+    tStat.lo = Math.max(tStat.lo ?? 1, sess.lo);
+    tStat.hi = Math.min(tStat.hi ?? getEloMax(), sess.hi);
+    tStat.lo = Math.min(tStat.lo, tStat.hi); // safety clamp
+    saveBattleData();
 
     sess.probesDone++;
 
-    if (sess.probesDone >= sess.probesMax || sess.lo >= sess.hi - 10) {
-        // Done with this book — show result then proceed
+    if (sess.probesDone >= sess.probesMax || sess.lo >= sess.hi - 50) {
         renderCalibResult();
     } else {
         duelStartTime = Date.now();
@@ -1072,10 +1107,18 @@ document.addEventListener("keydown", battleKeyHandler);
 //  RANKING
 // ============================================================
 function getRankedBooks() {
+    const eloMax = getEloMax();
     return Object.entries(battleData.bookStats)
         .map(([id, stat]) => ({ id: Number(id), stat }))
         .filter(e => e.stat !== null && e.stat !== undefined && getBookById(e.id) !== null)
-        .sort((a, b) => b.stat.rating - a.stat.rating);
+        .sort((a, b) => {
+            // Primary sort: lo bound descending — uncertain books sink
+            const loA = a.stat.lo ?? 1;
+            const loB = b.stat.lo ?? 1;
+            if (loB !== loA) return loB - loA;
+            // Tiebreak: point estimate rating
+            return b.stat.rating - a.stat.rating;
+        });
 }
 
 // ============================================================
@@ -1336,7 +1379,7 @@ function renderCalibPlay(el) {
     const target   = getBookById(targetId);
     if (!target) { calibNextBook(); return; }
 
-    const opponent = pickCalibOpponent(sess.lo, sess.hi, targetId);
+    const opponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
     if (!opponent) { calibNextBook(); return; }
 
     // Store current pair for keyboard handler
@@ -1345,15 +1388,13 @@ function renderCalibPlay(el) {
     const stat       = ensureBookStat(targetId);
     const evidence   = getEvidenceScore(stat);
     const evInfo     = evidenceLabel(evidence);
-    const midProbe   = Math.round((sess.lo + sess.hi) / 2);
     const oppStat    = ensureBookStat(opponent.importOrder);
     const ranked     = getRankedBooks();
     const oppRank    = ranked.findIndex(e => e.id === opponent.importOrder) + 1;
     const targetRank = ranked.findIndex(e => e.id === targetId) + 1;
 
-    const pct      = Math.round((sess.probesDone / sess.probesMax) * 100);
-    const loFmt    = sess.lo.toLocaleString();
-    const hiFmt    = sess.hi.toLocaleString();
+    const pct   = Math.round((sess.probesDone / sess.probesMax) * 100);
+    const rangeSize = sess.hi - sess.lo;
 
     const tCover = target.coverUrl   ? `<img src="${target.coverUrl}"   class="battle-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder">📖</div>`;
     const oCover = opponent.coverUrl ? `<img src="${opponent.coverUrl}" class="battle-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder">📖</div>`;
@@ -1365,20 +1406,22 @@ function renderCalibPlay(el) {
             <div class="calib-reason-row">
                 <span>📍 Calibrating:</span>
                 <strong>${target.title}</strong>
+                ${targetRank > 0 ? `<span style="color:#666;">currently #${targetRank}</span>` : ""}
             </div>
             <div class="calib-reason-row">
                 <span>🎯 Plausible range:</span>
-                <strong>${loFmt} – ${hiFmt}</strong>
-                <span style="color:#666;">(probe ${sess.probesDone+1} of ${sess.probesMax})</span>
+                <strong>${sess.lo.toLocaleString()} – ${sess.hi.toLocaleString()}</strong>
+                <span style="color:#666;">(±${Math.round(rangeSize/2).toLocaleString()} · probe ${sess.probesDone+1} of ${sess.probesMax})</span>
             </div>
             <div class="calib-reason-row">
                 <span>🔍 Why this opponent:</span>
-                <span>Ranked ~#${oppRank || "?"} (rating ${oppStat.rating.toLocaleString()}) — near the midpoint of your current range. If you prefer <em>${target.title}</em>, its real rating is likely above ${oppStat.rating.toLocaleString()}. If you prefer <em>${opponent.title}</em>, it's likely below.</span>
+                <span>Rated ${oppStat.rating.toLocaleString()} (rank ~#${oppRank||"?"}) — near the midpoint of the current range.
+                Win → range becomes <em>${oppStat.rating.toLocaleString()}–${sess.hi.toLocaleString()}</em>.
+                Loss → range becomes <em>${sess.lo.toLocaleString()}–${oppStat.rating.toLocaleString()}</em>.</span>
             </div>
             <div class="calib-reason-row">
                 <span>📊 Evidence:</span>
                 <span style="color:${evInfo.color}">${evInfo.label} (${Math.round(evidence*100)}%)</span>
-                ${targetRank > 0 ? `<span style="color:#666;">· currently ranked #${targetRank}</span>` : ""}
             </div>
         </div>`;
 
@@ -1566,61 +1609,91 @@ function renderBattleRankings() {
         return;
     }
 
+    // Split into ranked (have lo > 1 or some wins) and unranked (fully open range, no wins)
+    const hasEvidence = limited.filter(e => e.stat.interactions > 0 || (e.stat.lo ?? 1) > 1);
+    const noEvidence  = limited.filter(e => e.stat.interactions === 0 && (e.stat.lo ?? 1) <= 1);
+
     let html = `
         <h2 style="margin-bottom:4px;">📖 BookDuel Rankings</h2>
-        <p style="color:#888;margin-bottom:20px;font-size:0.9em;">
-            Top ${Math.min(battleRankingLimit, ranked.length)} books &nbsp;·&nbsp;
-            Scale: 0–${eloMax.toLocaleString()} &nbsp;·&nbsp; Midpoint: ${eloMid.toLocaleString()}
+        <p style="color:#888;margin-bottom:16px;font-size:0.9em;">
+            ${ranked.length} books ranked &nbsp;·&nbsp; Scale 0–${eloMax.toLocaleString()} &nbsp;·&nbsp; Sorted by lower-bound confidence
         </p>
         <div class="battle-rankings-table">
             <div class="battle-rank-header">
-                <span>#</span><span>Book</span><span>Rating</span><span>Win%</span><span>Evidence</span><span>Sessions</span><span>🏆</span><span></span>
+                <span class="rh-num">#</span>
+                <span class="rh-book">Book</span>
+                <span class="rh-rating">Rating</span>
+                <span class="rh-range">Range</span>
+                <span class="rh-win">W%</span>
+                <span class="rh-ev">Evidence</span>
+                <span class="rh-calib"></span>
             </div>`;
 
-    limited.forEach((entry, i) => {
+    function renderRow(entry, i) {
         const book = getBookById(entry.id);
-        if (!book) return;
+        if (!book) return "";
         const s       = entry.stat;
         const played  = s.wins + s.losses;
-        const winPct  = played > 0 ? Math.round((s.wins / played) * 100) : 0;
+        const winPct  = played > 0 ? Math.round((s.wins / played) * 100) : null;
         const cover   = book.coverUrl ? `<img src="${book.coverUrl}" class="battle-rank-thumb" alt="" onerror="this.style.display='none'">` : `<div class="battle-rank-thumb-placeholder">📖</div>`;
-        const crown   = s.sessionWins > 0 ? "👑".repeat(Math.min(s.sessionWins, 5)) : "–";
         const undefeated = s.losses === 0 && s.wins > 0 ? `<span class="battle-badge badge-undefeated">Undefeated</span>` : "";
-        const veteran    = s.appearances >= 5           ? `<span class="battle-badge badge-veteran">Veteran</span>` : "";
-        const ratingPct  = Math.round((s.rating / eloMax) * 100);
-        const evidence   = getEvidenceScore(s);
-        const evInfo     = evidenceLabel(evidence);
-        const evPct      = Math.round(evidence * 100);
+        const lo      = s.lo ?? 1;
+        const hi      = s.hi ?? eloMax;
+        const spread  = hi - lo;
+        const ratingPct = Math.round((s.rating / eloMax) * 100);
+        const loPct     = Math.round((lo / eloMax) * 100);
+        const hiPct     = Math.round((hi / eloMax) * 100);
+        const evidence  = getEvidenceScore(s);
+        const evInfo    = evidenceLabel(evidence);
+        const evPct     = Math.round(evidence * 100);
 
-        html += `
+        const rangeBar = `
+            <div class="range-bar-wrap" title="Range: ${lo.toLocaleString()}–${hi.toLocaleString()}">
+                <div class="range-bar-track">
+                    <div class="range-bar-fill" style="left:${loPct}%;width:${hiPct-loPct}%"></div>
+                    <div class="range-bar-point" style="left:${ratingPct}%"></div>
+                </div>
+                <div class="range-bar-labels">
+                    <span>${lo.toLocaleString()}</span>
+                    <span>${hi.toLocaleString()}</span>
+                </div>
+            </div>`;
+
+        const rankLabel = i < 3 ? medals[i] : (i + 1);
+        return `
         <div class="battle-rank-row ${i < 3 ? 'top-three' : ''}">
-            <span class="battle-rank-num">${medals[i] || (i+1)}</span>
-            <span class="battle-rank-book">
+            <span class="rh-num battle-rank-num">${rankLabel}</span>
+            <span class="rh-book battle-rank-book">
                 ${cover}
                 <span>
                     <strong>${book.title}</strong>
                     <small style="color:#aaa;display:block;">${book.author||""}</small>
-                    <span>${undefeated}${veteran}</span>
+                    ${undefeated}
                 </span>
             </span>
-            <span class="battle-rank-pts">
-                <div class="battle-rating-cell">
-                    <span class="battle-rating-num">${s.rating.toLocaleString()}</span>
-                    <div class="battle-rating-bar-track"><div class="battle-rating-bar-fill" style="width:${ratingPct}%"></div></div>
-                </div>
+            <span class="rh-rating battle-rank-pts">
+                <span class="battle-rating-num">${s.rating.toLocaleString()}</span>
             </span>
-            <span>${winPct}%</span>
-            <span>
+            <span class="rh-range">${rangeBar}</span>
+            <span class="rh-win">${winPct !== null ? winPct + "%" : "–"}</span>
+            <span class="rh-ev">
                 <div class="evidence-cell">
                     <div class="evidence-bar-track"><div class="evidence-bar-fill" style="width:${evPct}%;background:${evInfo.color}"></div></div>
                     <span class="evidence-label" style="color:${evInfo.color}">${evInfo.label}</span>
                 </div>
             </span>
-            <span>${s.appearances}</span>
-            <span>${crown}</span>
-            <span><button class="rank-calib-btn" onclick="startCalibSingle(${entry.id})" title="Recalibrate this book">🔬</button></span>
+            <span class="rh-calib"><button class="rank-calib-btn" onclick="startCalibSingle(${entry.id})" title="Recalibrate">🔬</button></span>
         </div>`;
-    });
+    }
+
+    hasEvidence.forEach((entry, i) => { html += renderRow(entry, i); });
+
+    if (noEvidence.length > 0) {
+        html += `<div class="rank-unranked-divider">
+            <span>⬇ ${noEvidence.length} unplayed book${noEvidence.length!==1?"s":""} — range fully open, sorted to bottom</span>
+        </div>`;
+        noEvidence.forEach((entry, i) => { html += renderRow(entry, hasEvidence.length + i); });
+    }
 
     html += `</div>`;
     if (ranked.length > battleRankingLimit) {
