@@ -60,7 +60,8 @@ document.getElementById("saveCloudBtn").addEventListener("click", () => {
             minAuthorBooks: minAuthorBooks,
             showCoversTimeline: showCoversInTimeline,
             showYearGoalProgress: showYearGoalProgress,
-            hideToReadExceptOwnShelf: hideToReadExceptOwnShelf
+            hideToReadExceptOwnShelf: hideToReadExceptOwnShelf,
+            titleLangPref: localStorage.getItem(TITLE_LANG_KEY) || "original",
         }
     };
     userRef.set(dataToSave)
@@ -92,6 +93,12 @@ document.getElementById("loadCloudBtn").addEventListener("click", () => {
             document.getElementById("showYearGoalProgress").checked = showYearGoalProgress;
             hideToReadExceptOwnShelf = settings.hideToReadExceptOwnShelf ?? false;
             document.getElementById("hideToReadExceptOwn").checked = hideToReadExceptOwnShelf;
+            if (settings.titleLangPref !== undefined) {
+                   titleLangPref = settings.titleLangPref;
+                   localStorage.setItem(TITLE_LANG_KEY, titleLangPref);
+                   const _tlSel = document.getElementById("titleLangPref");
+                   if (_tlSel) _tlSel.value = titleLangPref;
+               }
             document.getElementById("profileNick").value = profile.nick || "";
             document.getElementById("profileBio").value = profile.bio || "";
             if (profile.picture) document.getElementById("profilePic").src = profile.picture;
@@ -267,6 +274,9 @@ document.getElementById("hideToReadExceptOwn").addEventListener("change", e => {
     hideToReadExceptOwnShelf = e.target.checked;
     localStorage.setItem(HIDE_TO_READ_KEY, JSON.stringify(hideToReadExceptOwnShelf));
     renderTable();
+});
+document.getElementById("titleLangPref")?.addEventListener("change", e => {
+    saveTitleLangPref(e.target.value);
 });
 // Profile
 document.getElementById("profilePic").addEventListener("click", () => document.getElementById("profilePicInput").click());
