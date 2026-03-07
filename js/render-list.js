@@ -159,7 +159,7 @@ function renderTable() {
         const emojisTooltip = bookEmojis.map(e => `${e.emoji}${e.page ? ` (p.${e.page})` : ""}`).join(", ");
         const emojisHtml = bookEmojis.length ? `<span style="font-size:1.4em; margin-left:8px;" title="${emojisTooltip}">${emojisDisplay}</span>` : "";
         tr.innerHTML = `
-            <td>${showNumbers ? (idx + 1) + ". " : ""}${book.title || ""}${book.notes ? ' <span class="noteIcon" style="cursor:help;color:#888;">📝</span>' : ''}${emojisHtml}</td>
+            <td>${showNumbers ? (idx + 1) + ". " : ""}${getDisplayTitle(book)}${book.notes ? ' <span class="noteIcon" style="cursor:help;color:#888;">📝</span>' : ''}${emojisHtml}</td>
             <td>${book.rating || "-"}</td>
             <td>${book.author || ""}</td>
             <td>${coverHtml}</td>
