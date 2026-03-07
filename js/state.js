@@ -103,6 +103,7 @@ books.forEach(b => {
     showYearGoalProgressCheckbox.checked = showYearGoalProgress;
     hideToReadExceptOwnShelf = JSON.parse(localStorage.getItem(HIDE_TO_READ_KEY) || "false");
     document.getElementById("hideToReadExceptOwn").checked = hideToReadExceptOwnShelf;
+    loadTitleLangPref();
     // Constellation settings
 const savedSettings = localStorage.getItem('settings');
 if (savedSettings) {
