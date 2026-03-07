@@ -1099,19 +1099,21 @@ function qcalibDraw() {
     duelStartTime    = Date.now();
     renderBattlePlay();
 }
+
+function qcalibFinish() {
     const sess = battleSession;
     const el   = document.getElementById("battlePlayView");
     if (!el) return;
 
-    const totalRounds = sess.roundsDone;
-    const totalMs     = sess.results.reduce((s, r) => s + (r.durationMs || 0), 0);
+    const totalRounds = sess ? sess.roundsDone : 0;
+    const totalMs     = sess ? sess.results.reduce((s, r) => s + (r.durationMs || 0), 0) : 0;
     const avgMs       = totalRounds > 0 ? Math.round(totalMs / totalRounds) : 0;
 
-    // Count how many books had their range narrowed
-    const narrowed = new Set([
-        ...sess.results.map(r => r.winner),
-        ...sess.results.map(r => r.loser)
-    ]).size;
+    const narrowed = sess ? new Set([
+        ...sess.results.map(r => r.winner).filter(Boolean),
+        ...sess.results.map(r => r.loser).filter(Boolean),
+        ...sess.results.filter(r => r.draw).flatMap(r => [r.idA, r.idB])
+    ]).size : 0;
 
     el.innerHTML = `
         <div class="battle-winner-screen">
@@ -1130,6 +1132,7 @@ function qcalibDraw() {
         </div>`;
     battleSession = null;
 }
+
 //  Each probe picks the opponent whose rating is closest to
 //  (lo+hi)/2, halving the range on each outcome.
 //  usedOpponents prevents the same duel appearing twice.
@@ -1300,9 +1303,10 @@ function calibDraw() {
         renderBattlePlay();
     }
 }
+
+function calibNextBook() {
     const queue = battleSession?.remainingQueue || [];
     if (queue.length === 0) {
-        // All done
         battleSession = null;
         renderBattlePlay();
         return;
