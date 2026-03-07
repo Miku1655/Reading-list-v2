@@ -205,19 +205,22 @@
 
 /* ---------- Rankings ---------- */
 .battle-rankings-table { width: 100%; }
+
 .battle-rank-header,
 .battle-rank-row {
     display: grid;
-    grid-template-columns: 40px 1fr minmax(80px, 130px) 54px 44px 60px 56px;
+    /* #  |  Book  |  Rating  |  Range  |  W%  |  Evidence  |  Calib */
+    grid-template-columns: 40px 1fr 70px minmax(110px,160px) 44px 110px 32px;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     padding: 8px 10px;
-    font-size: 0.9em;
+    font-size: 0.88em;
 }
 .battle-rank-header {
     color: #888;
-    font-size: 0.82em;
+    font-size: 0.78em;
     text-transform: uppercase;
+    letter-spacing: 0.04em;
     border-bottom: 1px solid #333;
     margin-bottom: 4px;
 }
@@ -227,20 +230,10 @@
 }
 .battle-rank-row:hover { background: #1a1a1a; }
 .battle-rank-row.top-three { background: #1c1e1a; }
-.battle-rank-num { font-size: 1.1em; text-align: center; }
+.battle-rank-num { font-size: 1em; text-align: center; }
 .battle-rank-pts {
     font-weight: 700;
     color: #8bc34a;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.battle-rating-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
 }
 .battle-rating-num {
     font-weight: 700;
@@ -248,41 +241,78 @@
     font-size: 0.9em;
     white-space: nowrap;
 }
-.battle-rating-bar-track {
-    width: 100%;
-    height: 4px;
-    background: #2a2a2a;
-    border-radius: 2px;
-    overflow: hidden;
-}
-.battle-rating-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #3a7a3a, #8bc34a);
-    border-radius: 2px;
-    transition: width 0.4s ease;
-}
 .battle-rank-book {
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0;
 }
 .battle-rank-thumb {
-    width: 36px;
-    height: 50px;
+    width: 32px;
+    height: 46px;
     object-fit: cover;
     border-radius: 3px;
     flex-shrink: 0;
 }
 .battle-rank-thumb-placeholder {
-    width: 36px;
-    height: 50px;
+    width: 32px;
+    height: 46px;
     background: #252525;
     border-radius: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2em;
+    font-size: 1em;
     flex-shrink: 0;
+}
+
+/* Range bar: shows lo–hi spread with point estimate dot */
+.range-bar-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+}
+.range-bar-track {
+    position: relative;
+    height: 6px;
+    background: #1e1e1e;
+    border-radius: 3px;
+    overflow: visible;
+}
+.range-bar-fill {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #2a4a6a, #4a8aba);
+    border-radius: 3px;
+    opacity: 0.7;
+}
+.range-bar-point {
+    position: absolute;
+    top: -2px;
+    width: 4px;
+    height: 10px;
+    background: #8bc34a;
+    border-radius: 2px;
+    transform: translateX(-50%);
+    z-index: 1;
+}
+.range-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68em;
+    color: #555;
+}
+
+/* Unranked divider */
+.rank-unranked-divider {
+    padding: 10px 10px;
+    margin: 8px 0 4px;
+    border-top: 1px dashed #2a2a2a;
+    color: #555;
+    font-size: 0.8em;
+    text-align: center;
 }
 
 /* Badges */
@@ -528,14 +558,10 @@
 
     .battle-rank-header,
     .battle-rank-row {
-        grid-template-columns: 36px 1fr 70px 50px;
+        grid-template-columns: 36px 1fr 60px 36px;
     }
-    .battle-rank-header span:nth-child(5),
-    .battle-rank-header span:nth-child(6),
-    .battle-rank-header span:nth-child(7),
-    .battle-rank-row    span:nth-child(5),
-    .battle-rank-row    span:nth-child(6),
-    .battle-rank-row    span:nth-child(7) { display: none; }
+    /* Hide range, evidence, calib on mobile */
+    .rh-range, .rh-ev, .rh-calib { display: none; }
 
     .battle-blacklist-header { flex-direction: column; }
     .battle-blacklist-summary { text-align: left; }
