@@ -944,3 +944,22 @@
     padding: 2px 6px;
     margin-top: 4px;
 }
+
+/* ── Per-book calibrate button in rankings ── */
+.rank-calib-btn {
+    background: none;
+    border: 1px solid #333;
+    border-radius: 4px;
+    color: #666;
+    cursor: pointer;
+    font-size: 0.8em;
+    padding: 2px 5px;
+    line-height: 1;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+.rank-calib-btn:hover {
+    border-color: #7c7cff;
+    color: #aaaaff;
+    background: #1a1a2e;
+}
