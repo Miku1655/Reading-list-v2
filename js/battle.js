@@ -244,8 +244,14 @@ function nudgeBounds(winnerId, loserId) {
     }
 
     // Clamp and sanity
-    ws.lo = Math.max(1,       Math.min(ws.lo ?? wLo, ws.hi ?? eloMax));
-    ls.hi = Math.max(ls.lo ?? 1, Math.min(ls.hi ?? lHi, eloMax));
+    const MIN_SPREAD = 50;
+    ws.lo = Math.max(1, Math.min(ws.lo ?? wLo, eloMax));
+    ws.hi = Math.max(ws.lo, Math.min(ws.hi ?? wHi, eloMax));
+    if (ws.hi - ws.lo < MIN_SPREAD) { const m = Math.round((ws.lo+ws.hi)/2); ws.lo = Math.max(1,m-25); ws.hi = Math.min(eloMax,m+25); }
+
+    ls.lo = Math.max(1, Math.min(ls.lo ?? lLo, eloMax));
+    ls.hi = Math.max(ls.lo, Math.min(ls.hi ?? lHi, eloMax));
+    if (ls.hi - ls.lo < MIN_SPREAD) { const m = Math.round((ls.lo+ls.hi)/2); ls.lo = Math.max(1,m-25); ls.hi = Math.min(eloMax,m+25); }
 
     anchorRatingToRange(ws);
     anchorRatingToRange(ls);
@@ -255,10 +261,11 @@ function anchorRatingToRange(stat) {
     if (!stat) return;
     const evidence = getEvidenceScore(stat);
     if (evidence >= 0.7) {
-        // Confident: rating = midpoint of proven range
-        stat.rating = Math.round(((stat.lo ?? 1) + (stat.hi ?? getEloMax())) / 2);
+        const spread = (stat.hi ?? getEloMax()) - (stat.lo ?? 1);
+        if (spread >= 50) {
+            stat.rating = Math.round(((stat.lo ?? 1) + (stat.hi ?? getEloMax())) / 2);
+        }
     }
-    // Below 0.7: leave rating as pure Elo — it's still the best estimate we have
 }
 
 // Apply a draw in calibration: both books declared same level
@@ -1379,10 +1386,17 @@ function calibChoose(winnerId) {
         sess.hi = Math.min(sess.hi, pivot);  // target is below pivot
     }
     // Also write the narrowed range back to the stat so it persists
+    if (sess.hi - sess.lo < 100) {
+        const m = Math.round((sess.lo + sess.hi) / 2);
+        sess.lo = Math.max(1, m - 50);
+        sess.hi = Math.min(getEloMax(), m + 50);
+    }
+    // Write the narrowed range back to the stat so it persists
     const tStat = ensureBookStat(targetId);
     tStat.lo = Math.max(tStat.lo ?? 1, sess.lo);
     tStat.hi = Math.min(tStat.hi ?? getEloMax(), sess.hi);
-    tStat.lo = Math.min(tStat.lo, tStat.hi); // safety clamp
+    if (tStat.lo > tStat.hi) tStat.lo = tStat.hi;
+    if (tStat.hi - tStat.lo < 50) { const m = Math.round((tStat.lo+tStat.hi)/2); tStat.lo = Math.max(1,m-25); tStat.hi = Math.min(getEloMax(),m+25); }
     anchorRatingToRange(tStat);
     saveBattleData();
 
@@ -1419,16 +1433,22 @@ function calibDraw() {
     sess.hi = Math.min(sess.hi, pivot + margin);
 
     // Write back
+    if (sess.hi - sess.lo < 100) {
+        const m = Math.round((sess.lo + sess.hi) / 2);
+        sess.lo = Math.max(1, m - 50);
+        sess.hi = Math.min(getEloMax(), m + 50);
+    }
+    // Write back
     const tStat = ensureBookStat(targetId);
     tStat.lo = Math.max(tStat.lo ?? 1, sess.lo);
     tStat.hi = Math.min(tStat.hi ?? getEloMax(), sess.hi);
-    tStat.lo = Math.min(tStat.lo, tStat.hi);
+    if (tStat.lo > tStat.hi) tStat.lo = tStat.hi;
+    if (tStat.hi - tStat.lo < 50) { const m = Math.round((tStat.lo+tStat.hi)/2); tStat.lo = Math.max(1,m-25); tStat.hi = Math.min(getEloMax(),m+25); }
     saveBattleData();
 
     sess.results.push({ opponentId, opponentRating: pivot, targetWon: null, draw: true, lo: sess.lo, hi: sess.hi });
     sess.probesDone++;
 
-    // Same as calibChoose — never auto-finish, only move on if no opponents left
     const nextOpponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
     if (!nextOpponent) {
         calibNextBook();
