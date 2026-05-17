@@ -678,7 +678,8 @@
 <section id="tab-options" class="tab-content">
     <h3>Import / Export</h3>
     <label>Import list: <input type="file" id="fileInput" accept=".csv,.json"></label>
-    <button id="exportData">Export list</button>
+    <button id="exportData">Export JSON</button>
+    <button id="exportCSV" style="margin-left:8px;">Export CSV (Goodreads)</button>
     <button id="clearStorage" style="margin-left:12px;">Clear local list data</button>
     <hr style="border:1px solid #333; margin:16px 0;">
     <div id="generalSettings">
@@ -750,7 +751,7 @@
     </div>
 
     <hr style="border:1px solid #333; margin:16px 0;">
-    Version 1.20 – SHARING
+    Version 1.21 – mobile support, auto-complete, CSV export, other small bug-fixes
 </section>
 
 <div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); justify-content:center; align-items:center; z-index:1000;">
@@ -760,8 +761,8 @@
             <h4 onclick="this.parentElement.classList.toggle('collapsed')">Basic Info ▼</h4>
             <div class="edit-section-content">
                 <label>Title: <input type="text" id="editTitle" style="width:100%;"></label><br>
-                <label>Author: <input type="text" id="editAuthor" style="width:100%;"></label><br>
-                <label>Series: <input type="text" id="editSeries" style="width:100%;"></label><br>
+                <label>Author: <input type="text" id="editAuthor" style="width:100%;" list="authorAutocomplete"><datalist id="authorAutocomplete"></datalist></label><br>
+                <label>Series: <input type="text" id="editSeries" style="width:100%;" list="seriesAutocomplete"><datalist id="seriesAutocomplete"></datalist></label><br>
                 <label>Series #: <input type="number" id="editSeriesNumber" step="0.1" style="width:140px;"></label><br>
                 <label>Pages: <input type="number" id="editPages"></label><br>
                 <label>Year: <input type="number" id="editYear"></label><br>
@@ -774,10 +775,10 @@
         <div class="edit-section">
             <h4 onclick="this.parentElement.classList.toggle('collapsed')">Metadata ▼</h4>
             <div class="edit-section-content">
-                <label>Language: <input type="text" id="editLanguage" style="width:100%;"></label><br>
-                <label>Country: <input type="text" id="editCountry" style="width:100%;"></label><br>
-                <label>Genre: <input type="text" id="editGenre" style="width:100%;"></label><br>
-                <label>Tags (comma separated): <input type="text" id="editTags" style="width:100%;"></label><br>
+                <label>Language: <input type="text" id="editLanguage" style="width:100%;" list="languageAutocomplete"><datalist id="languageAutocomplete"></datalist></label><br>
+                <label>Country: <input type="text" id="editCountry" style="width:100%;" list="countryAutocomplete"><datalist id="countryAutocomplete"></datalist></label><br>
+                <label>Genre: <input type="text" id="editGenre" style="width:100%;" list="genreAutocomplete"><datalist id="genreAutocomplete"></datalist></label><br>
+                <label>Tags (comma separated): <input type="text" id="editTags" style="width:100%;" list="tagsAutocomplete"><datalist id="tagsAutocomplete"></datalist></label><br>
                 <label>Shelves (comma separated): <input type="text" id="editShelves" style="width:100%;"></label><br>
                 <label>Status:
                     <select id="editExclusiveShelf">
@@ -813,8 +814,8 @@
     <h4 onclick="this.parentElement.classList.toggle('collapsed')">Additional Info ▼</h4>
     <div class="edit-section-content">
         <label>ISBN: <input type="text" id="editIsbn" style="width:100%;"></label><br>
-        <label>Format: <input type="text" id="editFormat" style="width:100%;" placeholder="e.g. Hardcover, Paperback, Ebook, Audiobook"></label><br>
-        <label>Publisher: <input type="text" id="editPublisher" style="width:100%;"></label><br>
+        <label>Format: <input type="text" id="editFormat" style="width:100%;" placeholder="e.g. Hardcover, Paperback, Ebook, Audiobook" list="formatAutocomplete"><datalist id="formatAutocomplete"></datalist></label><br>
+        <label>Publisher: <input type="text" id="editPublisher" style="width:100%;" list="publisherAutocomplete"><datalist id="publisherAutocomplete"></datalist></label><br>
         <label>Additional Authors: <input type="text" id="editAdditionalAuthors" style="width:100%;" placeholder="Comma separated (translators, illustrators…)"></label><br>
         <hr style="border-color:#333; margin:12px 0;">
         <p style="color:#aaa; font-size:0.85em; margin:0 0 8px;">
