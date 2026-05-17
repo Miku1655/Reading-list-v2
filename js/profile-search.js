@@ -7,7 +7,6 @@ async function publishProfile() {
     if (!currentUser) return;
 
     if (!profileSearchable) {
-        // Remove from search index; share link at public/{uid} is unaffected
         await db.ref("profiles/" + currentUser.uid).remove();
         return;
     }
@@ -19,7 +18,8 @@ async function publishProfile() {
         nick:       nick,
         nickLower:  nick.toLowerCase(),
         bio:        profile.bio?.trim() || "",
-        picture:    (profile.picture && !profile.picture.startsWith("data:"))
+        // For search we only need a small image or none
+        picture:    (profile.picture && !profile.picture.startsWith("data:")) 
                         ? profile.picture : null,
         booksCount: readBooks.length,
         updatedAt:  Date.now(),
