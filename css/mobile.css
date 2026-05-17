@@ -1,0 +1,733 @@
+/* =============================================================================
+   css/mobile.css — Mobile-responsive overrides (≤ 768px)
+   Desktop behaviour is completely unchanged.
+
+   Progressive enhancement: tabs degrade gracefully to a scrollable row if
+   mobile-nav.js fails to load (body won't have .mobile-nav-ready class).
+   ============================================================================= */
+
+/* ── Elements injected by mobile-nav.js are invisible on desktop ─────────── */
+.mobile-topbar,
+.mobile-hamburger,
+.mobile-menu-backdrop,
+.mobile-menu-close {
+  display: none;
+}
+
+/* =============================================================================
+   SMALL SCREENS  (≤ 768 px)
+   ============================================================================= */
+@media (max-width: 768px) {
+
+  /* ── 1. Base ─────────────────────────────────────────────────────────────── */
+  body {
+    padding: 10px;
+  }
+
+  /* Prevent iOS text-size auto-adjustment */
+  * {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Prevent iOS double-tap zoom on inputs — font-size must be ≥ 16 px */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Minimum touch-target height */
+  button,
+  .tab {
+    min-height: 36px;
+  }
+
+  /* The original <h1> is replaced visually by .mobile-topbar */
+  body > h1 {
+    display: none;
+  }
+
+  /* ── 2. Mobile top bar (injected by mobile-nav.js) ───────────────────────── */
+  .mobile-topbar {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .mobile-topbar-title {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #eee;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-hamburger {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 6px;
+    background: #222;
+    border: 1px solid #555;
+    color: #eee;
+    font-size: 1em;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-height: 38px;
+  }
+
+  .mobile-hamburger:active {
+    background: #333;
+  }
+
+  /* ── 3. Tab navigation ───────────────────────────────────────────────────── */
+
+  /* --- Fallback (no JS): horizontal scrollable row ─── */
+  body:not(.mobile-nav-ready) .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 4px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 4px;
+  }
+
+  body:not(.mobile-nav-ready) .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  body:not(.mobile-nav-ready) .tab {
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-size: 0.88em;
+    padding: 5px 10px;
+  }
+
+  /* --- Full experience (JS loaded): slide-in drawer ─── */
+  body.mobile-nav-ready .tabs {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    right: auto !important;
+    width: min(300px, 82vw) !important;
+    z-index: 4000 !important;
+
+    background: #161616 !important;
+    border-right: 1px solid #333 !important;
+    box-shadow: 4px 0 28px rgba(0, 0, 0, 0.65) !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    gap: 2px !important;
+    padding: 56px 12px 20px !important;
+    margin: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+
+    transform: translateX(-110%) !important;
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
+  body.mobile-nav-ready.mobile-menu-open .tabs {
+    transform: translateX(0) !important;
+  }
+
+  /* Prevent background scroll while drawer is open */
+  body.mobile-menu-open {
+    overflow: hidden;
+  }
+
+  body.mobile-nav-ready .tab {
+    width: 100% !important;
+    text-align: left !important;
+    font-size: 1em !important;
+    padding: 11px 14px !important;
+    border-radius: 6px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+
+  body.mobile-nav-ready .tab.active {
+    background: #2a2a2a !important;
+    border-color: #666 !important;
+    color: #fff !important;
+  }
+
+  /* Close button inside drawer */
+  .mobile-menu-close {
+    display: block !important;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: transparent;
+    border: 1px solid #444;
+    color: #aaa;
+    font-size: 0.88em;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    min-height: 30px;
+    z-index: 1;
+    margin: 0 !important;
+  }
+
+  /* Backdrop overlay */
+  .mobile-menu-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 3999;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body.mobile-menu-open .mobile-menu-backdrop {
+    display: block;
+  }
+
+  /* ── 4. List tab — filter / search controls ──────────────────────────────── */
+  #tab-list > label,
+  #tab-list > button {
+    margin-bottom: 6px;
+    margin-left: 0 !important;
+    margin-right: 6px;
+  }
+
+  #sortRecent {
+    margin-left: 0 !important;
+  }
+
+  #addBook {
+    margin-left: 0 !important;
+  }
+
+  #searchInput {
+    width: 180px !important;
+  }
+
+  #yearGoalProgressContainer {
+    font-size: 0.82em;
+  }
+
+  /* ── 5. Table: hide rarely-needed columns ────────────────────────────────── */
+  /*  Visible:  Title(1) · Rating(2) · Author(3) · Shelves(5) · Edit(10)       */
+  /*  Hidden:   Cover(4) · Pages(6) · Year(7) · Last Read(8) · Read Count(9)   */
+
+  table {
+    font-size: 0.82em;
+  }
+
+  table th:nth-child(4), table td:nth-child(4),   /* Cover      */
+  table th:nth-child(6), table td:nth-child(6),   /* Pages      */
+  table th:nth-child(7), table td:nth-child(7),   /* Year       */
+  table th:nth-child(8), table td:nth-child(8),   /* Last Read  */
+  table th:nth-child(9), table td:nth-child(9) {  /* Read Count */
+    display: none;
+  }
+
+  th, td {
+    padding: 5px 3px;
+  }
+
+  /* Bigger touch target for edit button */
+  .editBtn {
+    padding: 6px 12px;
+    font-size: 1em;
+    min-width: 36px;
+  }
+
+  /* ── 6. Edit modal: full-screen ──────────────────────────────────────────── */
+  #editModal {
+    align-items: flex-start !important;
+    padding: 0 !important;
+  }
+
+  #editModal > div {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 100dvh !important;
+    height: 100dvh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 12px 12px 0 !important;
+    overflow-y: auto;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Sticky footer buttons */
+  .modal-footer {
+    position: sticky;
+    bottom: 0;
+    background: #222;
+    padding: 10px 0;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    border-top: 1px solid #444;
+    z-index: 10;
+    margin-top: auto;
+    flex-shrink: 0;
+  }
+
+  /* Read-date entries inside modal */
+  .read-entry {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+
+  .read-entry input {
+    width: 100% !important;
+  }
+
+  .read-entry button {
+    grid-column: 1 / -1;
+  }
+
+  /* Fields inside modal stretch full width */
+  #editModal input[type="text"],
+  #editModal input[type="number"],
+  #editModal input[type="date"],
+  #editModal select,
+  #editModal textarea {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  #editModal label {
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  /* ── 7. Year Review modal: full-screen ───────────────────────────────────── */
+  #yearReviewModal {
+    padding: 0 !important;
+    align-items: flex-start !important;
+  }
+
+  #yearReviewPanel {
+    border-radius: 0 !important;
+    width: 100% !important;
+    min-height: 100dvh;
+    margin: 0 !important;
+  }
+
+  #reviewHeader {
+    padding: 12px 16px !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  #reviewHeader h2 {
+    font-size: 1.2em;
+    margin: 0 0 4px;
+  }
+
+  #reviewYearSelect {
+    font-size: 0.9em !important;
+  }
+
+  /* Review stats grid: two columns on phones */
+  .review-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+    margin: 20px 12px !important;
+  }
+
+  .review-stats-block {
+    padding: 20px 12px !important;
+  }
+
+  .stats-number {
+    font-size: 2em !important;
+  }
+
+  .review-section {
+    margin: 20px 10px !important;
+    padding: 14px !important;
+  }
+
+  .review-top-list {
+    grid-template-columns: 1fr !important;
+  }
+
+  .review-book-card {
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    text-align: left !important;
+  }
+
+  .book-cover {
+    width: 65px !important;
+    height: 97px !important;
+  }
+
+  .author-showcase {
+    grid-template-columns: 1fr !important;
+  }
+
+  .review-collage {
+    grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  #reviewFooter {
+    padding: 14px 16px !important;
+  }
+
+  #reviewFooter button {
+    width: 100%;
+    padding: 12px !important;
+  }
+
+  /* ── 8. Profile tab ──────────────────────────────────────────────────────── */
+  #profileContainer {
+    max-width: 100% !important;
+  }
+
+  /* Stack profile picture and bio vertically */
+  #profileContainer > div:first-child {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    gap: 12px;
+  }
+
+  #profileContainer > div:first-child > div:last-child {
+    width: 100% !important;
+  }
+
+  #profileNick,
+  #profileBio {
+    width: 100% !important;
+  }
+
+  /* Smaller book cards */
+  .book-card {
+    width: 120px;
+    min-height: 170px;
+  }
+
+  .book-card img,
+  .book-card .no-cover {
+    height: 100px;
+  }
+
+  #onThisDayContainer {
+    gap: 8px;
+  }
+
+  /* ── 9. Stats tab ────────────────────────────────────────────────────────── */
+  .stats-upper {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .stats-block {
+    min-width: unset !important;
+    max-width: unset !important;
+    max-height: none !important;
+    width: 100% !important;
+  }
+
+  #statsChart {
+    height: 260px !important;
+  }
+
+  #cumulativeChart {
+    height: 260px !important;
+  }
+
+  .charts-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px;
+  }
+
+  .chart-wrapper canvas {
+    height: 240px !important;
+  }
+
+  /* ── 10. Timeline tab ────────────────────────────────────────────────────── */
+  #timelineContainer {
+    font-size: 0.88em;
+  }
+
+  /* ── 11. Challenges tab ──────────────────────────────────────────────────── */
+  .goals-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .goals-inline label {
+    font-size: 0.9em;
+  }
+
+  #goalYear,
+  #yearBooksGoal,
+  #yearPagesGoal {
+    width: 80px !important;
+  }
+
+  #customChallengesForm input[type="text"],
+  #customChallengesForm input[type="number"],
+  #customChallengesForm select,
+  #customChallengesForm textarea {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* ── 12. World Map tab ───────────────────────────────────────────────────── */
+  #mapContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #mapProgress {
+    font-size: 0.9em;
+  }
+
+  /* ── 13. Constellation tab ───────────────────────────────────────────────── */
+  .constellation-controls {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .constellation-controls label {
+    display: block;
+  }
+
+  #constellationCanvas {
+    height: 55vh !important;
+  }
+
+  /* ── 14. Quiz tab ────────────────────────────────────────────────────────── */
+  #quizPrompt {
+    font-size: 1.1em;
+    padding: 20px 14px;
+  }
+
+  #quizNextBtn {
+    width: 100%;
+    padding: 12px;
+    font-size: 1em;
+  }
+
+  /* ── 15. Quotes tab ──────────────────────────────────────────────────────── */
+  #tab-quotes > div:first-of-type {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  #quoteSearchInput {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  #quoteBookFilter,
+  #quotesSortSelect {
+    width: 100%;
+  }
+
+  /* ── 16. Battle (Duel) tab ───────────────────────────────────────────────── */
+  #battleSubNav {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 4px;
+  }
+
+  #battleSubNav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .battle-subnav {
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-size: 0.82em;
+    padding: 6px 10px;
+  }
+
+  /* Rankings table */
+  .battle-rank-header,
+  .battle-rank-row {
+    grid-template-columns: 28px 1fr 52px 28px !important;
+    gap: 4px;
+    padding: 6px 4px;
+    font-size: 0.8em;
+  }
+
+  .rh-range, .rh-ev, .rh-calib {
+    display: none !important;
+  }
+
+  /* Nth-child selectors for ranked book row cells (range, evidence, calib) */
+  .battle-rank-row > span:nth-child(4),
+  .battle-rank-row > span:nth-child(6),
+  .battle-rank-row > span:nth-child(7) {
+    display: none !important;
+  }
+
+  /* Lobby mode grid */
+  .lobby-mode-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+  }
+
+  .lobby-mode-btn {
+    padding: 9px 5px;
+  }
+
+  .lobby-mode-label { font-size: 0.76em; }
+  .lobby-mode-size  { font-size: 0.66em; }
+
+  /* Classic arena */
+  .battle-arena {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .battle-card {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  /* Complex arena */
+  .complex-arena {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .complex-shelf-slots {
+    flex-wrap: wrap;
+  }
+
+  .complex-shelf-slot {
+    min-width: 100px;
+  }
+
+  /* Calibration reasoning box */
+  .calib-reasoning {
+    font-size: 0.8em;
+    padding: 10px 12px;
+  }
+
+  /* Winner screens */
+  .battle-winner-screen {
+    padding: 20px 12px;
+  }
+
+  /* ── 17. Options tab ─────────────────────────────────────────────────────── */
+  #authEmail,
+  #authPassword {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin-bottom: 8px;
+  }
+
+  #tab-options button {
+    margin-left: 0 !important;
+    margin-right: 6px;
+    margin-bottom: 6px;
+  }
+
+  #cloudButtons button,
+  #coverCloudButtons button {
+    display: block;
+    width: 100%;
+    margin: 0 0 8px 0 !important;
+  }
+
+  /* Shelf manager rows */
+  #shelfManager > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 8px;
+    background: #1a1a1a;
+    border-radius: 4px;
+  }
+
+  /* Share link wrapping */
+  #currentShareLink {
+    word-break: break-all;
+    font-size: 0.82em;
+  }
+
+  /* ── 18. Shared view banner ──────────────────────────────────────────────── */
+  #sharedViewBanner {
+    font-size: 0.82em;
+    line-height: 1.5;
+  }
+
+} /* end @media 768px */
+
+
+/* =============================================================================
+   EXTRA SMALL SCREENS  (≤ 480 px)
+   ============================================================================= */
+@media (max-width: 480px) {
+
+  /* Also hide Author column — leaves Title · Rating · Shelves · Edit */
+  table th:nth-child(3), table td:nth-child(3) {
+    display: none;
+  }
+
+  /* Smaller search box */
+  #searchInput {
+    width: 140px !important;
+  }
+
+  /* Smaller book cards */
+  .book-card {
+    width: 105px;
+    min-height: 155px;
+  }
+
+  .book-card img,
+  .book-card .no-cover {
+    height: 88px;
+  }
+
+  .card-container {
+    gap: 8px;
+  }
+
+  /* Year Review: single-column stats on very small screens */
+  .review-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Battle cards: stacked */
+  .battle-arena {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .battle-card {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .lobby-mode-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+} /* end @media 480px */
