@@ -10,7 +10,7 @@ const goalYearInput = document.getElementById("goalYear");
 const yearBooksGoalInput = document.getElementById("yearBooksGoal");
 const yearPagesGoalInput = document.getElementById("yearPagesGoal");
 
-// Global state (rest unchanged)
+// Global state
 let currentUser = null;
 let userRef = null;
 let editingBook = null;
@@ -28,8 +28,6 @@ let showYearGoalProgress = true;
 let hideToReadExceptOwnShelf = false;
 let notePopup = null;
 let settings = {};
-let bookshelfShelves = [];
-let bookshelfSettings = { maxPagesPerShelf: 8000, justify: false, customEditEnabled: false };
 
 function loadLocalData() {
     const savedBooks = localStorage.getItem(STORAGE_KEY);
@@ -39,61 +37,46 @@ function loadLocalData() {
         books = [];
     }
 
-    let maxOrder = 0;
-books.forEach(b => {
-    if (!b.importOrder) b.importOrder = nextImportOrder++;
-    maxOrder = Math.max(maxOrder, b.importOrder ?? 0);
-    
-    if (!Array.isArray(b.reads)) {
-        b.reads = [];
-        // (migration code unchanged)
-    }
-    if (!Array.isArray(b.tags)) b.tags = [];
-    if (!Array.isArray(b.quotes)) {
-        b.quotes = [];
-    }
+    // ── Load challenges, settings, etc. ONCE — outside the books loop ──
     const savedChallenges = localStorage.getItem(CHALLENGES_KEY);
-challenges = savedChallenges ? JSON.parse(savedChallenges) : [];
+    challenges = savedChallenges ? JSON.parse(savedChallenges) : [];
+    challenges.forEach(c => {
+        if (!c.id) c.id = Date.now() + Math.random();
+    });
 
-// Migration: ensure id exists for old ones (if any)
-challenges.forEach(c => {
-    if (!c.id) c.id = Date.now() + Math.random(); // simple unique
-});
-    const savedDailyNotes = localStorage.getItem(DAILY_NOTES_KEY);
-dailyNotes = savedDailyNotes ? JSON.parse(savedDailyNotes) : [];
+    // ── Migrate & normalise each book ──
+    let maxOrder = 0;
+    books.forEach(b => {
+        if (!b.importOrder) b.importOrder = nextImportOrder++;
+        maxOrder = Math.max(maxOrder, b.importOrder ?? 0);
 
-// Simple migration: add currentPage to unfinished reads if missing
-books.forEach(book => {
-    if (book.reads) {
-        book.reads.forEach(read => {
+        if (!Array.isArray(b.reads)) b.reads = [];
+        if (!Array.isArray(b.tags))  b.tags  = [];
+        if (!Array.isArray(b.quotes)) b.quotes = [];
+        if (!Array.isArray(b.emojis)) b.emojis = [];
+
+        // Ensure unfinished reads have currentPage
+        b.reads.forEach(read => {
             if (read.finished === null && read.currentPage === undefined) {
                 read.currentPage = 0;
             }
         });
-    }
-});
-    const savedShelves = localStorage.getItem('bookshelfShelves');
-bookshelfShelves = savedShelves ? JSON.parse(savedShelves) : [];
 
-const savedBsSettings = localStorage.getItem('bookshelfSettings');
-bookshelfSettings = savedBsSettings ? JSON.parse(savedBsSettings) : { maxPagesPerShelf: 8000, justify: false, customEditEnabled: false };
-
-// Migrate books: add missing fields
-books.forEach(b => {
-    if (b.customHeight === undefined) b.customHeight = null;
-    if (b.spineColor === undefined) b.spineColor = null;
-});
-});
+        // Spine/height fields (used elsewhere)
+        if (b.customHeight === undefined) b.customHeight = null;
+        if (b.spineColor   === undefined) b.spineColor   = null;
+    });
     nextImportOrder = maxOrder + 1;
 
     const savedProfile = localStorage.getItem(PROFILE_KEY);
     profile = savedProfile ? JSON.parse(savedProfile) : { favourites: [], favouriteSeries: [] };
-    // (filter code unchanged)
+    if (!Array.isArray(profile.favourites))      profile.favourites      = [];
+    if (!Array.isArray(profile.favouriteSeries)) profile.favouriteSeries = [];
 
-    goals = JSON.parse(localStorage.getItem(GOALS_KEY) || "{}");
+    goals       = JSON.parse(localStorage.getItem(GOALS_KEY)        || "{}");
     shelfColors = JSON.parse(localStorage.getItem(SHELF_COLORS_KEY) || "{}");
 
-    // Settings
+    // ── Settings ──
     document.getElementById("showNumbers").checked = JSON.parse(localStorage.getItem(SHOW_NUM_KEY) || "true");
     minAuthorBooks = Number(localStorage.getItem(MIN_AUTHOR_BOOKS_KEY)) || 2;
     minAuthorBooksInput.value = minAuthorBooks;
@@ -104,24 +87,26 @@ books.forEach(b => {
     hideToReadExceptOwnShelf = JSON.parse(localStorage.getItem(HIDE_TO_READ_KEY) || "false");
     document.getElementById("hideToReadExceptOwn").checked = hideToReadExceptOwnShelf;
     loadTitleLangPref();
-    // Constellation settings
-const savedSettings = localStorage.getItem('settings');
-if (savedSettings) {
-    settings = JSON.parse(savedSettings);
-} else {
-    settings = {
-        constellation: {
-            mode: 'timeline',
-            showSeriesLines: true,
-            showAuthorLines: true,
-            showFavoritesGlow: true
-        }
-    };
-}
-    // Profile
-    profileNickInput.value = profile.nick || "";
-    profileBioTextarea.value = profile.bio || "";
-    if (profile.picture) profilePicImg.src = profile.picture;
+
+    // Constellation / generic settings
+    const savedSettings = localStorage.getItem('settings');
+    if (savedSettings) {
+        settings = JSON.parse(savedSettings);
+    } else {
+        settings = {
+            constellation: {
+                mode: 'timeline',
+                showSeriesLines: true,
+                showAuthorLines: true,
+                showFavoritesGlow: true
+            }
+        };
+    }
+
+    // ── Profile UI ──
+    profileNickInput.value  = profile.nick    || "";
+    profileBioTextarea.value = profile.bio   || "";
+    if (profile.picture) profilePicImg.src   = profile.picture;
 
     loadGoalsForYear();
     updateCoversCount();
@@ -129,11 +114,6 @@ if (savedSettings) {
 
 function saveBooksToLocal() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
-}
-
-function saveBookshelfToLocal() {
-    localStorage.setItem('bookshelfShelves', JSON.stringify(bookshelfShelves));
-    localStorage.setItem('bookshelfSettings', JSON.stringify(bookshelfSettings));
 }
 
 function loadGoalsForYear() {

@@ -27,20 +27,20 @@ function createBookCard(book) {
     div.addEventListener("click", () => openEditModal(book));
     return div;
 }
+
 function createSeriesCard(series) {
     const progress = getSeriesProgress(series);
-    if (!progress) return null; // No books in series
+    if (!progress) return null;
 
     const { completed, total, percent } = progress;
     const isComplete = completed === total;
 
-    // Get all books in this series, sorted by seriesNumber
     let seriesBooks = books.filter(b => b.series === series);
     seriesBooks = seriesBooks.sort((a, b) => (a.seriesNumber ?? Infinity) - (b.seriesNumber ?? Infinity));
 
     const firstCoverBook = seriesBooks.find(b => b.coverUrl);
     const author = seriesBooks[0]?.author || "Various";
-    const count = seriesBooks.length;
+    const count  = seriesBooks.length;
 
     let coverHtml = `<div class="no-cover">Series</div>`;
     if (firstCoverBook) {
@@ -48,17 +48,15 @@ function createSeriesCard(series) {
     }
 
     const div = document.createElement("div");
-    div.className = "book-card series-card"; // added series-card class for easier targeting
-    div.style.cursor = "pointer"; // visual hint it's clickable
+    div.className = "book-card series-card";
+    div.style.cursor = "pointer";
 
     const progressText = isComplete
         ? `<span class="series-progress-text series-progress-complete">${total} / ${total} completed ✓</span>`
         : `<span class="series-progress-text">${completed} / ${total} completed</span>`;
 
-    const progressBar = `<div class="series-progress-bar"><div class="series-progress-fill" style="width:${percent}%;"></div></div>`;
-
-    // Toggle icon (will be updated by JS when clicked)
-    const toggleIcon = `<span class="series-toggle-icon">+</span>`;
+    const progressBar  = `<div class="series-progress-bar"><div class="series-progress-fill" style="width:${percent}%;"></div></div>`;
+    const toggleIcon   = `<span class="series-toggle-icon">+</span>`;
 
     div.innerHTML = `
         ${coverHtml}
@@ -72,178 +70,161 @@ function createSeriesCard(series) {
 
     div.title = `${series} (${completed}/${total} completed) – click to ${total > 1 ? 'expand' : 'show'} details`;
 
-    // === COLLAPSE / EXPAND LOGIC ===
     const detailsContainer = document.createElement("div");
     detailsContainer.className = "series-details collapsed";
-    
-    // Build mini list of books in series
+
     if (seriesBooks.length > 0) {
-    const ul = document.createElement("ul");
+        const ul = document.createElement("ul");
+        seriesBooks.forEach(book => {
+            const status = book.exclusiveShelf === "read"              ? "✓ read"    :
+                           book.exclusiveShelf === "currently-reading" ? "→ reading" :
+                           book.exclusiveShelf === "dnf"               ? "✗ DNF"     : "to-read";
 
-    seriesBooks.forEach(book => {
-        // Status text
-        const status = book.exclusiveShelf === "read" ? "✓ read" :
-                       book.exclusiveShelf === "currently-reading" ? "→ reading" :
-                       book.exclusiveShelf === "dnf" ? "✗ DNF" : "to-read";
+            let ratingHtml = "";
+            if (book.rating > 0) {
+                ratingHtml = `<span class="series-book-rating">${"★".repeat(book.rating)}${"☆".repeat(5 - book.rating)}</span>`;
+            }
 
-        // Rating stars (only if rated)
-        let ratingHtml = "";
-        if (book.rating > 0) {
-            ratingHtml = `<span class="series-book-rating">${"★".repeat(book.rating)}${"☆".repeat(5 - book.rating)}</span>`;
-        }
+            const seriesNumHtml = book.seriesNumber != null
+                ? `<span class="series-book-number">#${book.seriesNumber}</span>`
+                : "";
 
-        // Series number only if it exists
-        const seriesNumHtml = book.seriesNumber != null 
-            ? `<span class="series-book-number">#${book.seriesNumber}</span>` 
-            : "";
+            const titleHtml = `<strong class="series-book-title">${book.title}${seriesNumHtml ? ` (${book.series}, ${seriesNumHtml.replace(/<[^>]+>/g, '')})` : ''}</strong>`;
 
-        const titleHtml = `<strong class="series-book-title">${book.title}${seriesNumHtml ? ` (${book.series}, ${seriesNumHtml.replace(/<[^>]+>/g,'')})` : ''}</strong>`;
+            const li = document.createElement("li");
+            li.innerHTML = `
+                ${book.coverUrl ? `<img src="${book.coverUrl}" class="series-book-thumb" alt="">` : '<div class="series-book-thumb-placeholder"></div>'}
+                <span class="series-book-status">${status}</span>
+                ${ratingHtml}
+                ${seriesNumHtml}
+                ${titleHtml}
+            `;
 
-        const li = document.createElement("li");
+            if (book.coverUrl) {
+                const img = li.querySelector("img.series-book-thumb");
+                img.onerror = () => {
+                    img.style.display = "none";
+                    const placeholder = document.createElement("div");
+                    placeholder.className = "series-book-thumb-placeholder";
+                    img.replaceWith(placeholder);
+                };
+            }
 
-        // Build the structure
-        li.innerHTML = `
-            ${book.coverUrl ? `<img src="${book.coverUrl}" class="series-book-thumb" alt="">` : '<div class="series-book-thumb-placeholder"></div>'}
-            <span class="series-book-status">${status}</span>
-            ${ratingHtml}
-            ${seriesNumHtml}
-            ${titleHtml}
-        `;
+            ul.appendChild(li);
+        });
+        detailsContainer.appendChild(ul);
+    } else {
+        detailsContainer.innerHTML = "<p style='color:#888; font-style:italic; padding:8px;'>No books found in this series.</p>";
+    }
 
-        // Handle broken images gracefully
-        if (book.coverUrl) {
-            const img = li.querySelector("img.series-book-thumb");
-            img.onerror = () => {
-                img.style.display = "none";
-                const placeholder = document.createElement("div");
-                placeholder.className = "series-book-thumb-placeholder";
-                img.replaceWith(placeholder);
-            };
-        }
+    div.appendChild(detailsContainer);
 
-        ul.appendChild(li);
-    });
-
-    detailsContainer.appendChild(ul);
-} else {
-    detailsContainer.innerHTML = "<p style='color:#888; font-style:italic; padding:8px;'>No books found in this series.</p>";
-}
-
-// Insert details right after the main card content
-div.appendChild(detailsContainer);
-
-    // Click handler – toggle collapse
     div.addEventListener("click", (e) => {
         e.stopPropagation();
         e.preventDefault();
         const isCollapsed = detailsContainer.classList.toggle("collapsed");
         const icon = div.querySelector(".series-toggle-icon");
-        if (icon) {
-            icon.textContent = isCollapsed ? "+" : "−";
-        }
+        if (icon) icon.textContent = isCollapsed ? "+" : "−";
     });
 
     return div;
 }
 
 function makeFavouritesDraggable(container) {
-    container.addEventListener("dragstart", e => {
-        const card = e.target.closest(".book-card");
-        if (card) {
-            draggedElement = card;
-            card.classList.add("dragging");
-            e.dataTransfer.effectAllowed = "move";
-        }
-    });
-    container.addEventListener("dragover", e => {
-        e.preventDefault();
-        const card = e.target.closest(".book-card");
-        if (card && card !== draggedElement) {
-            const rect = card.getBoundingClientRect();
-            const next = (e.clientY - rect.top) > (rect.height / 2);
-            if (next && card.nextSibling !== draggedElement) {
-                container.insertBefore(draggedElement, card.nextSibling);
-            } else if (!next && card !== draggedElement.nextSibling) {
-                container.insertBefore(draggedElement, card);
-            }
-        }
-    });
-    container.addEventListener("dragend", () => {
-        if (draggedElement) {
-            draggedElement.classList.remove("dragging");
-            profile.favourites = Array.from(container.querySelectorAll(".book-card")).map(c => Number(c.dataset.bookId));
-            localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-            draggedElement = null;
-        }
-    });
-    container.addEventListener("drop", e => e.preventDefault());
-    container.addEventListener("touchstart", e => {
-        if (e.touches.length === 1) {
-            const card = e.target.closest(".book-card");
-            if (card) {
-                draggedElement = card;
-                card.classList.add("dragging");
-            }
-        }
-    }, {passive: true});
-    container.addEventListener("touchmove", e => {
-        if (!draggedElement) return;
-        e.preventDefault();
-        const touch = e.touches[0];
-        const overElem = document.elementFromPoint(touch.clientX, touch.clientY);
-        const card = overElem ? overElem.closest(".book-card") : null;
-        if (card && card !== draggedElement) {
-            const rect = card.getBoundingClientRect();
-            if (touch.clientY > rect.top + rect.height / 2) {
-                card.after(draggedElement);
-            } else {
-                card.before(draggedElement);
-            }
-        }
-    }, {passive: false});
-    container.addEventListener("touchend", () => {
-        if (draggedElement) {
-            draggedElement.classList.remove("dragging");
-            profile.favourites = Array.from(container.querySelectorAll(".book-card")).map(c => Number(c.dataset.bookId));
-            localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-            draggedElement = null;
-        }
-    });
+    container.addEventListener("dragstart", e => {
+        const card = e.target.closest(".book-card");
+        if (card) {
+            draggedElement = card;
+            card.classList.add("dragging");
+            e.dataTransfer.effectAllowed = "move";
+        }
+    });
+    container.addEventListener("dragover", e => {
+        e.preventDefault();
+        const card = e.target.closest(".book-card");
+        if (card && card !== draggedElement) {
+            const rect = card.getBoundingClientRect();
+            const next = (e.clientY - rect.top) > (rect.height / 2);
+            if (next && card.nextSibling !== draggedElement) {
+                container.insertBefore(draggedElement, card.nextSibling);
+            } else if (!next && card !== draggedElement.nextSibling) {
+                container.insertBefore(draggedElement, card);
+            }
+        }
+    });
+    container.addEventListener("dragend", () => {
+        if (draggedElement) {
+            draggedElement.classList.remove("dragging");
+            profile.favourites = Array.from(container.querySelectorAll(".book-card")).map(c => Number(c.dataset.bookId));
+            localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+            draggedElement = null;
+        }
+    });
+    container.addEventListener("drop", e => e.preventDefault());
+    container.addEventListener("touchstart", e => {
+        if (e.touches.length === 1) {
+            const card = e.target.closest(".book-card");
+            if (card) { draggedElement = card; card.classList.add("dragging"); }
+        }
+    }, { passive: true });
+    container.addEventListener("touchmove", e => {
+        if (!draggedElement) return;
+        e.preventDefault();
+        const touch   = e.touches[0];
+        const overElem = document.elementFromPoint(touch.clientX, touch.clientY);
+        const card    = overElem ? overElem.closest(".book-card") : null;
+        if (card && card !== draggedElement) {
+            const rect = card.getBoundingClientRect();
+            if (touch.clientY > rect.top + rect.height / 2) card.after(draggedElement);
+            else card.before(draggedElement);
+        }
+    }, { passive: false });
+    container.addEventListener("touchend", () => {
+        if (draggedElement) {
+            draggedElement.classList.remove("dragging");
+            profile.favourites = Array.from(container.querySelectorAll(".book-card")).map(c => Number(c.dataset.bookId));
+            localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+            draggedElement = null;
+        }
+    });
 }
+
+// ── openEditModal ──────────────────────────────────────────────────────────────
+// FIX: every call previously added NEW listeners to Save/Close buttons without
+// removing old ones — after 10 opens the save handler fired 10 times.
+// We now use { once: true } for per-open listeners and track the Escape handler.
+
+let _modalEscHandler = null; // module-level so we can remove it
 
 function openEditModal(book = null) {
     if (window.__sharedView) return;
     editingBook = book || { reads: [], tags: [], exclusiveShelf: "to-read", dateAdded: Date.now(), emojis: [] };
 
-    // Fill all fields (your original)
-    document.getElementById("editTitle").value = book?.title || "";
-    document.getElementById("editAuthor").value = book?.author || "";
-    document.getElementById("editSeries").value = book?.series || "";
-    document.getElementById("editSeriesNumber").value = book?.seriesNumber ?? "";
-    document.getElementById("editLanguage").value = book?.language || "";
-    document.getElementById("editCountry").value = book?.country || "";
-    document.getElementById("editGenre").value = book?.genre || "";
-    document.getElementById("editTags").value = (book?.tags || []).join(", ");
-    document.getElementById("editShelves").value = (book?.shelves || []).join(", ");
+    document.getElementById("editTitle").value         = book?.title        || "";
+    document.getElementById("editAuthor").value        = book?.author       || "";
+    document.getElementById("editSeries").value        = book?.series       || "";
+    document.getElementById("editSeriesNumber").value  = book?.seriesNumber ?? "";
+    document.getElementById("editLanguage").value      = book?.language     || "";
+    document.getElementById("editCountry").value       = book?.country      || "";
+    document.getElementById("editGenre").value         = book?.genre        || "";
+    document.getElementById("editTags").value          = (book?.tags   || []).join(", ");
+    document.getElementById("editShelves").value       = (book?.shelves|| []).join(", ");
     document.getElementById("editExclusiveShelf").value = editingBook.exclusiveShelf || "to-read";
-    document.getElementById("editPages").value = book?.pages || "";
-    document.getElementById("editYear").value = book?.year || "";
-    document.getElementById("editRating").value = book?.rating || 0;
-    document.getElementById("editNotes").value = book?.notes || "";
-    document.getElementById("editCoverUrl").value = book?.coverUrl || "";
-    // Additional Info fields
-    document.getElementById("editIsbn").value = book?.isbn || "";
-    document.getElementById("editFormat").value = book?.format || "";
-    document.getElementById("editPublisher").value = book?.publisher || "";
+    document.getElementById("editPages").value         = book?.pages  || "";
+    document.getElementById("editYear").value          = book?.year   || "";
+    document.getElementById("editRating").value        = book?.rating || 0;
+    document.getElementById("editNotes").value         = book?.notes  || "";
+    document.getElementById("editCoverUrl").value      = book?.coverUrl || "";
+    document.getElementById("editIsbn").value          = book?.isbn    || "";
+    document.getElementById("editFormat").value        = book?.format  || "";
+    document.getElementById("editPublisher").value     = book?.publisher || "";
     document.getElementById("editAdditionalAuthors").value = (book?.additionalAuthors || []).join(", ");
 
-    // Alternative titles
     const _altTitles = book?.altTitles || {};
     document.getElementById("editAltTitlePl").value = _altTitles.pl || "";
     document.getElementById("editAltTitleEn").value = _altTitles.en || "";
     document.getElementById("editAltTitleJa").value = _altTitles.ja || "";
 
-    // Hide the row that matches the book's own language
     const _updateAltVisibility = () => {
         const lc = getBookLangCode({ language: document.getElementById("editLanguage").value });
         document.getElementById("altTitlePl").style.display = lc === "pl" ? "none" : "";
@@ -251,8 +232,14 @@ function openEditModal(book = null) {
         document.getElementById("altTitleJa").style.display = lc === "ja" ? "none" : "";
     };
     _updateAltVisibility();
-    document.getElementById("editLanguage").addEventListener("input", _updateAltVisibility);
-    document.getElementById("editDateAdded").value = book?.dateAdded ? new Date(book.dateAdded).toISOString().split('T')[0] : "";
+    // Use a named handler so duplicate listeners from multiple opens don't stack.
+    // We replace the element clone trick with a simpler flag.
+    const langInput = document.getElementById("editLanguage");
+    langInput.oninput = _updateAltVisibility; // replaces any prior assignment
+
+    document.getElementById("editDateAdded").value = book?.dateAdded
+        ? new Date(book.dateAdded).toISOString().split('T')[0]
+        : "";
 
     const preview = document.getElementById("coverPreview");
     if (book?.coverUrl) {
@@ -272,7 +259,7 @@ function openEditModal(book = null) {
         document.getElementById("favSeriesLabel").style.display = "none";
     }
 
-    // Simple reads list (original – no emojis here)
+    // ── Reads list ─────────────────────────────────────────────────────────────
     const readsList = document.getElementById("readsList");
     readsList.innerHTML = "";
 
@@ -282,16 +269,13 @@ function openEditModal(book = null) {
             const div = document.createElement("div");
             div.className = "read-entry";
             div.innerHTML = `
-                <input type="date" class="readStart" value="${read.started ? new Date(read.started).toISOString().substring(0,10) : ''}">
-                <input type="date" class="readFinish" value="${read.finished ? new Date(read.finished).toISOString().substring(0,10) : ''}">
+                <input type="date" class="readStart"  value="${read.started  ? new Date(read.started ).toISOString().substring(0, 10) : ''}">
+                <input type="date" class="readFinish" value="${read.finished ? new Date(read.finished).toISOString().substring(0, 10) : ''}">
                 <button type="button" class="removeRead">Remove</button>
             `;
-            div.querySelector(".removeRead").onclick = () => {
-                editingBook.reads.splice(idx, 1);
-                rebuildReadsList();
-            };
-            div.querySelector(".readStart").onchange = e => read.started = e.target.value ? new Date(e.target.value).getTime() : null;
-            div.querySelector(".readFinish").onchange = e => read.finished = e.target.value ? new Date(e.target.value).getTime() : null;
+            div.querySelector(".removeRead").onclick   = () => { editingBook.reads.splice(idx, 1); rebuildReadsList(); };
+            div.querySelector(".readStart").onchange   = e  => { read.started  = e.target.value ? new Date(e.target.value).getTime() : null; };
+            div.querySelector(".readFinish").onchange  = e  => { read.finished = e.target.value ? new Date(e.target.value).getTime() : null; };
             readsList.appendChild(div);
         });
     }
@@ -316,51 +300,46 @@ function openEditModal(book = null) {
         rebuildReadsList();
     };
 
-    // Ensure emojis array exists and refresh display (handlers initialized once globally)
+    // ── Emojis ─────────────────────────────────────────────────────────────────
     editingBook.emojis = editingBook.emojis || [];
     if (window.__updateEmojiDisplay) window.__updateEmojiDisplay();
 
-// Quotes list – similar to reads
-const quotesList = document.getElementById("quotesList");
-if (!quotesList) { // Create if not exist (we'll add HTML later)
-    // We'll add the HTML in index.html
-}
-quotesList.innerHTML = "";
-editingBook.quotes = editingBook.quotes || [];
-
-function rebuildQuotesList() {
+    // ── Quotes list ────────────────────────────────────────────────────────────
+    const quotesList = document.getElementById("quotesList");
     quotesList.innerHTML = "";
-    editingBook.quotes.forEach((quote, idx) => {
-        const div = document.createElement("div");
-        div.className = "quote-entry";
-        div.innerHTML = `
-            <textarea class="quoteText" placeholder="Quote text">${quote.text || ""}</textarea>
-            <input type="number" class="quotePage" placeholder="Page" value="${quote.page ?? ''}">
-            <input type="date" class="quoteDate" value="${quote.date ? new Date(quote.date).toISOString().split('T')[0] : ''}">
-            <label>Favorite: <input type="checkbox" class="quoteFavorite" ${quote.favorite ? 'checked' : ''}></label>
-            <button type="button" class="removeQuote">Remove</button>
-        `;
-        div.querySelector(".removeQuote").onclick = () => {
-            editingBook.quotes.splice(idx, 1);
-            rebuildQuotesList();
-        };
-        div.querySelector(".quoteText").onchange = e => quote.text = e.target.value.trim();
-        div.querySelector(".quotePage").onchange = e => quote.page = e.target.value ? Number(e.target.value) : null;
-        div.querySelector(".quoteDate").onchange = e => quote.date = e.target.value ? new Date(e.target.value).getTime() : null;
-        div.querySelector(".quoteFavorite").onchange = e => quote.favorite = e.target.checked;
-        quotesList.appendChild(div);
-    });
-}
-rebuildQuotesList();
+    editingBook.quotes = editingBook.quotes || [];
 
-document.getElementById("addQuoteBtn").onclick = () => {
-    editingBook.quotes.push({ text: "", page: null, date: null, favorite: false });
+    function rebuildQuotesList() {
+        quotesList.innerHTML = "";
+        editingBook.quotes.forEach((quote, idx) => {
+            const div = document.createElement("div");
+            div.className = "quote-entry";
+            div.innerHTML = `
+                <textarea class="quoteText" placeholder="Quote text">${quote.text || ""}</textarea>
+                <input type="number" class="quotePage" placeholder="Page" value="${quote.page ?? ''}">
+                <input type="date" class="quoteDate" value="${quote.date ? new Date(quote.date).toISOString().split('T')[0] : ''}">
+                <label>Favorite: <input type="checkbox" class="quoteFavorite" ${quote.favorite ? 'checked' : ''}></label>
+                <button type="button" class="removeQuote">Remove</button>
+            `;
+            div.querySelector(".removeQuote").onclick     = () => { editingBook.quotes.splice(idx, 1); rebuildQuotesList(); };
+            div.querySelector(".quoteText").onchange      = e => { quote.text     = e.target.value.trim(); };
+            div.querySelector(".quotePage").onchange      = e => { quote.page     = e.target.value ? Number(e.target.value) : null; };
+            div.querySelector(".quoteDate").onchange      = e => { quote.date     = e.target.value ? new Date(e.target.value).getTime() : null; };
+            div.querySelector(".quoteFavorite").onchange  = e => { quote.favorite = e.target.checked; };
+            quotesList.appendChild(div);
+        });
+    }
+
     rebuildQuotesList();
-};
-    
-    // Collapsed persistence (clean)
-    const key = "reading_edit_collapsed_sections";
-    const saved = JSON.parse(localStorage.getItem(key) || "[]");
+
+    document.getElementById("addQuoteBtn").onclick = () => {
+        editingBook.quotes.push({ text: "", page: null, date: null, favorite: false });
+        rebuildQuotesList();
+    };
+
+    // ── Collapsed sections ─────────────────────────────────────────────────────
+    const _colKey = "reading_edit_collapsed_sections";
+    const saved   = JSON.parse(localStorage.getItem(_colKey) || "[]");
     document.querySelectorAll(".edit-section").forEach((sec, i) => {
         sec.classList.toggle("collapsed", saved.includes(i));
     });
@@ -370,34 +349,49 @@ document.getElementById("addQuoteBtn").onclick = () => {
         document.querySelectorAll(".edit-section").forEach((sec, i) => {
             if (sec.classList.contains("collapsed")) now.push(i);
         });
-        localStorage.setItem(key, JSON.stringify(now));
+        localStorage.setItem(_colKey, JSON.stringify(now));
     };
 
-    document.getElementById("saveEdit").addEventListener("click", saveCollapsed);
-    document.getElementById("closeEdit").addEventListener("click", () => {
-        saveCollapsed();
-        closeEditModal();
-    });
-    document.getElementById("editModal").addEventListener("click", (e) => {
-        if (e.target === document.getElementById("editModal")) {
+    // FIX: use { once: true } so these fire exactly once per modal open,
+    // no matter how many times openEditModal has been called.
+    document.getElementById("saveEdit").addEventListener("click", saveCollapsed, { once: true });
+
+    // ── Escape key handler ─────────────────────────────────────────────────────
+    // Remove any previous handler before adding a new one.
+    if (_modalEscHandler) {
+        document.removeEventListener("keydown", _modalEscHandler);
+    }
+    _modalEscHandler = (e) => {
+        if (e.key === "Escape") {
             saveCollapsed();
             closeEditModal();
         }
-    });
+        // Ctrl+S / Cmd+S to save
+        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+            e.preventDefault();
+            document.getElementById("saveEdit").click();
+        }
+    };
+    document.addEventListener("keydown", _modalEscHandler);
 
     document.getElementById("editModal").style.display = "flex";
 }
 
 function closeEditModal() {
+    // Clean up the Escape/Ctrl+S handler
+    if (_modalEscHandler) {
+        document.removeEventListener("keydown", _modalEscHandler);
+        _modalEscHandler = null;
+    }
     editingBook = null;
     document.getElementById("editModal").style.display = "none";
 }
 
-// --- Emoji picker/display handlers (single initialization) ---
+// ── Emoji picker (single initialisation, unchanged) ────────────────────────────
 (() => {
     const currentEmojisSpan = document.getElementById("currentEmojis");
-    const pageInput = document.getElementById("emojiPageInput");
-    const picker = document.getElementById("emojiPicker");
+    const pageInput         = document.getElementById("emojiPageInput");
+    const picker            = document.getElementById("emojiPicker");
     if (!currentEmojisSpan || !pageInput || !picker) return;
 
     const emojiPickerText = "🙂 😐 😞 😭 💢 😂 😢 😡 🤔 🔥 ❄️ 🧠 🖤 ✨ ❤️ 🎯 🌫️ ☕️";
@@ -415,10 +409,8 @@ function closeEditModal() {
         ).join("");
     }
 
-    // Expose for openEditModal to call after editingBook is set
     window.__updateEmojiDisplay = updateEmojiDisplay;
 
-    // Left-click to remove emoji
     currentEmojisSpan.onclick = (ev) => {
         const span = ev.target.closest("span[data-index]");
         if (!span || !editingBook) return;
@@ -429,15 +421,14 @@ function closeEditModal() {
         updateEmojiDisplay();
     };
 
-    // Picker click to add emoji (use pageInput value if present)
     picker.innerHTML = emojiList.map(e => `<span style="margin:0 6px; cursor:pointer;">${e}</span>`).join("");
-    picker.onclick = (ev) => {
+    picker.onclick   = (ev) => {
         const span = ev.target.closest("span");
         if (!span || !editingBook) return;
         const emoji = span.textContent.trim();
         if (!emojiList.includes(emoji)) return;
         const pageVal = pageInput.value.trim();
-        const page = pageVal ? Number(pageVal) : null;
+        const page    = pageVal ? Number(pageVal) : null;
         editingBook.emojis = editingBook.emojis || [];
         editingBook.emojis.push({ emoji, page });
         pageInput.value = "";
@@ -445,54 +436,54 @@ function closeEditModal() {
     };
 })();
 
-// saveEdit (add emojis save)
+// ── saveEdit ───────────────────────────────────────────────────────────────────
 document.getElementById("saveEdit").addEventListener("click", () => {
-    const now = Date.now();
+    const now   = Date.now();
     const daStr = document.getElementById("editDateAdded").value;
     const dateAdded = daStr ? new Date(daStr).getTime() : (editingBook.dateAdded || now);
-renderChallengesList();
+
+    renderChallengesList();
+
     const data = {
-        title: document.getElementById("editTitle").value.trim(),
-        author: document.getElementById("editAuthor").value.trim(),
-        series: document.getElementById("editSeries").value.trim(),
-        seriesNumber: document.getElementById("editSeriesNumber").value ? Number(document.getElementById("editSeriesNumber").value) : null,
-        language: document.getElementById("editLanguage").value.trim() || null,
-        country: document.getElementById("editCountry").value.trim() || null,
-        genre: document.getElementById("editGenre").value.trim() || null,
-        isbn: document.getElementById("editIsbn").value.trim() || null,
-        format: document.getElementById("editFormat").value.trim() || null,
-        publisher: document.getElementById("editPublisher").value.trim() || null,
-        additionalAuthors: document.getElementById("editAdditionalAuthors").value
-            .split(",").map(s => s.trim()).filter(Boolean),
+        title:             document.getElementById("editTitle").value.trim(),
+        author:            document.getElementById("editAuthor").value.trim(),
+        series:            document.getElementById("editSeries").value.trim(),
+        seriesNumber:      document.getElementById("editSeriesNumber").value ? Number(document.getElementById("editSeriesNumber").value) : null,
+        language:          document.getElementById("editLanguage").value.trim() || null,
+        country:           document.getElementById("editCountry").value.trim()  || null,
+        genre:             document.getElementById("editGenre").value.trim()    || null,
+        isbn:              document.getElementById("editIsbn").value.trim()     || null,
+        format:            document.getElementById("editFormat").value.trim()   || null,
+        publisher:         document.getElementById("editPublisher").value.trim()|| null,
+        additionalAuthors: document.getElementById("editAdditionalAuthors").value.split(",").map(s => s.trim()).filter(Boolean),
         altTitles: {
             pl: document.getElementById("editAltTitlePl").value.trim() || null,
             en: document.getElementById("editAltTitleEn").value.trim() || null,
             ja: document.getElementById("editAltTitleJa").value.trim() || null,
         },
-        tags: document.getElementById("editTags").value.split(",").map(t => t.trim()).filter(Boolean),
-        shelves: document.getElementById("editShelves").value.split(",").map(s => s.trim()).filter(Boolean),
+        tags:           document.getElementById("editTags").value.split(",").map(t => t.trim()).filter(Boolean),
+        shelves:        document.getElementById("editShelves").value.split(",").map(s => s.trim()).filter(Boolean),
         exclusiveShelf: document.getElementById("editExclusiveShelf").value,
-        pages: Number(document.getElementById("editPages").value) || 0,
-        year: Number(document.getElementById("editYear").value) || null,
-        rating: Number(document.getElementById("editRating").value) || 0,
-        notes: document.getElementById("editNotes").value.trim(),
-        coverUrl: document.getElementById("editCoverUrl").value.trim() || null,
-        reads: editingBook.reads.map(r => ({ started: r.started, finished: r.finished })),
-        emojis: editingBook.emojis || [],
-        quotes: editingBook.quotes.map(q => ({ 
-    text: q.text.trim(), 
-    page: q.page, 
-    date: q.date, 
-    favorite: !!q.favorite 
-})).filter(q => q.text.length > 0),
-        dateAdded: dateAdded
+        pages:          Number(document.getElementById("editPages").value) || 0,
+        year:           Number(document.getElementById("editYear").value)  || null,
+        rating:         Number(document.getElementById("editRating").value) || 0,
+        notes:          document.getElementById("editNotes").value.trim(),
+        coverUrl:       document.getElementById("editCoverUrl").value.trim() || null,
+        reads:          editingBook.reads.map(r => ({ started: r.started, finished: r.finished })),
+        emojis:         editingBook.emojis || [],
+        quotes:         editingBook.quotes
+            .map(q => ({ text: q.text.trim(), page: q.page, date: q.date, favorite: !!q.favorite }))
+            .filter(q => q.text.length > 0),
+        dateAdded
     };
-    
-const collapsed = [];
+
+    // Save collapsed state
+    const collapsed = [];
     document.querySelectorAll(".edit-section").forEach((sec, idx) => {
         if (sec.classList.contains("collapsed")) collapsed.push(idx);
     });
     localStorage.setItem("reading_edit_collapsed_sections", JSON.stringify(collapsed));
+
     if (data.exclusiveShelf === "currently-reading") {
         if (data.reads.length === 0 || data.reads[data.reads.length - 1].finished !== null) {
             data.reads.push({ started: now, finished: null });
@@ -514,13 +505,14 @@ const collapsed = [];
         savedBook = data;
     }
 
-    const bookId = savedBook.importOrder;
-    const isFav = document.getElementById("editFavourite").checked;
+    const bookId  = savedBook.importOrder;
+    const isFav   = document.getElementById("editFavourite").checked;
     if (isFav) {
         if (!profile.favourites.includes(bookId)) profile.favourites.push(bookId);
     } else {
         profile.favourites = profile.favourites.filter(id => id !== bookId);
     }
+
     const isFavSeries = document.getElementById("editFavouriteSeries").checked;
     if (isFavSeries && data.series && !profile.favouriteSeries.includes(data.series)) {
         profile.favouriteSeries.push(data.series);

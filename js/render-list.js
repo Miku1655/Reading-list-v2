@@ -1,7 +1,13 @@
+// ── Shared debounce used by search ────────────────────────────────────────────
+function _listDebounce(fn, delay) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
+}
+
 function populateShelfFilter() {
-    const select = document.getElementById("shelfFilter");
+    const select       = document.getElementById("shelfFilter");
     const currentValue = select.value;
-    select.innerHTML = '<option value="all">all</option>';
+    select.innerHTML   = '<option value="all">all</option>';
     const set = new Set();
     books.forEach(b => {
         if (b.exclusiveShelf) set.add(b.exclusiveShelf);
@@ -9,7 +15,7 @@ function populateShelfFilter() {
     });
     [...set].sort().forEach(s => {
         const opt = document.createElement("option");
-        opt.value = s;
+        opt.value       = s;
         opt.textContent = s;
         select.appendChild(opt);
     });
@@ -26,81 +32,64 @@ function filterBooksByQuery(list, query) {
         let match = true;
         for (const term of terms) {
             let m;
+
+            // rated
             if ((m = term.match(/^rated([<>=!]+)?(\d+)$/))) {
-                let op = m[1] || "=";
-                const num = Number(m[2]);
-                const val = book.rating ?? 0;
-                if (op === ">") match = match && val > num;
-                else if (op === ">=") match = match && val >= num;
-                else if (op === "<") match = match && val < num;
-                else if (op === "<=") match = match && val <= num;
-                else if (op === "=" || op === "==") match = match && val === num;
-                else if (op === "!=") match = match && val !== num;
+                const op = m[1] || "=", num = Number(m[2]), val = book.rating ?? 0;
+                match = match && applyOp(val, op, num);
+
+            // pages
             } else if ((m = term.match(/^pages([<>=!]+)?(\d+)$/i))) {
-                let op = m[1] || "=";
-                const num = Number(m[2]);
-                const val = book.pages ?? 0;
-                if (op === ">") match = match && val > num;
-                else if (op === ">=") match = match && val >= num;
-                else if (op === "<") match = match && val < num;
-                else if (op === "<=") match = match && val <= num;
-                else if (op === "=" || op === "==") match = match && val === num;
-                else if (op === "!=") match = match && val !== num;
-            } else if ((m = term.match(/^cover(=|:) *(true|1|false|0)$/i))) {
-                const wantCover = m[2] === "true" || m[2] === "1";
-                const hasCover = !!book.coverUrl;
-                match = match && (hasCover === wantCover);
+                const op = m[1] || "=", num = Number(m[2]), val = book.pages ?? 0;
+                match = match && applyOp(val, op, num);
+
+            // cover
+            } else if ((m = term.match(/^cover[:=] *(true|1|false|0)$/i))) {
+                const wantCover = m[1] === "true" || m[1] === "1";
+                match = match && (!!book.coverUrl === wantCover);
+
+            // year
             } else if ((m = term.match(/^year([<>=!]+)?(-?\d+)$/i))) {
-                let op = m[1] || "=";
-                const num = Number(m[2]);
                 if (book.year == null) { match = false; continue; }
-                const val = book.year;
-                if (op === ">") match = match && val > num;
-                else if (op === ">=") match = match && val >= num;
-                else if (op === "<") match = match && val < num;
-                else if (op === "<=") match = match && val <= num;
-                else if (op === "=" || op === "==") match = match && val === num;
-                else if (op === "!=") match = match && val !== num;
-            } else if ((m = term.match(/^lang(uage)?:?(.*)$/i))) {
-                const val = m[2];
+                match = match && applyOp(book.year, m[1] || "=", Number(m[2]));
+
+            // lang
+            } else if ((m = term.match(/^lang(?:uage)?:?(.*)$/i))) {
+                const val = m[1];
                 if (val === "" || val === "none") {
                     match = match && !book.language;
                 } else {
-                    const lc = (book.language || "").toLowerCase();
-                    match = match && lc.includes(val.toLowerCase());
+                    match = match && (book.language || "").toLowerCase().includes(val.toLowerCase());
                 }
+
+            // read year
             } else if ((m = term.match(/^read([<>=!]+)?(\d{4})$/i))) {
-                let op = m[1] || "=";
-                const num = Number(m[2]);
+                const op  = m[1] || "=", num = Number(m[2]);
                 const readYears = (book.reads || [])
                     .filter(r => r.finished != null)
                     .map(r => new Date(r.finished).getFullYear());
                 if (readYears.length === 0) { match = false; continue; }
-                const satisfies = year => {
-                    if (op === ">") return year > num;
-                    if (op === ">=") return year >= num;
-                    if (op === "<") return year < num;
-                    if (op === "<=") return year <= num;
-                    if (op === "!=" ) return year !== num;
-                    return year === num; // = or ==
-                };
-                match = match && readYears.some(satisfies);
+                match = match && readYears.some(y => applyOp(y, op, num));
+
+            // country
             } else if ((m = term.match(/^country?:?(.*)$/i))) {
                 const val = m[1];
                 if (val === "" || val === "none") {
                     match = match && !book.country;
                 } else {
-                    const lc = (book.country || "").toLowerCase();
-                    match = match && lc.includes(val.toLowerCase());
+                    match = match && (book.country || "").toLowerCase().includes(val.toLowerCase());
                 }
+
+            // genre
             } else if ((m = term.match(/^genre?:?(.*)$/i))) {
                 const val = m[1];
                 if (val === "" || val === "none") {
                     match = match && !book.genre;
                 } else {
-                    const lc = (book.genre || "").toLowerCase();
-                    match = match && lc.includes(val.toLowerCase());
+                    match = match && (book.genre || "").toLowerCase().includes(val.toLowerCase());
                 }
+
+            // tag
             } else if ((m = term.match(/^tag:?(.*)$/i))) {
                 const val = m[1];
                 if (val === "" || val === "none") {
@@ -109,21 +98,60 @@ function filterBooksByQuery(list, query) {
                     const lcTags = (book.tags || []).map(t => t.toLowerCase());
                     match = match && lcTags.some(t => t.includes(val.toLowerCase()));
                 }
+
+            // ── FIX: implement added: filter to match the documented tooltip ──
+            // Supports:  added:2024  added>2023-06-01  added<=2024  added:none
+            } else if ((m = term.match(/^added([<>=!]+)?(.+)$/i))) {
+                const op  = m[1] || "=";
+                const raw = m[2].trim();
+                if (raw === "none") {
+                    match = match && !book.dateAdded;
+                } else {
+                    if (!book.dateAdded) { match = false; continue; }
+                    // Parse right-hand side as a year or a date
+                    const rhsTs = raw.match(/^\d{4}$/)
+                        ? new Date(`${raw}-01-01`).getTime()   // year only → Jan 1
+                        : new Date(raw).getTime();
+                    if (isNaN(rhsTs)) { match = false; continue; }
+                    // For year-only, compare calendar year
+                    if (raw.match(/^\d{4}$/)) {
+                        const bookYear = new Date(book.dateAdded).getFullYear();
+                        match = match && applyOp(bookYear, op, Number(raw));
+                    } else {
+                        match = match && applyOp(book.dateAdded, op, rhsTs);
+                    }
+                }
+
+            // plain text
             } else {
                 const text = `${book.title} ${book.author} ${book.series || ""} ${book.notes || ""}`.toLowerCase();
                 match = match && text.includes(term);
             }
+
             if (!match) return false;
         }
         return match;
     });
 }
 
+// Helper: apply a comparison operator
+function applyOp(a, op, b) {
+    switch (op) {
+        case ">":  return a > b;
+        case ">=": return a >= b;
+        case "<":  return a < b;
+        case "<=": return a <= b;
+        case "!=": return a !== b;
+        default:   return a === b;   // "=" or "=="
+    }
+}
+
 function renderTable() {
     const showNumbers = document.getElementById("showNumbers").checked;
-    const filter = document.getElementById("shelfFilter").value;
-    const tbody = document.getElementById("tableBody");
-    tbody.innerHTML = "";
+    const filter      = document.getElementById("shelfFilter").value;
+    const tbody       = document.getElementById("tableBody");
+    tbody.innerHTML   = "";
+
     let list = books.slice();
     if (filter !== "all") {
         list = list.filter(b => b.exclusiveShelf === filter || (b.shelves || []).includes(filter));
@@ -134,6 +162,7 @@ function renderTable() {
 
     const query = document.getElementById("searchInput").value.trim();
     if (query) list = filterBooksByQuery(list, query);
+
     if (sortState.column) {
         list.sort((a, b) => compare(a, b, sortState.column) * sortState.direction);
     } else {
@@ -141,8 +170,7 @@ function renderTable() {
             const hasA = getSortTimestamp(a) > 0 ? 1 : 0;
             const hasB = getSortTimestamp(b) > 0 ? 1 : 0;
             if (hasA !== hasB) return hasB - hasA;
-            const diff = getSortTimestamp(a) - getSortTimestamp(b);
-            return diff * sortState.direction;
+            return (getSortTimestamp(a) - getSortTimestamp(b)) * sortState.direction;
         });
     }
 
@@ -151,13 +179,15 @@ function renderTable() {
         const shelvesDisplay = [book.exclusiveShelf, ...(book.shelves || [])].filter(Boolean)
             .map(sh => `<span style="background:${shelfColors[sh] || '#888'}; padding:2px 4px; margin-right:2px; border-radius:3px;">${sh}</span>`)
             .join("");
-        const coverHtml = book.coverUrl ? `<img src="${book.coverUrl}" alt="Cover" style="max-height:80px;" onerror="this.style.display='none'">` : "";
-        const lastReadTs = getLatestFinished(book);
+        const coverHtml     = book.coverUrl ? `<img src="${book.coverUrl}" alt="Cover" style="max-height:80px;" onerror="this.style.display='none'">` : "";
+        const lastReadTs    = getLatestFinished(book);
         const lastReadDisplay = lastReadTs > 0 ? new Date(lastReadTs).toLocaleDateString() : "-";
-        const bookEmojis = book.emojis || [];
+        const bookEmojis    = book.emojis || [];
         const emojisDisplay = bookEmojis.map(e => e.emoji).join(" ");
         const emojisTooltip = bookEmojis.map(e => `${e.emoji}${e.page ? ` (p.${e.page})` : ""}`).join(", ");
-        const emojisHtml = bookEmojis.length ? `<span style="font-size:1.4em; margin-left:8px;" title="${emojisTooltip}">${emojisDisplay}</span>` : "";
+        const emojisHtml    = bookEmojis.length
+            ? `<span style="font-size:1.4em; margin-left:8px;" title="${emojisTooltip}">${emojisDisplay}</span>`
+            : "";
         tr.innerHTML = `
             <td>${showNumbers ? (idx + 1) + ". " : ""}${getDisplayTitle(book)}${book.notes ? ' <span class="noteIcon" style="cursor:help;color:#888;">📝</span>' : ''}${emojisHtml}</td>
             <td>${book.rating || "-"}</td>
@@ -181,14 +211,18 @@ function renderTable() {
     });
 }
 
+// Debounced version used by the search input event listener
+// (wired in ui-events.js — see updated version)
+const renderTableDebounced = _listDebounce(renderTable, 200);
+
 function renderYearGoalProgress() {
     const container = document.getElementById("yearGoalProgressContainer");
     container.innerHTML = "";
     if (!showYearGoalProgress) return;
 
     const currentYear = getCurrentYear();
-    const stats = getYearStats(currentYear);
-    const goal = goals[currentYear] || {};
+    const stats       = getYearStats(currentYear);
+    const goal        = goals[currentYear] || {};
     const daysElapsed = getDaysElapsed(currentYear);
 
     let html = `<div style="background:#1a1a1a;padding:14px;border:1px solid #333;border-radius:8px; font-size:0.95em;">`;
