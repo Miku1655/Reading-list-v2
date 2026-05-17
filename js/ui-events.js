@@ -49,29 +49,31 @@ document.getElementById("saveCloudBtn").addEventListener("click", () => {
     if (!confirm("Overwrite cloud data with current local data?")) return;
 
     const dataToSave = {
-        books: books,
-        profile: profile,
-        goals: goals,
-        challenges: challenges,
-        shelfColors: shelfColors,
-        // bookshelfShelves was removed (it doesn't exist)
-        bookshelfSettings: bookshelfSettings || {},
+        books: books || [],
+        profile: profile || { favourites: [], favouriteSeries: [] },
+        goals: goals || {},
+        challenges: challenges || [],
+        shelfColors: shelfColors || {},
+        
+        // Safe fallbacks for variables that may not exist
+        bookshelfSettings: typeof bookshelfSettings !== 'undefined' ? bookshelfSettings : {},
         battleData: JSON.parse(localStorage.getItem(BATTLE_KEY) || "{}"),
         battleRankingLimit: localStorage.getItem(BATTLE_LIMIT_KEY) || "20",
         battleComplexMode: localStorage.getItem(BATTLE_COMPLEX_KEY) || "off",
+        
         settings: {
             showNumbers: document.getElementById("showNumbers").checked,
-            minAuthorBooks: minAuthorBooks,
-            showCoversTimeline: showCoversInTimeline,
-            showYearGoalProgress: showYearGoalProgress,
-            hideToReadExceptOwnShelf: hideToReadExceptOwnShelf,
+            minAuthorBooks: typeof minAuthorBooks !== 'undefined' ? minAuthorBooks : 2,
+            showCoversTimeline: typeof showCoversInTimeline !== 'undefined' ? showCoversInTimeline : false,
+            showYearGoalProgress: typeof showYearGoalProgress !== 'undefined' ? showYearGoalProgress : true,
+            hideToReadExceptOwnShelf: typeof hideToReadExceptOwnShelf !== 'undefined' ? hideToReadExceptOwnShelf : false,
             titleLangPref: localStorage.getItem(TITLE_LANG_KEY) || "original",
         }
     };
 
     userRef.set(dataToSave)
         .then(() => {
-            publishProfile?.();
+            if (typeof publishProfile === 'function') publishProfile();
             alert("Saved to cloud successfully!");
         })
         .catch(err => alert("Save failed: " + err.message));
