@@ -41,8 +41,8 @@ async function generateShareLink() {
         bio:             profile.bio              || "",
         favourites:      profile.favourites       || [],
         favouriteSeries: profile.favouriteSeries  || [],
-        picture: (profile.picture && !profile.picture.startsWith("data:"))
-            ? profile.picture : null
+        // IMPORTANT: Keep data: URLs here! They work fine in public shares
+        picture: profile.picture || null
     };
 
     const publicData = {
