@@ -156,6 +156,11 @@ document.getElementById("deleteCoversCloud").addEventListener("click", () => {
         .then(() => alert("Covers deleted from cloud!"))
         .catch(err => alert("Delete failed: " + err.message));
 });
+
+// Share buttons
+document.getElementById("generateShareBtn")?.addEventListener("click", generateShareLink);
+document.getElementById("revokeShareBtn")?.addEventListener("click", revokeShareLink);
+
 // Covers management
 document.getElementById("fetchAllCovers").addEventListener("click", async () => {
     const missing = books.filter(b => !b.coverUrl && b.title);
@@ -181,6 +186,7 @@ document.getElementById("clearLocalCovers").addEventListener("click", () => {
     renderAll();
     alert("All local covers cleared.");
 });
+
 // Import/Export/Clear
 document.getElementById("fileInput").addEventListener("change", e => {
     const file = e.target.files[0];
@@ -221,6 +227,7 @@ document.getElementById("clearStorage").addEventListener("click", () => {
         renderAll();
     }
 });
+
 // Goals
 document.getElementById("goalYear").addEventListener("change", () => {
     loadGoalsForYear();
@@ -249,11 +256,12 @@ document.getElementById("removeGoal").addEventListener("click", () => {
         renderYearGoalProgress();
     }
 });
+
 // Settings
 document.getElementById("showNumbers").addEventListener("change", e => {
     const value = e.target.checked;
     localStorage.setItem(SHOW_NUM_KEY, JSON.stringify(value));
-    renderTable();  // usually needed after this setting changes
+    renderTable();
 });
 document.getElementById("showYearGoalProgress").addEventListener("change", e => {
     showYearGoalProgress = e.target.checked;
@@ -278,6 +286,7 @@ document.getElementById("hideToReadExceptOwn").addEventListener("change", e => {
 document.getElementById("titleLangPref")?.addEventListener("change", e => {
     saveTitleLangPref(e.target.value);
 });
+
 // Profile
 document.getElementById("profilePic").addEventListener("click", () => document.getElementById("profilePicInput").click());
 document.getElementById("profilePicInput").addEventListener("change", e => {
@@ -307,6 +316,7 @@ document.getElementById("profileBio").addEventListener("input", () => {
         localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
     }, 800);
 });
+
 // Modal fetch cover
 document.getElementById("fetchCoverBtn").addEventListener("click", async () => {
     const title = document.getElementById("editTitle").value.trim();
@@ -325,6 +335,7 @@ document.getElementById("fetchCoverBtn").addEventListener("click", async () => {
         alert("No cover found for this book.");
     }
 });
+
 // Search info
 document.getElementById("filterInfo").addEventListener("click", () => {
     alert(`Search syntax:
@@ -341,6 +352,7 @@ document.getElementById("filterInfo").addEventListener("click", () => {
 - added:2024, added>2023-06-01, added:none
 Combine terms with spaces (AND).`);
 });
+
 // Auth buttons
 document.getElementById("signInBtn").addEventListener("click", () => {
     const email = document.getElementById("authEmail").value.trim();
@@ -357,12 +369,28 @@ document.getElementById("signUpBtn").addEventListener("click", () => {
 document.getElementById("signOutBtn").addEventListener("click", () => auth.signOut());
 
 // Initial load
-document.addEventListener("DOMContentLoaded", () => {
-    initApp(); // From ui-core.js
-    document.getElementById("goalYear").value = new Date().getFullYear();
-    loadGoalsForYear();
-    if (localStorage.getItem(TAB_KEY) === "constellation") {
-        setTimeout(initConstellation, 100); // give time for canvas to exist
+document.addEventListener("DOMContentLoaded", async () => {
+    const params  = new URLSearchParams(location.search);
+    const shareId = params.get("view");
+
+    if (shareId) {
+        // Shared view — load public Firebase data, skip normal local flow
+        initApp();
+        await loadSharedView(shareId);
+    } else {
+        // Normal view
+        initApp();
+        document.getElementById("goalYear").value = new Date().getFullYear();
+        loadGoalsForYear();
+        if (localStorage.getItem(TAB_KEY) === "constellation") {
+            setTimeout(initConstellation, 100);
+        }
+        // Restore share link UI if one was previously generated
+        const savedShareId = localStorage.getItem(SHARE_KEY);
+        if (savedShareId) {
+            const url = `${location.origin}${location.pathname}?view=${savedShareId}`;
+            updateShareUI(url);
+        }
     }
 });
 
