@@ -189,16 +189,84 @@ function makeFavouritesDraggable(container) {
     });
 }
 
-// ── openEditModal ──────────────────────────────────────────────────────────────
-// FIX: every call previously added NEW listeners to Save/Close buttons without
-// removing old ones — after 10 opens the save handler fired 10 times.
-// We now use { once: true } for per-open listeners and track the Escape handler.
+// ── Autocomplete helpers ───────────────────────────────────────────────────────
+// Collects unique non-empty values for a given book field across all books
+function getUniqueFieldValues(field) {
+    const set = new Set();
+    books.forEach(b => {
+        const val = b[field];
+        if (val && typeof val === "string" && val.trim()) set.add(val.trim());
+    });
+    return [...set].sort((a, b) => a.localeCompare(b));
+}
 
-let _modalEscHandler = null; // module-level so we can remove it
+// Collects unique tags across all books
+function getUniqueTags() {
+    const set = new Set();
+    books.forEach(b => {
+        (b.tags || []).forEach(t => { if (t.trim()) set.add(t.trim()); });
+    });
+    return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+// Populates a <datalist> element with the given options
+function populateDatalist(datalistId, values) {
+    const dl = document.getElementById(datalistId);
+    if (!dl) return;
+    dl.innerHTML = values.map(v => `<option value="${v.replace(/"/g, '&quot;')}">`).join("");
+}
+
+// Refreshes all autocomplete datalists — called when opening the edit modal
+function refreshAutocompleteLists() {
+    populateDatalist("genreAutocomplete",    getUniqueFieldValues("genre"));
+    populateDatalist("languageAutocomplete", getUniqueFieldValues("language"));
+    populateDatalist("countryAutocomplete",  getUniqueFieldValues("country"));
+    populateDatalist("seriesAutocomplete",   getUniqueFieldValues("series"));
+    populateDatalist("authorAutocomplete",   getUniqueFieldValues("author"));
+    populateDatalist("publisherAutocomplete",getUniqueFieldValues("publisher"));
+    populateDatalist("formatAutocomplete",   getUniqueFieldValues("format"));
+    // Tags autocomplete: user types comma-separated; we suggest after the last comma
+    // This is handled by a custom input listener below.
+}
+
+// For the tags field we do inline completion: suggest after the last comma
+function initTagsAutocomplete() {
+    const tagsInput = document.getElementById("editTags");
+    const tagsDl    = document.getElementById("tagsAutocomplete");
+    if (!tagsInput || !tagsDl) return;
+
+    tagsInput.addEventListener("input", () => {
+        const raw    = tagsInput.value;
+        const parts  = raw.split(",");
+        const prefix = parts[parts.length - 1].trim().toLowerCase();
+
+        if (!prefix) { tagsDl.innerHTML = ""; return; }
+
+        const allTags  = getUniqueTags();
+        const existing = parts.slice(0, -1).map(t => t.trim().toLowerCase());
+        const filtered = allTags.filter(t =>
+            t.toLowerCase().startsWith(prefix) &&
+            !existing.includes(t.toLowerCase())
+        );
+
+        tagsDl.innerHTML = filtered.map(t => {
+            // Value = everything before the last comma + the suggestion
+            const before = parts.slice(0, -1).join(", ");
+            const full   = before ? before + ", " + t : t;
+            return `<option value="${full.replace(/"/g, '&quot;')}">`;
+        }).join("");
+    });
+}
+
+// ── openEditModal ──────────────────────────────────────────────────────────────
+let _modalEscHandler = null;
 
 function openEditModal(book = null) {
     if (window.__sharedView) return;
     editingBook = book || { reads: [], tags: [], exclusiveShelf: "to-read", dateAdded: Date.now(), emojis: [] };
+
+    // Refresh autocomplete lists before opening
+    refreshAutocompleteLists();
 
     document.getElementById("editTitle").value         = book?.title        || "";
     document.getElementById("editAuthor").value        = book?.author       || "";
@@ -232,10 +300,8 @@ function openEditModal(book = null) {
         document.getElementById("altTitleJa").style.display = lc === "ja" ? "none" : "";
     };
     _updateAltVisibility();
-    // Use a named handler so duplicate listeners from multiple opens don't stack.
-    // We replace the element clone trick with a simpler flag.
     const langInput = document.getElementById("editLanguage");
-    langInput.oninput = _updateAltVisibility; // replaces any prior assignment
+    langInput.oninput = _updateAltVisibility;
 
     document.getElementById("editDateAdded").value = book?.dateAdded
         ? new Date(book.dateAdded).toISOString().split('T')[0]
@@ -352,21 +418,23 @@ function openEditModal(book = null) {
         localStorage.setItem(_colKey, JSON.stringify(now));
     };
 
-    // FIX: use { once: true } so these fire exactly once per modal open,
-    // no matter how many times openEditModal has been called.
     document.getElementById("saveEdit").addEventListener("click", saveCollapsed, { once: true });
 
-    // ── Escape key handler ─────────────────────────────────────────────────────
-    // Remove any previous handler before adding a new one.
+    // ── Keyboard shortcuts for the modal ──────────────────────────────────────
+    // Ctrl+S / Cmd+S → save; Escape → close
     if (_modalEscHandler) {
         document.removeEventListener("keydown", _modalEscHandler);
     }
     _modalEscHandler = (e) => {
+        // Only act when the edit modal is open
+        const modal = document.getElementById("editModal");
+        if (!modal || modal.style.display === "none") return;
+
         if (e.key === "Escape") {
             saveCollapsed();
             closeEditModal();
+            return;
         }
-        // Ctrl+S / Cmd+S to save
         if ((e.ctrlKey || e.metaKey) && e.key === "s") {
             e.preventDefault();
             document.getElementById("saveEdit").click();
@@ -378,7 +446,6 @@ function openEditModal(book = null) {
 }
 
 function closeEditModal() {
-    // Clean up the Escape/Ctrl+S handler
     if (_modalEscHandler) {
         document.removeEventListener("keydown", _modalEscHandler);
         _modalEscHandler = null;
@@ -387,7 +454,7 @@ function closeEditModal() {
     document.getElementById("editModal").style.display = "none";
 }
 
-// ── Emoji picker (single initialisation, unchanged) ────────────────────────────
+// ── Emoji picker (single initialisation) ──────────────────────────────────────
 (() => {
     const currentEmojisSpan = document.getElementById("currentEmojis");
     const pageInput         = document.getElementById("emojiPageInput");
@@ -434,6 +501,9 @@ function closeEditModal() {
         pageInput.value = "";
         updateEmojiDisplay();
     };
+
+    // Initialise tags autocomplete once
+    initTagsAutocomplete();
 })();
 
 // ── saveEdit ───────────────────────────────────────────────────────────────────

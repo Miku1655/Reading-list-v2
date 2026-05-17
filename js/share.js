@@ -34,17 +34,21 @@ async function generateShareLink() {
         coverUrl: (b.coverUrl && !b.coverUrl.startsWith("data:")) ? b.coverUrl : null
     }));
 
+    // Build a clean profile object — always include nick, bio, favourites, favouriteSeries
+    // Skip data: URI profile pictures (too large for Firebase)
+    const publicProfile = {
+        nick:            profile.nick             || "",
+        bio:             profile.bio              || "",
+        favourites:      profile.favourites       || [],
+        favouriteSeries: profile.favouriteSeries  || [],
+        picture: (profile.picture && !profile.picture.startsWith("data:"))
+            ? profile.picture : null
+    };
+
     const publicData = {
-        books: publicBooks,
-        profile: {
-            nick:            profile.nick             || "",
-            bio:             profile.bio              || "",
-            favourites:      profile.favourites       || [],
-            favouriteSeries: profile.favouriteSeries  || [],
-            // Skip data: URI profile pictures
-            picture: (profile.picture && !profile.picture.startsWith("data:"))
-                ? profile.picture : null
-        },
+        books:   publicBooks,
+        profile: publicProfile,
+        goals:   goals        || {},
         sharedAt: Date.now()
     };
 
@@ -114,10 +118,15 @@ async function loadSharedView(shareId) {
 
         // Load shared data into global state
         books   = data.books || [];
+
+        // Restore profile — always fall back gracefully so nick/bio/favourites all work
         profile = data.profile || {};
         if (!profile.favourites)      profile.favourites      = [];
         if (!profile.favouriteSeries) profile.favouriteSeries = [];
-        goals       = {};
+
+        // Restore reading goals if present (used in challenges/stats tab)
+        goals = data.goals || {};
+
         shelfColors = {};
 
         const maxOrder  = books.reduce((m, b) => Math.max(m, b.importOrder || 0), 0);
@@ -140,6 +149,14 @@ async function loadSharedView(shareId) {
 
         // Flag checked by openEditModal to prevent any edits
         window.__sharedView = true;
+
+        // Populate profile UI fields so the Profile tab renders correctly
+        const nickEl = document.getElementById("profileNick");
+        const bioEl  = document.getElementById("profileBio");
+        const picEl  = document.getElementById("profilePic");
+        if (nickEl) nickEl.value  = profile.nick  || "";
+        if (bioEl)  bioEl.value   = profile.bio   || "";
+        if (picEl && profile.picture) picEl.src   = profile.picture;
 
         // Hide controls that don't apply to a viewer
         [

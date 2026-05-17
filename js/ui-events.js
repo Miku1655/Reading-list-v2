@@ -1,7 +1,10 @@
 // Core tab/button events
 document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
 document.getElementById("addBook").addEventListener("click", () => openEditModal());
-document.getElementById("searchInput").addEventListener("input", renderTable);
+
+// ── Search: debounced so every keystroke doesn't trigger a full re-render ──────
+document.getElementById("searchInput").addEventListener("input", renderTableDebounced);
+
 document.getElementById("shelfFilter").addEventListener("change", renderTable);
 document.getElementById("refreshWaitingBtn").addEventListener("click", renderWaitingWidget);
 document.getElementById("refreshRediscoverBtn").addEventListener("click", renderRediscoverWidget);
@@ -161,7 +164,7 @@ document.getElementById("deleteCoversCloud").addEventListener("click", () => {
 document.getElementById("generateShareBtn")?.addEventListener("click", generateShareLink);
 document.getElementById("revokeShareBtn")?.addEventListener("click", revokeShareLink);
 
-// Covers management
+// Covers management — batch fetch: collect all results then render once
 document.getElementById("fetchAllCovers").addEventListener("click", async () => {
     const missing = books.filter(b => !b.coverUrl && b.title);
     if (missing.length === 0) return alert("No books are missing covers.");
@@ -172,11 +175,13 @@ document.getElementById("fetchAllCovers").addEventListener("click", async () => 
         if (url) {
             b.coverUrl = url;
             found++;
+            // Save to local after each find, but don't re-render yet
             saveBooksToLocal();
-            renderAll();
         }
         await new Promise(r => setTimeout(r, 800)); // rate limit
     }
+    // Single render after all fetches complete
+    renderAll();
     alert(`Done! Found covers for ${found} book(s).`);
 });
 document.getElementById("clearLocalCovers").addEventListener("click", () => {
@@ -216,6 +221,9 @@ document.getElementById("exportData").addEventListener("click", () => {
     a.click();
     URL.revokeObjectURL(url);
 });
+// CSV export button
+document.getElementById("exportCSV")?.addEventListener("click", exportCSV);
+
 document.getElementById("clearStorage").addEventListener("click", () => {
     if (confirm("Clear all local data? (Cloud data stays if signed in)")) {
         localStorage.clear();
@@ -367,6 +375,20 @@ document.getElementById("signUpBtn").addEventListener("click", () => {
     auth.createUserWithEmailAndPassword(email, pass).catch(err => alert("Sign up error: " + err.message));
 });
 document.getElementById("signOutBtn").addEventListener("click", () => auth.signOut());
+
+// ── Year in Review modal: Escape to close ─────────────────────────────────────
+document.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+        const modal = document.getElementById("yearReviewModal");
+        if (modal && modal.style.display !== "none") {
+            modal.classList.remove("modal-visible");
+            setTimeout(() => {
+                modal.style.display = "none";
+                if (typeof tempCoverDataUrls !== "undefined") tempCoverDataUrls = {};
+            }, 300);
+        }
+    }
+});
 
 // Initial load
 document.addEventListener("DOMContentLoaded", async () => {

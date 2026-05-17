@@ -99,8 +99,7 @@ function filterBooksByQuery(list, query) {
                     match = match && lcTags.some(t => t.includes(val.toLowerCase()));
                 }
 
-            // ── FIX: implement added: filter to match the documented tooltip ──
-            // Supports:  added:2024  added>2023-06-01  added<=2024  added:none
+            // added
             } else if ((m = term.match(/^added([<>=!]+)?(.+)$/i))) {
                 const op  = m[1] || "=";
                 const raw = m[2].trim();
@@ -108,12 +107,10 @@ function filterBooksByQuery(list, query) {
                     match = match && !book.dateAdded;
                 } else {
                     if (!book.dateAdded) { match = false; continue; }
-                    // Parse right-hand side as a year or a date
                     const rhsTs = raw.match(/^\d{4}$/)
-                        ? new Date(`${raw}-01-01`).getTime()   // year only → Jan 1
+                        ? new Date(`${raw}-01-01`).getTime()
                         : new Date(raw).getTime();
                     if (isNaN(rhsTs)) { match = false; continue; }
-                    // For year-only, compare calendar year
                     if (raw.match(/^\d{4}$/)) {
                         const bookYear = new Date(book.dateAdded).getFullYear();
                         match = match && applyOp(bookYear, op, Number(raw));
@@ -142,7 +139,7 @@ function applyOp(a, op, b) {
         case "<":  return a < b;
         case "<=": return a <= b;
         case "!=": return a !== b;
-        default:   return a === b;   // "=" or "=="
+        default:   return a === b;
     }
 }
 
@@ -211,8 +208,7 @@ function renderTable() {
     });
 }
 
-// Debounced version used by the search input event listener
-// (wired in ui-events.js — see updated version)
+// Debounced version wired to the search input in ui-events.js
 const renderTableDebounced = _listDebounce(renderTable, 200);
 
 function renderYearGoalProgress() {
@@ -258,4 +254,102 @@ function renderYearGoalProgress() {
     }
     html += `</div>`;
     container.innerHTML = html;
+}
+
+// ── CSV Export (Goodreads-compatible format) ───────────────────────────────────
+function exportCSV() {
+    // Goodreads CSV columns in standard order
+    const headers = [
+        "Title",
+        "Author",
+        "Additional Authors",
+        "ISBN",
+        "ISBN13",
+        "My Rating",
+        "Average Rating",
+        "Publisher",
+        "Binding",
+        "Number of Pages",
+        "Year Published",
+        "Original Publication Year",
+        "Date Read",
+        "Date Added",
+        "Bookshelves",
+        "Bookshelves with positions",
+        "Exclusive Shelf",
+        "My Review",
+        "Spoiler",
+        "Private Notes",
+        "Read Count",
+        "Owned Copies"
+    ];
+
+    function escapeCSV(val) {
+        if (val === null || val === undefined) return "";
+        const str = String(val);
+        // Wrap in quotes if contains comma, quote, or newline
+        if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+            return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+    }
+
+    function formatDate(ts) {
+        if (!ts) return "";
+        const d = new Date(ts);
+        const yyyy = d.getFullYear();
+        const mm   = String(d.getMonth() + 1).padStart(2, "0");
+        const dd   = String(d.getDate()).padStart(2, "0");
+        return `${yyyy}/${mm}/${dd}`;
+    }
+
+    const rows = [headers.map(escapeCSV).join(",")];
+
+    books.forEach(b => {
+        // Date Read = most recent finished date
+        const lastFinished = getLatestFinished(b);
+        const dateRead     = lastFinished ? formatDate(lastFinished) : "";
+        const dateAdded    = b.dateAdded  ? formatDate(b.dateAdded)  : "";
+
+        // Bookshelves = extra shelves joined
+        const extraShelves = (b.shelves || []).join(", ");
+
+        const readCount = getReadCount(b);
+
+        const row = [
+            b.title       || "",
+            b.author      || "",
+            (b.additionalAuthors || []).join(", "),
+            b.isbn        || "",
+            "",                           // ISBN13 — not stored separately
+            b.rating      || 0,
+            "",                           // Average Rating — not stored
+            b.publisher   || "",
+            b.format      || "",
+            b.pages       || "",
+            b.year        || "",
+            b.year        || "",          // Original Publication Year (same field)
+            dateRead,
+            dateAdded,
+            extraShelves,
+            "",                           // Bookshelves with positions — not stored
+            b.exclusiveShelf || "to-read",
+            b.notes       || "",
+            "",                           // Spoiler — not stored
+            "",                           // Private Notes — not stored
+            readCount     || 0,
+            ""                            // Owned Copies — not stored
+        ];
+
+        rows.push(row.map(escapeCSV).join(","));
+    });
+
+    const csv  = rows.join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = "reading-list-goodreads.csv";
+    a.click();
+    URL.revokeObjectURL(url);
 }
