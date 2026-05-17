@@ -21,6 +21,10 @@
 
 <h1>Reading List</h1>
 
+<div id="sharedViewBanner" style="display:none; background:#1a2a1a; border:1px solid #3a5a3a;
+     color:#8bc34a; padding:10px 16px; margin-bottom:12px; border-radius:6px;
+     font-size:0.95em;"></div>
+ 
 <div class="tabs">
     <button class="tab" data-tab="profile">Profile</button>
     <button class="tab active" data-tab="list">List</button>
@@ -729,7 +733,22 @@
     <h3>Manage Shelves</h3>
     <div id="shelfManager"></div>
     <hr style="border:1px solid #333; margin:16px 0;">
-    Version 1.19 – ALT LANGUAGES
+    <hr style="border:1px solid #333; margin:16px 0;">
+    <h3>Share Your List</h3>
+    <p style="color:#aaa; font-size:0.9em; margin-bottom:12px;">
+        Creates a public read-only snapshot of your list at a shareable URL.
+        Only works when signed in. Click Generate again to update the snapshot with your latest data.
+    </p>
+    <button id="generateShareBtn">🔗 Generate / Update Share Link</button>
+    <button id="revokeShareBtn" class="danger" style="display:none; margin-left:8px;">Revoke Link</button>
+    <div id="shareLinkContainer" style="display:none; margin-top:12px;">
+        <p style="color:#aaa; font-size:0.85em; margin:0 0 4px;">Your current share link:</p>
+        <a id="currentShareLink" href="#" target="_blank"
+           style="color:#8bc34a; font-size:0.85em; word-break:break-all;"></a>
+    </div>
+
+    <hr style="border:1px solid #333; margin:16px 0;">
+    Version 1.20 – SHARING
 </section>
 
 <div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); justify-content:center; align-items:center; z-index:1000;">
@@ -893,6 +912,7 @@
 <script src="js/covers.js"></script>
 <script src="js/year-review.js"></script>
 <script src="js/ui-core.js"></script>
+<script src="js/share.js"></script>
 <script src="js/ui-events.js"></script>
 <script src="js/ui-year-review.js"></script>
 <script src="js/constellation.js"></script>
