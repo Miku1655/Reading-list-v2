@@ -212,6 +212,7 @@ function makeFavouritesDraggable(container) {
 }
 
 function openEditModal(book = null) {
+    if (window.__sharedView) return;
     editingBook = book || { reads: [], tags: [], exclusiveShelf: "to-read", dateAdded: Date.now(), emojis: [] };
 
     // Fill all fields (your original)
