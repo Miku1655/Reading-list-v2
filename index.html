@@ -29,6 +29,7 @@
  
 <div class="tabs">
     <button class="tab" data-tab="profile">Profile</button>
+    <button class="tab" data-tab="search">Search</button>
     <button class="tab active" data-tab="list">List</button>
     <button class="tab" data-tab="stats">Stats</button>
     <button class="tab" data-tab="timeline">Timeline</button>
@@ -142,6 +143,23 @@
     </div>
     <button id="refreshRediscoverBtn" style="margin-top:8px;">New rediscovery</button>
 </div>
+</section>
+
+<section id="tab-search" class="tab-content">
+    <div style="max-width:600px; margin:0 auto; padding:20px 0;">
+        <h2>Find Readers</h2>
+        <p style="color:#aaa; margin-bottom:20px;">
+            Search for other users by their nickname. Only users who have opted into
+            search are visible here.
+        </p>
+        <div style="display:flex; gap:8px; margin-bottom:24px;">
+            <input type="text" id="profileSearchInput"
+                   placeholder="Search by nickname (min. 2 characters)"
+                   style="flex:1; padding:8px 12px;">
+            <button id="profileSearchBtn">Search</button>
+        </div>
+        <div id="profileSearchResults"></div>
+    </div>
 </section>
 
     <section id="tab-timeline" class="tab-content">
@@ -751,6 +769,17 @@
     </div>
 
     <hr style="border:1px solid #333; margin:16px 0;">
+    <hr style="border:1px solid #333; margin:16px 0;">
+    <h3>Profile Privacy</h3>
+    <p style="color:#aaa; font-size:0.9em; margin-bottom:12px;">
+        When enabled, your nickname appears in search results and others can
+        browse to your profile. Your share link always works regardless of this setting.
+    </p>
+    <label>
+        <input type="checkbox" id="profileSearchable" checked>
+        Allow others to find my profile via search
+    </label>
+
     Version 1.21 – mobile support, auto-complete, CSV export, other small bug-fixes
 </section>
 
@@ -916,6 +945,7 @@
 <script src="js/year-review.js"></script>
 <script src="js/ui-core.js"></script>
 <script src="js/share.js"></script>
+<script src="js/profile-search.js"></script>
 <script src="js/ui-events.js"></script>
 <script src="js/ui-year-review.js"></script>
 <script src="js/constellation.js"></script>
