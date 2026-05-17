@@ -47,14 +47,15 @@ document.getElementById("editModal").addEventListener("click", e => {
 document.getElementById("saveCloudBtn").addEventListener("click", () => {
     if (!currentUser) return alert("Sign in first");
     if (!confirm("Overwrite cloud data with current local data?")) return;
+
     const dataToSave = {
         books: books,
         profile: profile,
         goals: goals,
         challenges: challenges,
         shelfColors: shelfColors,
-        bookshelfShelves: bookshelfShelves,
-        bookshelfSettings: bookshelfSettings,
+        // bookshelfShelves was removed (it doesn't exist)
+        bookshelfSettings: bookshelfSettings || {},
         battleData: JSON.parse(localStorage.getItem(BATTLE_KEY) || "{}"),
         battleRankingLimit: localStorage.getItem(BATTLE_LIMIT_KEY) || "20",
         battleComplexMode: localStorage.getItem(BATTLE_COMPLEX_KEY) || "off",
@@ -67,6 +68,7 @@ document.getElementById("saveCloudBtn").addEventListener("click", () => {
             titleLangPref: localStorage.getItem(TITLE_LANG_KEY) || "original",
         }
     };
+
     userRef.set(dataToSave)
         .then(() => {
             publishProfile?.();
