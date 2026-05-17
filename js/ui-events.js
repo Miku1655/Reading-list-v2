@@ -68,7 +68,10 @@ document.getElementById("saveCloudBtn").addEventListener("click", () => {
         }
     };
     userRef.set(dataToSave)
-        .then(() => alert("Saved to cloud successfully!"))
+        .then(() => {
+            publishProfile?.();
+            alert("Saved to cloud successfully!");
+        })
         .catch(err => alert("Save failed: " + err.message));
 });
 document.getElementById("loadCloudBtn").addEventListener("click", () => {
@@ -296,6 +299,43 @@ document.getElementById("titleLangPref")?.addEventListener("change", e => {
     saveTitleLangPref(e.target.value);
 });
 
+// ── Profile searchable toggle ─────────────────────────────────────────────────
+document.getElementById("profileSearchable")?.addEventListener("change", async e => {
+    profileSearchable = e.target.checked;
+    localStorage.setItem(PROFILE_SEARCHABLE_KEY, JSON.stringify(profileSearchable));
+    await publishProfile?.();
+});
+
+// ── Profile search tab — search button + Enter key ────────────────────────────
+document.getElementById("profileSearchBtn")?.addEventListener("click", async () => {
+    const query = document.getElementById("profileSearchInput")?.value || "";
+    const resultsEl = document.getElementById("profileSearchResults");
+
+    if (query.trim().length < 2) {
+        renderSearchResults(null, query);
+        return;
+    }
+
+    if (resultsEl) {
+        resultsEl.innerHTML = `<p style="color:#888; text-align:center; padding:16px;">Searching…</p>`;
+    }
+
+    try {
+        const results = await searchProfiles(query);
+        renderSearchResults(results, query);
+    } catch (err) {
+        if (resultsEl) {
+            resultsEl.innerHTML = `<p style="color:#c66; text-align:center; padding:16px;">
+                Search failed: ${err.message}
+            </p>`;
+        }
+    }
+});
+
+document.getElementById("profileSearchInput")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") document.getElementById("profileSearchBtn")?.click();
+});
+
 // Profile
 document.getElementById("profilePic").addEventListener("click", () => document.getElementById("profilePicInput").click());
 document.getElementById("profilePicInput").addEventListener("change", e => {
@@ -316,6 +356,7 @@ document.getElementById("profileNick").addEventListener("input", () => {
     profileSaveTimeout = setTimeout(() => {
         profile.nick = document.getElementById("profileNick").value.trim();
         localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+        publishProfile?.();
     }, 800);
 });
 document.getElementById("profileBio").addEventListener("input", () => {
@@ -323,6 +364,7 @@ document.getElementById("profileBio").addEventListener("input", () => {
     profileSaveTimeout = setTimeout(() => {
         profile.bio = document.getElementById("profileBio").value.trim();
         localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+        publishProfile?.();
     }, 800);
 });
 

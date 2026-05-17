@@ -79,21 +79,25 @@ function switchTab(name) {
     }
     
     if (name === "constellation") {
-    if (!constellationCanvas) initConstellation();
-    renderConstellation();
-}
+        if (!constellationCanvas) initConstellation();
+        renderConstellation();
+    }
    
     if (name === "quiz") {
-    renderQuiz();
-}
+        renderQuiz();
+    }
     
     if (name === "stats") {
-        renderStats?.(); // optional chaining if function might not exist yet
+        renderStats?.();
     }
     
     if (name === "challenges") {
         loadGoalsForYear();
         renderChallengesTab?.();
+    }
+
+    if (name === "search") {
+        renderSearchTab?.();
     }
 }
 
@@ -101,7 +105,7 @@ function switchTab(name) {
 // (e.g. after save, import, cloud load, etc.)
 function renderAll() {
     // Core shared elements
-    populateShelfFilter?.();         // optional, with ?.
+    populateShelfFilter?.();
     updateCoversCount?.();
     
     // Always render table (it's fast and often needed)
@@ -119,12 +123,12 @@ function renderAll() {
     }
     
     if (document.getElementById("tab-world-map")?.classList.contains("active")) {
-    renderMap();
-}
+        renderMap();
+    }
     
     if (document.getElementById("tab-quiz")?.classList.contains("active")) {
-    renderQuiz();
-}
+        renderQuiz();
+    }
 
     if (document.getElementById("tab-battle")?.classList.contains("active")) {
         renderBattle?.();
@@ -141,20 +145,19 @@ function renderAll() {
     if (activeTab === "timeline") renderTimeline?.();
     if (activeTab === "quotes") renderQuotes?.();
     if (document.getElementById("tab-constellation")?.classList.contains("active")) {
-    prepareConstellationData();
-    renderConstellation();
-}
+        prepareConstellationData();
+        renderConstellation();
+    }
     if (activeTab === "challenges") {
-    loadGoalsForYear();
-    renderChallengesTab();
-    renderChallengesList();
-}
+        loadGoalsForYear();
+        renderChallengesTab();
+        renderChallengesList();
+    }
     
     // Options shelf manager
     if (activeTab === "options") renderShelfManager?.();
 }
 function renderShelfManager() {
-    // (exact code from your ui.js — unchanged)
     const container = document.getElementById("shelfManager");
     container.innerHTML = "";
     const set = new Set();
@@ -200,7 +203,6 @@ function renderShelfManager() {
     });
 }
 function updateSortIndicators() {
-    // (exact code from your ui.js — unchanged)
     document.querySelectorAll(".sort").forEach(s => s.textContent = "");
     document.getElementById("recentSortIndicator").textContent = "";
     if (sortState.column) {
@@ -211,7 +213,6 @@ function updateSortIndicators() {
     }
 }
 function loadGoalsForYear() {
-    // (exact code from your ui.js — unchanged)
     const year = Number(document.getElementById("goalYear").value) || new Date().getFullYear();
     document.getElementById("goalYear").value = year;
     const g = goals[year] || {};
@@ -219,7 +220,6 @@ function loadGoalsForYear() {
     document.getElementById("yearPagesGoal").value = g.pages || "";
 }
 function renderChallengesTab() {
-    // (exact full code from your ui.js — unchanged, including pace/projection/goal progress HTML)
     const container = document.getElementById("challengesProgressContainer");
     if (!container) return;
     let html = "";
@@ -290,14 +290,14 @@ function renderChallengesTab() {
     container.innerHTML = html;
 }
 
-// Initial load (moved here — will be called from ui-events.js after DOM ready)
+// Initial load (called from ui-events.js after DOM ready)
 function initApp() {
     const savedTab = localStorage.getItem(TAB_KEY) || "list";
     switchTab(savedTab);
     renderAll();
     document.getElementById("goalYear").value = new Date().getFullYear();
     loadGoalsForYear();
-if (savedTab === "constellation") {
-    initConstellation();
-}
+    if (savedTab === "constellation") {
+        initConstellation();
+    }
 }

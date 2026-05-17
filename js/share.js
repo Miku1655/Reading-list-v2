@@ -55,6 +55,9 @@ async function generateShareLink() {
     try {
         await db.ref("public/" + shareId).set(publicData);
 
+        // Keep the search profile index in sync with updated booksCount
+        await publishProfile?.();
+
         const url = `${location.origin}${location.pathname}?view=${shareId}`;
         localStorage.setItem(SHARE_KEY, shareId);
         updateShareUI(url);
@@ -166,7 +169,8 @@ async function loadSharedView(shareId) {
             ".tab[data-tab='options']",
             ".tab[data-tab='challenges']",
             ".tab[data-tab='battle']",
-            ".tab[data-tab='quotes']"
+            ".tab[data-tab='quotes']",
+            ".tab[data-tab='search']"
         ].forEach(sel => {
             document.querySelectorAll(sel).forEach(el => el.style.display = "none");
         });

@@ -28,6 +28,7 @@ let showYearGoalProgress = true;
 let hideToReadExceptOwnShelf = false;
 let notePopup = null;
 let settings = {};
+let profileSearchable = true;
 
 function loadLocalData() {
     const savedBooks = localStorage.getItem(STORAGE_KEY);
@@ -87,6 +88,11 @@ function loadLocalData() {
     hideToReadExceptOwnShelf = JSON.parse(localStorage.getItem(HIDE_TO_READ_KEY) || "false");
     document.getElementById("hideToReadExceptOwn").checked = hideToReadExceptOwnShelf;
     loadTitleLangPref();
+
+    // ── Profile searchable ──
+    profileSearchable = JSON.parse(localStorage.getItem(PROFILE_SEARCHABLE_KEY) ?? "true");
+    const searchableCheckbox = document.getElementById("profileSearchable");
+    if (searchableCheckbox) searchableCheckbox.checked = profileSearchable;
 
     // Constellation / generic settings
     const savedSettings = localStorage.getItem('settings');
