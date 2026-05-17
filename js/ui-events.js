@@ -221,8 +221,9 @@ document.getElementById("exportData").addEventListener("click", () => {
     a.click();
     URL.revokeObjectURL(url);
 });
-// CSV export button
-document.getElementById("exportCSV")?.addEventListener("click", exportCSV);
+
+// CSV export button — wired directly (no optional chaining; element is guaranteed by index.html)
+document.getElementById("exportCSV").addEventListener("click", exportCSV);
 
 document.getElementById("clearStorage").addEventListener("click", () => {
     if (confirm("Clear all local data? (Cloud data stays if signed in)")) {
