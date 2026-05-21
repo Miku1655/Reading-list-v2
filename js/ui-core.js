@@ -107,10 +107,15 @@ function renderAll() {
     // Core shared elements
     populateShelfFilter?.();
     updateCoversCount?.();
-    
-    // Always render table (it's fast and often needed)
-    renderTable();
-    
+
+    // Only render the table when the list tab is actually visible — it's not
+    // "fast" once the library grows, and callers from other tabs (save, cloud
+    // load, challenge update, etc.) don't need it.
+    if (document.getElementById("tab-list")?.classList.contains("active")) {
+        renderTable();
+        renderYearGoalProgress();
+    }
+
     // Profile section (only if visible)
     if (document.getElementById("tab-profile")?.classList.contains("active")) {
         renderProfileStats();
@@ -133,11 +138,7 @@ function renderAll() {
     if (document.getElementById("tab-battle")?.classList.contains("active")) {
         renderBattle?.();
     }
-    
-    // Goal progress (only if list tab active)
-    if (document.getElementById("tab-list")?.classList.contains("active")) {
-        renderYearGoalProgress();
-    }
+
     // Tab-specific heavy renders
     const activeTab = document.querySelector(".tab.active")?.dataset.tab;
     
