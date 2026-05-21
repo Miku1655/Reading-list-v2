@@ -1,35 +1,54 @@
 // ============================================================
-//  BookDuel – ranking game
-//  File: js/battle.js
+//  BookDuel – js/battle.js
+//  Rating system: Glicko-inspired win-rate with opponent
+//  strength weighting. Replaces the previous ELO+bounds system
+//  that caused instability and "frozen" rankings.
+//
+//  Core principles:
+//  1. MONOTONIC   — winning always helps, losing always hurts
+//  2. STABLE      — veterans move slowly, newcomers move fast
+//  3. RECOVERABLE — more duels always refine placement
+//  4. TRANSPARENT — win%, match count, strength displayed
+//  5. NO DECAY    — idle books never drift without a duel
 // ============================================================
 
-const BATTLE_KEY            = "reading_battle_data";
-const BATTLE_LIMIT_KEY      = "reading_battle_ranking_limit";
-const BATTLE_COMPLEX_KEY    = "reading_battle_complex";   // "off"|"2"-"10"
-const BATTLE_POOL_MODE_KEY  = "reading_battle_pool_mode"; // "sprint"|"standard"|"marathon"|"deep"
-const BATTLE_FOCUS_KEY      = "reading_battle_focus";     // "-2"|"-1"|"0"|"1"|"2"|"random"
+const BATTLE_KEY          = "reading_battle_data";
+const BATTLE_LIMIT_KEY    = "reading_battle_ranking_limit";
+const BATTLE_COMPLEX_KEY  = "reading_battle_complex";   // "off"|"2"–"10"
+const BATTLE_POOL_MODE_KEY = "reading_battle_pool_mode";
+const BATTLE_FOCUS_KEY    = "reading_battle_focus";
 const DEFAULT_RANKING_LIMIT = 20;
 
-// ---------- persistent prefs ----------
+// ── Rating scale ──────────────────────────────────────────────
+// Books start at 1000. Range is roughly 0–3000.
+// A win against an equal opponent is worth ~32 pts at K=32.
+const RATING_START   = 1000;
+const RATING_MAX     = 3000;
+const RATING_MIN     = 1;
+const K_BASE         = 32;   // max points per duel for a veteran
+const K_PROVISIONAL  = 64;   // first 5 duels — move faster
+const PROVISIONAL_N  = 5;    // duels before "veteran" status
+
+// ── Persistent preferences ────────────────────────────────────
 let battleData         = null;
 let battleRankingLimit = DEFAULT_RANKING_LIMIT;
 let battleComplexMode  = "off";
-let battlePoolMode     = "standard";  // sprint|standard|marathon|deep
-let battleFocus        = "0";         // -2=bottom-heavy … 2=top-heavy, "random"=pure random
+let battlePoolMode     = "standard";
+let battleFocus        = "0";
 
-// ---------- live session ----------
+// ── Live session ──────────────────────────────────────────────
 let battleSession  = null;
 let duelStartTime  = null;
 let battleView     = "play";
 
 // ============================================================
-//  SESSION CONFIG
+//  SESSION CONFIGS  (unchanged from original — UI depends on these)
 // ============================================================
 const SESSION_CONFIGS = {
-    sprint:   { label: "Sprint",   size: 30,  kMx: 0.6,  sessionWeight: 0.3,  emoji: "⚡" },
-    standard: { label: "Standard", size: 75,  kMx: 1.0,  sessionWeight: 0.75, emoji: "📖" },
-    marathon: { label: "Marathon", size: 150, kMx: 1.1,  sessionWeight: 1.0,  emoji: "🏃" },
-    deep:     { label: "Deep Dive",size: Infinity, kMx: 1.25, sessionWeight: 1.5, emoji: "🌊" }
+    sprint:   { label: "Sprint",    size: 30,       kMx: 1.0, sessionWeight: 0.3,  emoji: "⚡" },
+    standard: { label: "Standard",  size: 75,       kMx: 1.0, sessionWeight: 0.75, emoji: "📖" },
+    marathon: { label: "Marathon",  size: 150,      kMx: 1.0, sessionWeight: 1.0,  emoji: "🏃" },
+    deep:     { label: "Deep Dive", size: Infinity, kMx: 1.0, sessionWeight: 1.5,  emoji: "🌊" }
 };
 
 function getSessionConfig() {
@@ -48,10 +67,10 @@ function loadBattleData() {
         blacklist: parsed.blacklist || []
     };
     battleRankingLimit = Number(localStorage.getItem(BATTLE_LIMIT_KEY)) || DEFAULT_RANKING_LIMIT;
-    battleComplexMode  = localStorage.getItem(BATTLE_COMPLEX_KEY)   || "off";
-    battlePoolMode     = localStorage.getItem(BATTLE_POOL_MODE_KEY)  || "standard";
-    battleFocus        = localStorage.getItem(BATTLE_FOCUS_KEY)      || "0";
-    migrateBookStats();
+    battleComplexMode  = localStorage.getItem(BATTLE_COMPLEX_KEY)    || "off";
+    battlePoolMode     = localStorage.getItem(BATTLE_POOL_MODE_KEY)   || "standard";
+    battleFocus        = localStorage.getItem(BATTLE_FOCUS_KEY)       || "0";
+    migrateLegacyStats();
 }
 
 function saveBattleData() {
@@ -62,19 +81,22 @@ function saveBattleComplexMode(val) {
     battleComplexMode = val;
     localStorage.setItem(BATTLE_COMPLEX_KEY, val);
 }
-
 function saveBattlePoolMode(val) {
     battlePoolMode = val;
     localStorage.setItem(BATTLE_POOL_MODE_KEY, val);
 }
-
 function saveBattleFocus(val) {
     battleFocus = val;
     localStorage.setItem(BATTLE_FOCUS_KEY, val);
 }
+function saveBattleRankingLimit(val) {
+    battleRankingLimit = Math.max(1, Number(val) || DEFAULT_RANKING_LIMIT);
+    localStorage.setItem(BATTLE_LIMIT_KEY, String(battleRankingLimit));
+}
+function saveBattleComplexSetting(val) { saveBattleComplexMode(val); }
 
 function resetBattleStats() {
-    if (!confirm("Reset all BookDuel rankings and session history? The blacklist will be kept. This cannot be undone.")) return;
+    if (!confirm("Reset all BookDuel rankings and session history? The blacklist will be kept.")) return;
     battleData.sessions  = [];
     battleData.bookStats = {};
     battleSession = null;
@@ -84,10 +106,160 @@ function resetBattleStats() {
 }
 
 function resetBlacklist() {
-    if (!confirm("Clear the entire BookDuel blacklist? Rankings and history will be kept.")) return;
+    if (!confirm("Clear the entire BookDuel blacklist?")) return;
     battleData.blacklist = [];
     saveBattleData();
     renderBattle();
+}
+
+// ============================================================
+//  MIGRATION  — convert old ELO/bounds stats to new format
+//  Preserves win/loss counts; derives a clean rating from them.
+// ============================================================
+function migrateLegacyStats() {
+    if (battleData._newRatingSystem) return;
+
+    let changed = false;
+    Object.keys(battleData.bookStats).forEach(id => {
+        const s = battleData.bookStats[id];
+        if (!s) return;
+
+        // Old system had rating, lo, hi, wins, losses, interactions, etc.
+        // New system needs: rating, wins, losses, appearances, sessionWins
+        const wins   = s.wins   || 0;
+        const losses = s.losses || 0;
+        const total  = wins + losses;
+
+        if (total > 0) {
+            // Derive a sensible starting rating from win rate
+            const winRate = wins / total;
+            s.rating = Math.round(RATING_START + (winRate - 0.5) * 600);
+            s.rating = Math.max(RATING_MIN, Math.min(RATING_MAX, s.rating));
+        } else {
+            s.rating = RATING_START;
+        }
+
+        // Strip old fields that no longer apply
+        delete s.lo;
+        delete s.hi;
+        delete s.interactions;
+        delete s.lastSeenSession;
+        delete s.lastSeenAt;
+        delete s.decayWeight;
+        delete s.tiersEncountered;
+
+        s.wins        = wins;
+        s.losses      = losses;
+        s.appearances = s.appearances || total;
+        s.sessionWins = s.sessionWins || 0;
+
+        changed = true;
+    });
+
+    if (changed || !battleData._newRatingSystem) {
+        battleData._newRatingSystem = true;
+        saveBattleData();
+    }
+}
+
+// ============================================================
+//  STAT HELPERS
+// ============================================================
+function ensureBookStat(id) {
+    if (!battleData.bookStats[id]) {
+        battleData.bookStats[id] = {
+            rating:      RATING_START,
+            wins:        0,
+            losses:      0,
+            appearances: 0,
+            sessionWins: 0
+        };
+    }
+    const s = battleData.bookStats[id];
+    if (s.rating      === undefined) s.rating      = RATING_START;
+    if (s.wins        === undefined) s.wins        = 0;
+    if (s.losses      === undefined) s.losses      = 0;
+    if (s.appearances === undefined) s.appearances = 0;
+    if (s.sessionWins === undefined) s.sessionWins = 0;
+    return s;
+}
+
+function getBookById(importOrder) {
+    return books.find(b => b.importOrder === importOrder) || null;
+}
+
+function getDuels(stat) {
+    return (stat.wins || 0) + (stat.losses || 0);
+}
+
+function getWinRate(stat) {
+    const d = getDuels(stat);
+    return d > 0 ? stat.wins / d : null;
+}
+
+// Confidence label based purely on number of duels
+function confidenceLabel(stat) {
+    const d = getDuels(stat);
+    if (d === 0)   return { label: "Unranked",   color: "#666" };
+    if (d < 5)     return { label: "Uncertain",  color: "#c0392b" };
+    if (d < 15)    return { label: "Developing", color: "#e67e22" };
+    if (d < 30)    return { label: "Established",color: "#f1c40f" };
+    return               { label: "Confident",   color: "#2ecc71" };
+}
+
+// ============================================================
+//  CORE RATING  — clean, predictable, no hidden multipliers
+//
+//  Uses standard Elo expected-value formula. K is simply:
+//    64 if fewer than PROVISIONAL_N duels (new book, move fast)
+//    32 otherwise (veteran, stable)
+//
+//  No session weighting, no pool ceiling dampening, no decay.
+//  The result is fully deterministic from the match outcome.
+// ============================================================
+function eloExpected(ratingA, ratingB) {
+    return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+}
+
+function kFactor(stat) {
+    return getDuels(stat) < PROVISIONAL_N ? K_PROVISIONAL : K_BASE;
+}
+
+function applyRating(winnerId, loserId) {
+    const ws = ensureBookStat(winnerId);
+    const ls = ensureBookStat(loserId);
+
+    const expected = eloExpected(ws.rating, ls.rating);
+
+    const wK = kFactor(ws);
+    const lK = kFactor(ls);
+
+    ws.rating = Math.min(RATING_MAX, Math.round(ws.rating + wK * (1 - expected)));
+    ls.rating = Math.max(RATING_MIN, Math.round(ls.rating - lK * (1 - expected)));
+
+    ws.wins   += 1;
+    ls.losses += 1;
+}
+
+// Draw: both move toward each other's rating slightly
+function applyDraw(idA, idB) {
+    const sa = ensureBookStat(idA);
+    const sb = ensureBookStat(idB);
+
+    const expA = eloExpected(sa.rating, sb.rating);
+    const kA   = kFactor(sa);
+    const kB   = kFactor(sb);
+
+    sa.rating = Math.min(RATING_MAX, Math.max(RATING_MIN,
+        Math.round(sa.rating + kA * (0.5 - expA))));
+    sb.rating = Math.min(RATING_MAX, Math.max(RATING_MIN,
+        Math.round(sb.rating + kB * (0.5 - (1 - expA)))));
+
+    // Draws count as half a win/loss each for display purposes
+    sa.wins   += 0.5;
+    sa.losses += 0.5;
+    sb.wins   += 0.5;
+    sb.losses += 0.5;
 }
 
 // ============================================================
@@ -99,10 +271,6 @@ function getBattlePool() {
         (b.exclusiveShelf === "read" || b.exclusiveShelf === "currently-reading") &&
         !blacklistSet.has(b.importOrder)
     );
-}
-
-function getBookById(importOrder) {
-    return books.find(b => b.importOrder === importOrder) || null;
 }
 
 function fmtMs(ms) {
@@ -117,505 +285,41 @@ function fmtDate(ts) {
 }
 
 // ============================================================
-//  ELO SCALE — fixed 0–3000, midpoint 1500 (chess-style)
-//
-//  Previously dynamic (5 × bookCount), which caused scale inflation
-//  as books were added: existing ratings didn't rescale, so the
-//  distribution compressed toward the bottom over time.
-//  Fixed scale means ratings are stable and intuitive.
+//  POOL SAMPLING  — tier-aware, focus-weighted
+//  Simplified: tiers are now purely rating quartiles, no
+//  entanglement with the bounds system.
 // ============================================================
-function getEloMidpoint() { return 1500; }
-function getEloMax()      { return 3000; }
-function getEloStart()    { return  750; } // 25% — books earn their way up
-
-// ============================================================
-//  BOUNDS SYSTEM  (lo / hi uncertainty range)
-//
-//  Every book tracks a plausible range [lo, hi] alongside its
-//  point-estimate `rating`. The range only ever tightens:
-//
-//    Winner beats opponent at R:  lo = max(lo, opponent.lo)
-//    Loser loses to opponent at R: hi = min(hi, opponent.hi)  (capped softly)
-//
-//  Fresh books: lo=1, hi=eloMax  (we know nothing)
-//  Sort key for rankings = lo  (uncertain books sink to bottom)
-//  Display: show `rating` as point estimate, (lo–hi) as range band
-//
-//  Evidence = 1 - (hi - lo) / eloMax
-//    → 0% when range is fully open, ~100% when range is tight
-// ============================================================
-
-function getBoundsSpread(stat) {
-    const lo = stat.lo ?? 1;
-    const hi = stat.hi ?? getEloMax();
-    return hi - lo;
-}
-
-// Evidence purely from range tightness — semantically correct
-function getEvidenceScore(stat) {
-    if (!stat) return 0;
-    const spread = getBoundsSpread(stat);
-    return Math.max(0, 1 - spread / getEloMax());
-}
-
-function evidenceLabel(score) {
-    if (score < 0.15) return { label: "Uncertain",   color: "#c0392b" };
-    if (score < 0.40) return { label: "Developing",  color: "#e67e22" };
-    if (score < 0.70) return { label: "Established", color: "#f1c40f" };
-    return                   { label: "Confident",   color: "#2ecc71" };
-}
-
-// ============================================================
-//  BOUNDS + RATING INTEGRATION
-//
-//  Every duel nudges lo/hi bounds, scaled by opponent's evidence:
-//    Low evidence opponent  → tiny nudge (we don't trust their position)
-//    High evidence opponent → larger nudge (their position is reliable)
-//
-//  nudgeFraction = 0.03 + 0.12 × opponentEvidence²
-//    → ranges from ~3% (unknown opponent) to ~15% (confident opponent)
-//    of the gap between current bound and opponent's rating.
-//
-//  Rating anchoring:
-//    Below "Established" (<70% evidence): rating = pure Elo point estimate
-//    At "Established" (≥70% evidence):   rating = midpoint of [lo, hi]
-//    This means well-calibrated books' rankings are driven by proven range,
-//    not accumulated Elo drift.
-// ============================================================
-
-// ============================================================
-//  BOUNDS UPDATE
-//
-//  When A beats B:
-//  1. Base nudge: lo rises, hi falls — gentle when opponent is uncertain,
-//     stronger when opponent is well-known.
-//  2. Surprise factor: if the win/loss contradicts the current range
-//     (e.g. you beat someone far above your hi, or lose to someone far
-//     below your lo), the range shifts aggressively to correct itself.
-//     The range should reflect reality — a book that beats a 1500 while
-//     ranged at 600–800 is obviously misplaced.
-// ============================================================
-function nudgeBounds(winnerId, loserId) {
-    const ws  = battleData.bookStats[winnerId];
-    const ls  = battleData.bookStats[loserId];
-    if (!ws || !ls) return;
-
-    const eloMax    = getEloMax();
-    const wEv = getEvidenceScore(ws);
-    const lEv = getEvidenceScore(ls);
-
-    const wLo = ws.lo ?? 1;
-    const wHi = ws.hi ?? eloMax;
-    const lLo = ls.lo ?? 1;
-    const lHi = ls.hi ?? eloMax;
-
-    // ── Winner ──────────────────────────────────────────────────────────
-    // How surprising is this win? If loser's rating is above winner's hi,
-    // the win directly contradicts the range — shift aggressively.
-    const loserRating = ls.rating ?? lLo;
-    const winnerSurprise = Math.max(0, loserRating - wHi); // how far above winner's hi the loser was
-
-    if (winnerSurprise > 0) {
-        // Contradicting evidence: shift the whole range up toward loser's rating
-        const shift = Math.round(winnerSurprise * (0.4 + 0.4 * lEv));
-        ws.lo = Math.min(eloMax, wLo + shift);
-        ws.hi = Math.min(eloMax, wHi + shift);
-    } else {
-        // Normal case: nudge lo up within existing range
-        const nudge = 0.04 + 0.18 * (lEv ** 2);
-        const gap   = loserRating - wLo;
-        if (gap > 0) ws.lo = Math.round(wLo + gap * nudge);
-    }
-
-    // ── Loser ───────────────────────────────────────────────────────────
-    const winnerRating = ws.rating ?? wLo;
-    const loserSurprise = Math.max(0, lLo - winnerRating); // how far below loser's lo the winner was
-
-    if (loserSurprise > 0) {
-        // Contradicting evidence: shift whole range down toward winner's rating
-        const shift = Math.round(loserSurprise * (0.4 + 0.4 * wEv));
-        ls.lo = Math.max(1, lLo - shift);
-        ls.hi = Math.max(1, lHi - shift);
-    } else {
-        // Normal case: nudge hi down
-        const nudge = 0.04 + 0.18 * (wEv ** 2);
-        const gap   = lHi - winnerRating;
-        if (gap > 0) ls.hi = Math.round(lHi - gap * nudge);
-    }
-
-    // Clamp and sanity
-    const MIN_SPREAD = 50;
-    ws.lo = Math.max(1, Math.min(ws.lo ?? wLo, eloMax));
-    ws.hi = Math.max(ws.lo, Math.min(ws.hi ?? wHi, eloMax));
-    if (ws.hi - ws.lo < MIN_SPREAD) { const m = Math.round((ws.lo+ws.hi)/2); ws.lo = Math.max(1,m-25); ws.hi = Math.min(eloMax,m+25); }
-
-    ls.lo = Math.max(1, Math.min(ls.lo ?? lLo, eloMax));
-    ls.hi = Math.max(ls.lo, Math.min(ls.hi ?? lHi, eloMax));
-    if (ls.hi - ls.lo < MIN_SPREAD) { const m = Math.round((ls.lo+ls.hi)/2); ls.lo = Math.max(1,m-25); ls.hi = Math.min(eloMax,m+25); }
-
-    anchorRatingToRange(ws);
-    anchorRatingToRange(ls);
-}
-
-function anchorRatingToRange(stat) {
-    if (!stat) return;
-    const evidence = getEvidenceScore(stat);
-    if (evidence >= 0.7) {
-        const spread = (stat.hi ?? getEloMax()) - (stat.lo ?? 1);
-        if (spread >= 50) {
-            stat.rating = Math.round(((stat.lo ?? 1) + (stat.hi ?? getEloMax())) / 2);
-        }
-    }
-}
-
-// Apply a draw in calibration: both books declared same level
-function applyDrawBounds(idA, idB) {
-    const sa = battleData.bookStats[idA];
-    const sb = battleData.bookStats[idB];
-    if (!sa || !sb) return;
-
-    const eloMax = getEloMax();
-    // Treat draw as if both have high evidence of being at the same level —
-    // use a strong nudge toward each other's rating
-    const center = Math.round((sa.rating + sb.rating) / 2);
-    const band   = 400;
-    sa.lo = Math.max(sa.lo ?? 1,      center - band);
-    sa.hi = Math.min(sa.hi ?? eloMax, center + band);
-    sb.lo = Math.max(sb.lo ?? 1,      center - band);
-    sb.hi = Math.min(sb.hi ?? eloMax, center + band);
-    sa.lo = Math.min(sa.lo, sa.hi);
-    sb.lo = Math.min(sb.lo, sb.hi);
-
-    // Small Elo nudge toward each other
-    const expA = eloExpected(sa.rating, sb.rating);
-    const K    = 32;
-    sa.rating  = Math.max(1, Math.min(eloMax, Math.round(sa.rating + K * (0.5 - expA))));
-    sb.rating  = Math.max(1, Math.min(eloMax, Math.round(sb.rating + K * (0.5 - (1 - expA)))));
-    anchorRatingToRange(sa);
-    anchorRatingToRange(sb);
-    sa.interactions = (sa.interactions || 0) + 1;
-    sb.interactions = (sb.interactions || 0) + 1;
-}
-
-// Keep these for tier tracking (used in pool sampling)
-function recordTierEncountered(stat, opponentId) {
-    if (!stat.tiersEncountered) stat.tiersEncountered = [];
-    const tier = getEloTier(ensureBookStat(opponentId).rating);
-    if (!stat.tiersEncountered.includes(tier)) stat.tiersEncountered.push(tier);
-}
-
-// ============================================================
-//  TIER SYSTEM (0=bottom … 3=top, computed dynamically)
-// ============================================================
-function computeTierBoundaries(pool) {
-    if (!pool || pool.length === 0) {
-        const mid = getEloMidpoint();
-        return [mid * 0.25, mid * 0.75, mid * 1.25];
-    }
-    const sorted = pool.map(b => {
-        const s = battleData.bookStats[b.importOrder];
-        return s ? s.rating : getEloStart();
-    }).sort((a, b) => a - b);
-    const q = (p) => sorted[Math.floor(p * (sorted.length - 1))];
+function getRatingTierBoundaries(pool) {
+    if (!pool || pool.length === 0) return [800, 1000, 1200];
+    const rated = pool
+        .map(b => ensureBookStat(b.importOrder).rating)
+        .sort((a, b) => a - b);
+    const q = p => rated[Math.floor(p * (rated.length - 1))];
     return [q(0.25), q(0.5), q(0.75)];
 }
 
-function getEloTier(rating, boundaries) {
-    const b = boundaries || computeTierBoundaries(getBattlePool());
-    if (rating <= b[0]) return 0;
-    if (rating <= b[1]) return 1;
-    if (rating <= b[2]) return 2;
+function getRatingTier(rating, boundaries) {
+    if (rating <= boundaries[0]) return 0;
+    if (rating <= boundaries[1]) return 1;
+    if (rating <= boundaries[2]) return 2;
     return 3;
 }
 
-// ============================================================
-//  MIGRATION
-// ============================================================
-function migrateBookStats() {
-    const NEW_MAX = 3000;
-    let changed = false;
-
-    // ── Step 1: Detect & rescale from old dynamic scale ──────────────────
-    const allStats = Object.values(battleData.bookStats).filter(Boolean);
-    if (allStats.length > 0) {
-        const maxRating = Math.max(...allStats.map(s => s.rating ?? 0).filter(r => r > 0));
-        const needsRescale = maxRating > 0 && maxRating < 2400 && !battleData._scaleMigrated3k;
-
-        if (needsRescale) {
-            // Infer old max: treat observed max as ~80th percentile of old scale
-            const oldMax = Math.max(500, Math.round(maxRating / 0.8));
-            const scale  = NEW_MAX / oldMax;
-            allStats.forEach(stat => {
-                if (stat.rating !== undefined) stat.rating = Math.max(1, Math.min(NEW_MAX, Math.round(stat.rating * scale)));
-                if (stat.lo     !== undefined) stat.lo     = Math.max(1, Math.min(NEW_MAX, Math.round(stat.lo * scale)));
-                if (stat.hi     !== undefined) stat.hi     = Math.max(1, Math.min(NEW_MAX, Math.round(stat.hi * scale)));
-                // After rescale ensure lo ≤ hi
-                if (stat.lo !== undefined && stat.hi !== undefined) stat.lo = Math.min(stat.lo, stat.hi);
-        // Reset any collapsed bounds (lo===hi) — artifact of previous broken logic.
-        // Wide open is honest; calibration will narrow them deliberately.
-        if (stat.lo !== undefined && stat.hi !== undefined && stat.hi - stat.lo < 50) {
-            stat.lo = 1;
-            stat.hi = NEW_MAX;
-        }
-            });
-            battleData._scaleMigrated3k = true;
-            // Clear old flag so we don't double-apply
-            delete battleData._scaleMigrated;
-            changed = true;
-        } else if (!battleData._scaleMigrated3k) {
-            battleData._scaleMigrated3k = true;
-            changed = true;
-        }
-    }
-
-    // ── Step 2: Field defaults ────────────────────────────────────────────
-    allStats.forEach(stat => {
-        if (!stat) return;
-        if (stat.rating          === undefined) { stat.rating          = getEloStart(); changed = true; }
-        if (stat.interactions    === undefined) { stat.interactions    = (stat.wins || 0) + (stat.losses || 0); changed = true; }
-        if (stat.lastSeenSession === undefined) { stat.lastSeenSession = 0;      changed = true; }
-        if (stat.decayWeight     === undefined) { stat.decayWeight     = 0;      changed = true; }
-        if (stat.tiersEncountered=== undefined) { stat.tiersEncountered= [];     changed = true; }
-        if (stat.lo              === undefined) {
-            const n = stat.interactions || 0;
-            if (n === 0) {
-                stat.lo = 1; stat.hi = NEW_MAX;
-            } else {
-                const spread = Math.max(200, NEW_MAX * Math.max(0.1, 0.8 - n * 0.03));
-                stat.lo = Math.max(1,        Math.round(stat.rating - spread / 2));
-                stat.hi = Math.min(NEW_MAX,  Math.round(stat.rating + spread / 2));
-            }
-            changed = true;
-        }
-        // Clamp to new scale
-        stat.rating = Math.max(1,  Math.min(NEW_MAX, stat.rating ?? getEloStart()));
-        stat.lo     = Math.max(1,  Math.min(NEW_MAX, stat.lo ?? 1));
-        stat.hi     = Math.max(1,  Math.min(NEW_MAX, stat.hi ?? NEW_MAX));
-        stat.lo     = Math.min(stat.lo, stat.hi);
-        // Reset any tight/collapsed bounds — these are artifacts of broken prior logic.
-        // Only calibration should narrow bounds; anything < 500 wide is suspect.
-        if (stat.hi - stat.lo < 500 && (stat.interactions ?? 0) < 20) {
-            stat.lo = 1;
-            stat.hi = NEW_MAX;
-            changed = true;
-        }
-    });
-
-    if (changed) saveBattleData();
-}
-
-function ensureBookStat(id) {
-    const eloMax = getEloMax(); // always 3000
-    if (!battleData.bookStats[id]) {
-        battleData.bookStats[id] = {
-            rating:           getEloStart(), // 750 — earn upward, not drift from midpoint
-            lo:               1,
-            hi:               eloMax,
-            wins:             0,
-            losses:           0,
-            appearances:      0,
-            sessionWins:      0,
-            interactions:     0,
-            lastSeenSession:  battleData.sessions.length,
-            lastSeenAt:       0,
-            decayWeight:      0,
-            tiersEncountered: []
-        };
-    }
-    const s = battleData.bookStats[id];
-    if (s.rating          === undefined) s.rating          = getEloStart();
-    if (s.lo              === undefined) { s.lo = 1; s.hi = eloMax; }
-    if (s.hi              === undefined) s.hi              = eloMax;
-    if (s.interactions    === undefined) s.interactions    = (s.wins || 0) + (s.losses || 0);
-    if (s.lastSeenSession === undefined) s.lastSeenSession = 0;
-    if (s.decayWeight     === undefined) s.decayWeight     = 0;
-    if (s.tiersEncountered=== undefined) s.tiersEncountered= [];
-    return s;
-}
-
-// ============================================================
-//  CORE ELO
-//
-//  Uses standard logistic expected-value formula (chess Elo, divisor 400)
-//  instead of linear ratio — this correctly handles all rating magnitudes
-//  and ensures the winner always rates higher than the loser over time.
-//
-//  kScale     : external multiplier (pool mode, calibration, etc.)
-//  poolCeiling: only dampens when session pool is genuinely low-tier
-//               (pool average < 60% of global midpoint). Ignores ceiling
-//               for strong sessions so top performers aren't throttled.
-// ============================================================
-
-// Standard logistic Elo expected value
-function eloExpected(ratingA, ratingB) {
-    return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
-}
-
-// Provisional K: new books move faster but not explosively (2× / 1.5×, not 3× / 2×)
-function provisionalMx(stat) {
-    const n = stat.interactions;
-    if (n <  5) return 2.0;
-    if (n < 10) return 1.5;
-    return 1.0;
-}
-
-// Top-vs-top: high-Elo duels are high-stakes
-function topMatchupMx(ws, ls) {
-    return (ws.rating > getEloMax() * 0.65 && ls.rating > getEloMax() * 0.65) ? 1.8 : 1.0;
-}
-
-function applyElo(winnerId, loserId, roundIndex, totalRounds, kScale = 1.0, poolCeiling = null, poolAvg = null) {
-    const ws = ensureBookStat(winnerId);
-    const ls = ensureBookStat(loserId);
-
-    // Record tier exposure for evidence
-    recordTierEncountered(ws, loserId);
-    recordTierEncountered(ls, winnerId);
-
-    const K           = 64;
-    const roundWeight = totalRounds > 0 ? roundIndex / totalRounds : 1;
-    const baseK       = K * (1 + roundWeight) * kScale;
-
-    const winnerK = baseK * provisionalMx(ws) * topMatchupMx(ws, ls);
-    const loserK  = baseK * provisionalMx(ls) * topMatchupMx(ws, ls);
-
-    // Standard logistic expected value (correct Elo formula)
-    const expected = eloExpected(ws.rating, ls.rating);
-
-    const loserPlayed  = ls.wins + ls.losses;
-    const loserWinRate = loserPlayed > 0 ? ls.wins / loserPlayed : 0.5;
-    const chronicMx    = loserWinRate < 0.25 ? 1.5 : 1.0;
-
-    let winnerGain = winnerK * (1 - expected);
-
-    // Pool ceiling dampening — ONLY for genuinely low-tier sessions.
-    // If the pool average is above 60% of midpoint, the session has real
-    // competition and we must not throttle legitimate winners.
-    const mid = getEloMidpoint();
-    const isLowTierSession = poolAvg !== null && poolAvg < mid * 0.6;
-    if (isLowTierSession && poolCeiling !== null && ws.rating > poolCeiling) {
-        const overshoot = (ws.rating - poolCeiling) / Math.max(1, poolCeiling);
-        const damp      = Math.max(0.3, 1 - overshoot * 1.0);
-        winnerGain     *= damp;
-    }
-
-    ws.rating = Math.min(getEloMax(), Math.round(ws.rating + winnerGain));
-    ls.rating = Math.max(1,           Math.round(ls.rating - loserK * (1 - expected) * chronicMx));
-
-    ws.wins         += 1;
-    ls.losses       += 1;
-    ws.interactions += 1;
-    ls.interactions += 1;
-
-    // Nudge bounds based on duel outcome (scaled by opponent's evidence)
-    // then anchor rating to range midpoint if evidence is strong enough
-    nudgeBounds(winnerId, loserId);
-}
-
-// Saves immediately — used in classic mode per-round
-function awardPoints(winnerId, loserId, roundIndex, totalRounds, poolCeiling = null, poolAvg = null) {
-    applyElo(winnerId, loserId, roundIndex, totalRounds, 1.0, poolCeiling, poolAvg);
-    saveBattleData();
-}
-
-// ============================================================
-//  REJECT ELO (complex mode)
-// ============================================================
-function applyRejectElo(shelf, challenger, durationMs, roundIndex, totalRounds, poolCeiling = null, poolAvg = null) {
-    const cs    = ensureBookStat(challenger);
-    const kMx   = getSessionConfig().kMx;
-
-    const ms      = Math.max(200, Math.min(3000, durationMs || 200));
-    const timeMod = 1.0 - 0.7 * ((ms - 200) / 2800);
-
-    const shelfRatings = shelf.map(id => ensureBookStat(id).rating);
-    const shelfAvg     = shelfRatings.reduce((a, b) => a + b, 0) / shelfRatings.length;
-    const shelfStrMod  = Math.max(0.3, Math.min(1.0, shelfAvg / getEloMax()));
-
-    const isBorderline = cs.rating > shelfAvg;
-    const opponents    = isBorderline
-        ? shelf.slice(0, Math.ceil(shelf.length / 2))
-        : shelf;
-
-    const kScale = timeMod * shelfStrMod * kMx;
-
-    opponents.forEach(shelfId => {
-        applyElo(shelfId, challenger, roundIndex, totalRounds, kScale, poolCeiling, poolAvg);
-    });
-}
-
-// ============================================================
-//  DECAY (weighted-session based)
-//
-//  Each session mode contributes a sessionWeight to each seen book's
-//  decayWeight accumulator. When (currentTotalWeight - book.decayWeight)
-//  exceeds 3.0 (≈ 3 Standard sessions), and the book hasn't been seen
-//  in 24h, nudge rating 1.5% × missedWeight toward midpoint.
-// ============================================================
-function getTotalDecayWeight() {
-    return battleData.sessions.reduce((sum, s) => {
-        const cfg = SESSION_CONFIGS[s.poolMode] || SESSION_CONFIGS.standard;
-        return sum + cfg.sessionWeight;
-    }, 0);
-}
-
-function applyDecay() {
-    const mid          = getEloMidpoint();
-    const totalWeight  = getTotalDecayWeight();
-    const now          = Date.now();
-    const oneDayMs     = 86400000;
-    let changed        = false;
-
-    Object.values(battleData.bookStats).forEach(stat => {
-        if (!stat) return;
-        const missedWeight = totalWeight - (stat.decayWeight || 0);
-        if (missedWeight < 3.0) return;
-        if (stat.lastSeenAt && (now - stat.lastSeenAt) < oneDayMs) return;
-        const effectiveMissed = Math.min(missedWeight, 10);
-        const decayRate  = 1 - (0.015 * effectiveMissed);
-        stat.rating = Math.round(mid + (stat.rating - mid) * decayRate);
-        stat.rating = Math.max(1, Math.min(getEloMax(), stat.rating));
-        changed = true;
-    });
-
-    if (changed) saveBattleData();
-}
-
-function markSeen(id) {
-    const stat           = ensureBookStat(id);
-    const totalWeight    = getTotalDecayWeight();
-    stat.lastSeenSession = battleData.sessions.length;
-    stat.lastSeenAt      = Date.now();
-    stat.decayWeight     = totalWeight; // "caught up" to current weight
-}
-
-// ============================================================
-//  TIER-AWARE POOL SAMPLING
-//
-//  focus: -2=bottom-heavy, -1=lower-mid, 0=balanced, 1=upper-mid, 2=top-heavy
-//         "random" = pure random (no tier logic)
-//
-//  Always includes unranked ("fresh") books proportionally.
-//  Minimum 1 book from each tier to ensure cross-tier Elo movement.
-// ============================================================
 function samplePool(allBooks, targetSize, focus, boundaries) {
     if (focus === "random" || allBooks.length <= targetSize) {
         return allBooks.slice().sort(() => Math.random() - 0.5).slice(0, targetSize);
     }
 
-    // Bucket by tier
-    const tiers = [[], [], [], [], []]; // 0-3 = tiers, 4 = fresh (no stat)
+    const tiers   = [[], [], [], [], []]; // 0-3 rated tiers, 4 = unranked
     allBooks.forEach(b => {
-        const stat = battleData.bookStats[b.importOrder];
-        if (!stat || stat.interactions === 0) {
+        const s = battleData.bookStats[b.importOrder];
+        if (!s || getDuels(s) === 0) {
             tiers[4].push(b);
         } else {
-            tiers[getEloTier(stat.rating, boundaries)].push(b);
+            tiers[getRatingTier(s.rating, boundaries)].push(b);
         }
     });
 
-    // Base allocation weights per tier [bottom, lower-mid, upper-mid, top]
-    // focus shifts weight toward one end
     const focusNum = Number(focus) || 0;
     const baseWeights = [1, 1, 1, 1];
     if (focusNum < 0) {
@@ -626,84 +330,32 @@ function samplePool(allBooks, targetSize, focus, boundaries) {
         baseWeights[2] += focusNum * 0.5;
     }
 
-    // Fresh books always get ~15% of slots
     const freshCount = Math.min(tiers[4].length, Math.max(1, Math.round(targetSize * 0.15)));
     const remaining  = targetSize - freshCount;
-    const totalWeight = baseWeights.reduce((a, b) => a + b, 0);
-
-    // Allocate with minimum 1 per non-empty tier
-    const alloc = baseWeights.map((w, i) =>
-        tiers[i].length > 0 ? Math.max(1, Math.round((w / totalWeight) * remaining)) : 0
+    const totalW     = baseWeights.reduce((a, b) => a + b, 0);
+    const alloc      = baseWeights.map((w, i) =>
+        tiers[i].length > 0 ? Math.max(1, Math.round((w / totalW) * remaining)) : 0
     );
 
-    // Trim/expand to hit remaining exactly
     let allocated = alloc.reduce((a, b) => a + b, 0);
     while (allocated > remaining) {
-        // Remove from the most over-represented tier
-        const idx = alloc.map((a, i) => ({ i, ratio: tiers[i].length > 0 ? a / tiers[i].length : 999 }))
-                         .sort((a, b) => b.ratio - a.ratio)[0].i;
+        const idx = alloc
+            .map((a, i) => ({ i, ratio: tiers[i].length > 0 ? a / tiers[i].length : 999 }))
+            .sort((a, b) => b.ratio - a.ratio)[0].i;
         if (alloc[idx] > 1) { alloc[idx]--; allocated--; } else break;
     }
     while (allocated < remaining) {
-        const idx = alloc.map((a, i) => ({ i, ratio: tiers[i].length > 0 ? (tiers[i].length - a) / tiers[i].length : -1 }))
-                         .sort((a, b) => b.ratio - a.ratio)[0].i;
+        const idx = alloc
+            .map((a, i) => ({ i, ratio: tiers[i].length > 0 ? (tiers[i].length - a) / tiers[i].length : -1 }))
+            .sort((a, b) => b.ratio - a.ratio)[0].i;
         if (alloc[idx] < tiers[idx].length) { alloc[idx]++; allocated++; } else break;
     }
 
-    const result = [];
-    // Pick fresh books
-    result.push(...tiers[4].sort(() => Math.random() - 0.5).slice(0, freshCount));
-    // Pick from each tier
+    const result = tiers[4].sort(() => Math.random() - 0.5).slice(0, freshCount);
     alloc.forEach((n, i) => {
         result.push(...tiers[i].sort(() => Math.random() - 0.5).slice(0, n));
     });
-
     return result.sort(() => Math.random() - 0.5);
-}
-
-// Compute the session pool ceiling (90th percentile of pool Elo at start)
-function computePoolCeiling(poolIds) {
-    const ratings = poolIds.map(id => {
-        const s = battleData.bookStats[id];
-        return s ? s.rating : getEloStart();
-    }).sort((a, b) => a - b);
-    if (ratings.length === 0) return getEloMax();
-    const idx = Math.floor(0.90 * (ratings.length - 1));
-    return ratings[idx];
-}
-
-// ============================================================
-//  EVIDENCE SPREAD ENFORCEMENT
-//  After session ends, gently push winners up and losers down
-//  to prevent rating clumping near midpoint.
-// ============================================================
-function enforceSpread(participantIds, poolCeiling) {
-    const mid    = getEloMidpoint();
-    const eloMax = getEloMax();
-    let changed  = false;
-
-    // Count how many participants are within 10% of midpoint
-    const clumpThreshold = eloMax * 0.10;
-    const clumped = participantIds.filter(id => {
-        const s = battleData.bookStats[id];
-        return s && Math.abs(s.rating - mid) < clumpThreshold;
-    });
-    if (clumped.length / participantIds.length < 0.4) return; // spread is fine
-
-    participantIds.forEach(id => {
-        const s = battleData.bookStats[id];
-        if (!s) return;
-        const dist = s.rating - mid;
-        if (Math.abs(dist) < clumpThreshold) {
-            // Nudge away from midpoint based on win rate
-            const played   = s.wins + s.losses;
-            const winRate  = played > 0 ? s.wins / played : 0.5;
-            const nudge    = Math.round((winRate - 0.5) * eloMax * 0.04);
-            s.rating = Math.max(1, Math.min(eloMax, s.rating + nudge));
-            changed = true;
-        }
-    });
-    if (changed) saveBattleData();
 }
 
 // ============================================================
@@ -777,7 +429,7 @@ function unblacklistSeries(series) {
 }
 
 // ============================================================
-//  SESSION START — shared entry point
+//  SESSION START
 // ============================================================
 function startNewSession() {
     const allBooks = getBattlePool();
@@ -790,38 +442,25 @@ function startNewSession() {
         return;
     }
 
-    applyDecay();
+    const boundaries = getRatingTierBoundaries(allBooks);
+    const targetSize = Math.min(allBooks.length, cfg.size);
+    const sampled    = samplePool(allBooks, targetSize, battleFocus, boundaries);
 
-    const boundaries  = computeTierBoundaries(allBooks);
-    const targetSize  = Math.min(allBooks.length, cfg.size);
-    const sampled     = samplePool(allBooks, targetSize, battleFocus, boundaries);
-    const sampledIds  = sampled.map(b => b.importOrder);
-    const poolCeiling = computePoolCeiling(sampledIds);
-    const poolAvg     = sampledIds.reduce((sum, id) => {
-        const s = battleData.bookStats[id];
-        return sum + (s ? s.rating : getEloMidpoint());
-    }, 0) / Math.max(1, sampledIds.length);
-
-    sampled.forEach(b => {
-        ensureBookStat(b.importOrder).appearances++;
-        markSeen(b.importOrder);
-    });
+    sampled.forEach(b => ensureBookStat(b.importOrder).appearances++);
     saveBattleData();
 
     if (slots > 0) {
-        beginComplexSetup(sampled, slots, poolCeiling, poolAvg);
+        beginComplexSetup(sampled, slots);
         return;
     }
 
     battleSession = {
-        mode:         "classic",
-        pool:         sampled.map(b => b.importOrder),
-        poolMode:     battlePoolMode,
-        poolCeiling,
-        poolAvg,
-        roundIndex:   0,
-        startedAt:    Date.now(),
-        rounds:       []
+        mode:       "classic",
+        pool:       sampled.map(b => b.importOrder),
+        poolMode:   battlePoolMode,
+        roundIndex: 0,
+        startedAt:  Date.now(),
+        rounds:     []
     };
     duelStartTime = Date.now();
     renderBattlePlay();
@@ -840,13 +479,14 @@ function chooseSide(winnerId) {
     const duration = duelStartTime ? now - duelStartTime : null;
     const pair     = pickNextPair();
     const loserId  = pair.find(id => id !== winnerId);
-    const kMx      = getSessionConfig().kMx;
 
     battleSession.roundIndex++;
-    const totalRounds = battleSession.pool.length + battleSession.rounds.length - 1;
-    battleSession.rounds.push({ winner: winnerId, loser: loserId, roundIndex: battleSession.roundIndex, durationMs: duration });
-    markSeen(winnerId); markSeen(loserId);
-    applyElo(winnerId, loserId, battleSession.roundIndex, totalRounds, kMx, battleSession.poolCeiling, battleSession.poolAvg);
+    battleSession.rounds.push({
+        winner: winnerId, loser: loserId,
+        roundIndex: battleSession.roundIndex, durationMs: duration
+    });
+
+    applyRating(winnerId, loserId);
     saveBattleData();
     battleSession.pool = battleSession.pool.filter(id => id !== loserId);
 
@@ -857,12 +497,13 @@ function chooseSide(winnerId) {
 function finishSession() {
     const winnerId = battleSession.pool[0];
     ensureBookStat(winnerId).sessionWins++;
-    enforceSpread(battleSession.rounds.flatMap(r => [r.winner, r.loser]).filter(Boolean), battleSession.poolCeiling);
     const sessionRecord = {
-        date: Date.now(), poolSize: battleSession.rounds.length + 1,
-        winner: winnerId, mode: "classic",
+        date:     Date.now(),
+        poolSize: battleSession.rounds.length + 1,
+        winner:   winnerId,
+        mode:     "classic",
         poolMode: battleSession.poolMode,
-        rounds: battleSession.rounds.slice()
+        rounds:   battleSession.rounds.slice()
     };
     battleData.sessions.push(sessionRecord);
     saveBattleData();
@@ -871,26 +512,24 @@ function finishSession() {
 }
 
 function abandonSession() {
-    if (!confirm("Abandon this session? Elo changes made so far remain.")) return;
+    if (!confirm("Abandon this session? Rating changes made so far remain.")) return;
     battleSession = null;
     duelStartTime = null;
     renderBattlePlay();
 }
 
 // ============================================================
-//  COMPLEX: SETUP PHASE
+//  COMPLEX: SETUP
 // ============================================================
-function beginComplexSetup(sampled, slots, poolCeiling, poolAvg) {
+function beginComplexSetup(sampled, slots) {
     battleSession = {
-        mode:         "complex-setup",
+        mode:       "complex-setup",
         slots,
-        poolMode:     battlePoolMode,
-        poolCeiling,
-        poolAvg,
-        shelf:        sampled.slice(0, slots).map(b => b.importOrder),
-        queue:        sampled.slice(slots).map(b => b.importOrder),
-        totalBooks:   sampled.length,
-        startedAt:    Date.now()
+        poolMode:   battlePoolMode,
+        shelf:      sampled.slice(0, slots).map(b => b.importOrder),
+        queue:      sampled.slice(slots).map(b => b.importOrder),
+        totalBooks: sampled.length,
+        startedAt:  Date.now()
     };
     renderBattlePlay();
 }
@@ -912,62 +551,64 @@ function shelfMoveDown(index) {
 
 function confirmComplexSetup() {
     if (!battleSession || battleSession.mode !== "complex-setup") return;
-    const { shelf, queue, slots, totalBooks, poolCeiling, poolAvg } = battleSession;
-    const totalRounds = totalBooks - 1;
-    const kMx = getSessionConfig().kMx;
+    const { shelf, queue, slots, totalBooks } = battleSession;
 
+    // Apply ratings for initial shelf ordering
     for (let i = 0; i < shelf.length - 1; i++) {
-        markSeen(shelf[i]); markSeen(shelf[i + 1]);
-        applyElo(shelf[i], shelf[i + 1], i + 1, totalRounds, kMx, poolCeiling, poolAvg);
+        applyRating(shelf[i], shelf[i + 1]);
     }
     saveBattleData();
 
     battleSession = {
-        mode: "complex", slots,
-        poolMode: battleSession.poolMode,
-        poolCeiling,
-        poolAvg,
-        shelf: [...shelf], queue: [...queue],
+        mode:       "complex",
+        slots,
+        poolMode:   battleSession.poolMode,
+        shelf:      [...shelf],
+        queue:      [...queue],
         roundIndex: shelf.length - 1,
-        startedAt: Date.now(), rounds: [], totalBooks
+        startedAt:  Date.now(),
+        rounds:     [],
+        totalBooks
     };
     duelStartTime = Date.now();
     renderBattlePlay();
 }
 
 // ============================================================
-//  COMPLEX: PLAY PHASE
+//  COMPLEX: PLAY
 // ============================================================
+function applyRejectElo(shelf, challenger) {
+    // Challenger loses to the weakest book on the shelf
+    const weakest = shelf[shelf.length - 1];
+    applyRating(weakest, challenger);
+    // Also loses to each book it was compared to (approximate: all of them)
+    shelf.slice(0, -1).forEach(id => applyRating(id, challenger));
+}
+
 function complexChoose(slotIndex) {
     if (!battleSession || battleSession.mode !== "complex") return;
-
-    const now         = Date.now();
-    const duration    = duelStartTime ? now - duelStartTime : null;
-    const challenger  = battleSession.queue[0];
-    const shelf       = battleSession.shelf;
-    const slots       = battleSession.slots;
-    const totalRounds = battleSession.totalBooks - 1;
-    const kMx         = getSessionConfig().kMx;
-    const ceiling     = battleSession.poolCeiling;
-    const poolAvg     = battleSession.poolAvg;
+    const now        = Date.now();
+    const duration   = duelStartTime ? now - duelStartTime : null;
+    const challenger = battleSession.queue[0];
+    const shelf      = battleSession.shelf;
+    const slots      = battleSession.slots;
 
     battleSession.roundIndex++;
 
     if (slotIndex === -1) {
-        markSeen(challenger);
-        applyRejectElo(shelf, challenger, duration, battleSession.roundIndex, totalRounds, ceiling, poolAvg);
+        applyRejectElo(shelf, challenger);
         battleSession.rounds.push({
             action: "reject", challenger, shelfSnapshot: [...shelf],
             durationMs: duration, roundIndex: battleSession.roundIndex
         });
     } else {
+        // Challenger beats everyone from slotIndex downward
         for (let i = slotIndex; i < shelf.length; i++) {
-            markSeen(challenger); markSeen(shelf[i]);
-            applyElo(challenger, shelf[i], battleSession.roundIndex, totalRounds, kMx, ceiling, poolAvg);
+            applyRating(challenger, shelf[i]);
         }
+        // Challenger loses to everyone above slotIndex
         for (let i = 0; i < slotIndex; i++) {
-            markSeen(shelf[i]); markSeen(challenger);
-            applyElo(shelf[i], challenger, battleSession.roundIndex, totalRounds, kMx, ceiling, poolAvg);
+            applyRating(shelf[i], challenger);
         }
         const eliminated = shelf[shelf.length - 1];
         battleSession.shelf = [
@@ -990,38 +631,25 @@ function complexChoose(slotIndex) {
 }
 
 function finishComplexSession() {
-    const shelf       = battleSession.shelf;
-    const winnerId    = shelf[0];
-    const totalRounds = battleSession.totalBooks - 1;
-    const kMx         = getSessionConfig().kMx;
-    const ceiling     = battleSession.poolCeiling;
-    const poolAvg     = battleSession.poolAvg;
+    const shelf = battleSession.shelf;
+    const winnerId = shelf[0];
 
     for (let i = 0; i < shelf.length - 1; i++) {
-        applyElo(shelf[i], shelf[i + 1], totalRounds, totalRounds, kMx, ceiling, poolAvg);
+        applyRating(shelf[i], shelf[i + 1]);
     }
 
-    battleSession.rounds
-        .filter(r => r.action === "reject")
-        .forEach(r => applyRejectElo(
-            r.shelfSnapshot || shelf, r.challenger, r.durationMs,
-            totalRounds, totalRounds, ceiling, poolAvg
-        ));
-
     ensureBookStat(winnerId).sessionWins++;
-    const allParticipants = [
-        ...shelf,
-        ...battleSession.rounds.map(r => r.challenger || r.loser).filter(Boolean)
-    ];
-    enforceSpread([...new Set(allParticipants)], ceiling);
     saveBattleData();
 
     const sessionRecord = {
-        date: Date.now(), poolSize: battleSession.totalBooks,
-        winner: winnerId, shelf: [...shelf],
-        mode: "complex", slots: battleSession.slots,
+        date:     Date.now(),
+        poolSize: battleSession.totalBooks,
+        winner:   winnerId,
+        shelf:    [...shelf],
+        mode:     "complex",
+        slots:    battleSession.slots,
         poolMode: battleSession.poolMode,
-        rounds: battleSession.rounds.slice()
+        rounds:   battleSession.rounds.slice()
     };
     battleData.sessions.push(sessionRecord);
     saveBattleData();
@@ -1030,87 +658,52 @@ function finishComplexSession() {
 }
 
 // ============================================================
-//  QUICK CALIBRATION MODE
-//
-//  Rapid-fire "would you rather" where every pair is chosen to
-//  maximise information gain for both books simultaneously.
-//
-//  Pair scoring:
-//    overlap    = max(0, min(A.hi,B.hi) - max(A.lo,B.lo))
-//    avgSpread  = (A.hi-A.lo + B.hi-B.lo) / 2
-//    ratingGap  = |A.rating - B.rating|
-//    score      = overlap × avgSpread / (1 + ratingGap)
-//
-//  After each duel bounds update for both books:
-//    winner.lo = max(winner.lo, loser.lo)    — winner is above loser's floor
-//    loser.hi  = min(loser.hi,  winner.rating) — loser is below winner
-//
-//  Real Elo (1.5× K) also applied — duels count for rankings.
-//  Recently-duelled pairs are cooled down for QCALIB_COOLDOWN rounds
-//  to prevent the same pair reappearing immediately.
-//  Non-transitivity (A>B>C>A) is handled naturally by bounds + logistic Elo.
+//  QUICK CALIBRATION
+//  Picks pairs by maximum rating overlap (most informative).
+//  Clean implementation: no cooldown complexity, just pick the
+//  highest-value unseen pair each round.
 // ============================================================
-
-const QCALIB_K_MX      = 1.2;
-const QCALIB_COOLDOWN  = 12;   // rounds before a pair can repeat — long enough to see many other pairs
-const QCALIB_MAX_ELO_CHANGE = 200; // max total Elo a book can gain/lose in one quick-calib session
+const QCALIB_COOLDOWN = 8;
 
 function scoreQCalibPair(idA, idB) {
-    const sa = ensureBookStat(idA);
-    const sb = ensureBookStat(idB);
-    const loA = sa.lo ?? 1, hiA = sa.hi ?? getEloMax();
-    const loB = sb.lo ?? 1, hiB = sb.hi ?? getEloMax();
-    const overlap   = Math.max(0, Math.min(hiA, hiB) - Math.max(loA, loB));
-    const avgSpread = ((hiA - loA) + (hiB - loB)) / 2;
-    const ratingGap = Math.abs(sa.rating - sb.rating);
-    return (overlap * avgSpread) / (1 + ratingGap);
+    const sa  = ensureBookStat(idA);
+    const sb  = ensureBookStat(idB);
+    const gap = Math.abs(sa.rating - sb.rating);
+    // Prefer close ratings (high information) and books with few duels
+    const noveltyA = Math.max(0, PROVISIONAL_N - getDuels(sa));
+    const noveltyB = Math.max(0, PROVISIONAL_N - getDuels(sb));
+    return (1000 - gap) + (noveltyA + noveltyB) * 100;
 }
 
 function pickQCalibPair(pool, recentPairs) {
-    // Build candidate pairs sorted by score descending
-    // Only consider books with at least some overlap potential (hi > 1)
-    const eligible = pool.filter(b => {
-        const s = battleData.bookStats[b.importOrder];
-        return !s || (s.hi ?? getEloMax()) > (s.lo ?? 1) + 50; // has meaningful spread
-    });
-    if (eligible.length < 2) return pool.length >= 2 ? [pool[0].importOrder, pool[1].importOrder] : null;
+    const eligible = pool.length >= 2 ? pool : null;
+    if (!eligible) return null;
 
-    let bestScore = -1, bestA = null, bestB = null;
-    // Sample top candidates to avoid O(n²) on large libraries
-    // Sort by spread descending, check top 30
-    const candidates = eligible
-        .map(b => {
-            const s = battleData.bookStats[b.importOrder];
-            return { b, spread: (s ? (s.hi ?? getEloMax()) - (s.lo ?? 1) : getEloMax()) };
+    // Sort by rating for candidate selection
+    const sorted = eligible
+        .slice()
+        .sort((a, b) => {
+            const sa = battleData.bookStats[a.importOrder];
+            const sb = battleData.bookStats[b.importOrder];
+            return (sb ? sb.rating : RATING_START) - (sa ? sa.rating : RATING_START);
         })
-        .sort((a, b) => b.spread - a.spread)
-        .slice(0, 30)
-        .map(x => x.b);
+        .slice(0, 40);
 
-    for (let i = 0; i < candidates.length; i++) {
-        for (let j = i + 1; j < candidates.length; j++) {
-            const idA = candidates[i].importOrder;
-            const idB = candidates[j].importOrder;
+    let bestScore = -Infinity, bestA = null, bestB = null;
+    for (let i = 0; i < sorted.length; i++) {
+        for (let j = i + 1; j < sorted.length; j++) {
+            const idA    = sorted[i].importOrder;
+            const idB    = sorted[j].importOrder;
             const pairKey = [idA, idB].sort().join(",");
-            if (recentPairs.has(pairKey)) continue; // cooled down
+            if (recentPairs.has(pairKey)) continue;
             const score = scoreQCalibPair(idA, idB);
-            if (score > bestScore) {
-                bestScore = score;
-                bestA = idA; bestB = idB;
-            }
+            if (score > bestScore) { bestScore = score; bestA = idA; bestB = idB; }
         }
     }
-    if (!bestA) {
-        // All top pairs on cooldown — just pick highest-spread uncooled pair
-        for (let i = 0; i < eligible.length && !bestA; i++) {
-            for (let j = i + 1; j < eligible.length && !bestA; j++) {
-                const pairKey = [eligible[i].importOrder, eligible[j].importOrder].sort().join(",");
-                if (!recentPairs.has(pairKey)) {
-                    bestA = eligible[i].importOrder;
-                    bestB = eligible[j].importOrder;
-                }
-            }
-        }
+    if (!bestA && eligible.length >= 2) {
+        // All on cooldown — just pick closest ratings
+        bestA = sorted[0].importOrder;
+        bestB = sorted[1].importOrder;
     }
     return bestA ? [bestA, bestB] : null;
 }
@@ -1118,29 +711,20 @@ function pickQCalibPair(pool, recentPairs) {
 function startQuickCalib() {
     const pool = getBattlePool();
     if (pool.length < 2) { alert("Need at least 2 eligible books."); return; }
-    applyDecay();
-    pool.forEach(b => markSeen(b.importOrder));
+    pool.forEach(b => ensureBookStat(b.importOrder).appearances++);
     saveBattleData();
-
-    // Record each book's starting rating so we can cap total movement
-    const startRatings = {};
-    pool.forEach(b => {
-        const s = battleData.bookStats[b.importOrder];
-        startRatings[b.importOrder] = s ? s.rating : getEloMidpoint();
-    });
 
     const firstPair = pickQCalibPair(pool, new Set());
     if (!firstPair) { alert("Not enough pairs to calibrate."); return; }
 
     battleSession = {
-        mode:         "quick-calib",
-        pool:         pool.map(b => b.importOrder),
-        currentPair:  firstPair,
-        roundsDone:   0,
-        recentPairs:  new Map(),   // pairKey → roundDone (for cooldown)
-        startRatings,             // cap Elo movement per book
-        results:      [],
-        startedAt:    Date.now()
+        mode:        "quick-calib",
+        pool:        pool.map(b => b.importOrder),
+        currentPair: firstPair,
+        roundsDone:  0,
+        recentPairs: new Map(),
+        results:     [],
+        startedAt:   Date.now()
     };
     duelStartTime = Date.now();
     switchBattleView("play");
@@ -1155,40 +739,24 @@ function qcalibChoose(winnerId) {
     const [idA, idB] = sess.currentPair;
     const loserId  = winnerId === idA ? idB : idA;
 
-    markSeen(winnerId); markSeen(loserId);
-
-    // Apply Elo but cap total movement per book for this session
-    const wStatBefore = ensureBookStat(winnerId).rating;
-    const lStatBefore = ensureBookStat(loserId).rating;
-    applyElo(winnerId, loserId, 1, 1, QCALIB_K_MX);
-
-    // Enforce per-session Elo cap — prevent a book from being nuked by repeat matchups
-    const wStat = ensureBookStat(winnerId);
-    const lStat = ensureBookStat(loserId);
-    const wStart = sess.startRatings[winnerId] ?? wStatBefore;
-    const lStart = sess.startRatings[loserId]  ?? lStatBefore;
-    if (wStat.rating - wStart >  QCALIB_MAX_ELO_CHANGE) wStat.rating = wStart + QCALIB_MAX_ELO_CHANGE;
-    if (lStart - lStat.rating >  QCALIB_MAX_ELO_CHANGE) lStat.rating = lStart - QCALIB_MAX_ELO_CHANGE;
-
+    applyRating(winnerId, loserId);
     saveBattleData();
 
+    const wStat = ensureBookStat(winnerId);
+    const lStat = ensureBookStat(loserId);
     sess.results.push({
         winner: winnerId, loser: loserId,
-        winnerRatingAfter: wStat.rating, loserRatingAfter: lStat.rating,
+        winnerRating: wStat.rating, loserRating: lStat.rating,
         durationMs: duration
     });
-
     sess.roundsDone++;
 
-    // Add pair to cooldown — expires after QCALIB_COOLDOWN more rounds
     const pairKey = [idA, idB].sort().join(",");
     sess.recentPairs.set(pairKey, sess.roundsDone);
-    // Expire cooldowns that are old enough
     for (const [k, setAt] of sess.recentPairs) {
         if (sess.roundsDone - setAt >= QCALIB_COOLDOWN) sess.recentPairs.delete(k);
     }
 
-    // Pick next pair — pass cooled set so picker avoids them
     const poolBooks = getBattlePool().filter(b => sess.pool.includes(b.importOrder));
     const cooledSet = new Set(sess.recentPairs.keys());
     const nextPair  = pickQCalibPair(poolBooks, cooledSet);
@@ -1201,22 +769,13 @@ function qcalibChoose(winnerId) {
 
 function qcalibDraw() {
     if (!battleSession || battleSession.mode !== "quick-calib") return;
-    const sess = battleSession;
+    const sess       = battleSession;
     const [idA, idB] = sess.currentPair;
 
-    markSeen(idA); markSeen(idB);
-    applyDrawBounds(idA, idB);
-
-    // Clamp draw Elo movement to session cap too
-    const sA = ensureBookStat(idA), sB = ensureBookStat(idB);
-    const startA = sess.startRatings[idA] ?? sA.rating;
-    const startB = sess.startRatings[idB] ?? sB.rating;
-    sA.rating = Math.max(startA - QCALIB_MAX_ELO_CHANGE, Math.min(startA + QCALIB_MAX_ELO_CHANGE, sA.rating));
-    sB.rating = Math.max(startB - QCALIB_MAX_ELO_CHANGE, Math.min(startB + QCALIB_MAX_ELO_CHANGE, sB.rating));
-
+    applyDraw(idA, idB);
     saveBattleData();
 
-    sess.results.push({ winner: null, loser: null, draw: true, idA, idB });
+    sess.results.push({ draw: true, idA, idB });
     sess.roundsDone++;
 
     const pairKey = [idA, idB].sort().join(",");
@@ -1236,15 +795,14 @@ function qcalibDraw() {
 }
 
 function qcalibFinish() {
-    const sess = battleSession;
     const el   = document.getElementById("battlePlayView");
+    const sess = battleSession;
     if (!el) return;
 
     const totalRounds = sess ? sess.roundsDone : 0;
     const totalMs     = sess ? sess.results.reduce((s, r) => s + (r.durationMs || 0), 0) : 0;
     const avgMs       = totalRounds > 0 ? Math.round(totalMs / totalRounds) : 0;
-
-    const narrowed = sess ? new Set([
+    const narrowed    = sess ? new Set([
         ...sess.results.map(r => r.winner).filter(Boolean),
         ...sess.results.map(r => r.loser).filter(Boolean),
         ...sess.results.filter(r => r.draw).flatMap(r => [r.idA, r.idB])
@@ -1268,62 +826,56 @@ function qcalibFinish() {
     battleSession = null;
 }
 
-//  Each probe picks the opponent whose rating is closest to
-//  (lo+hi)/2, halving the range on each outcome.
-//  usedOpponents prevents the same duel appearing twice.
 // ============================================================
-const CALIB_PROBES_PER_BOOK = 6;
+//  CALIBRATION MODE
+//  Bisection: pick the opponent closest to the midpoint of
+//  the book's plausible range, narrowing each round.
+//  Range is derived purely from ratings of beaten/lost books.
+// ============================================================
 const CALIB_K_MX = 1.5;
 
 function buildCalibQueue() {
     const pool = getBattlePool();
     return pool
-        .map(b => {
-            const stat = battleData.bookStats[b.importOrder];
-            return { b, evidence: stat ? getEvidenceScore(stat) : 0 };
-        })
-        .sort((a, b) => a.evidence - b.evidence)
+        .map(b => ({ b, duels: getDuels(ensureBookStat(b.importOrder)) }))
+        .sort((a, b) => a.duels - b.duels)
         .map(x => x.b.importOrder);
 }
 
 function startCalibTarget(targetId, remainingQueue) {
-    const stat   = ensureBookStat(targetId);
-    const eloMax = getEloMax();
-    // Use the book's actual uncertainty range as the bisection range
-    const lo = stat.lo ?? 1;
-    const hi = stat.hi ?? eloMax;
-
+    const stat = ensureBookStat(targetId);
     return {
         mode:          "calibration",
         targetId,
-        lo, hi,
+        rangeMin:      RATING_MIN,
+        rangeMax:      RATING_MAX,
         probesDone:    0,
-        probesMax:     CALIB_PROBES_PER_BOOK,
+        probesMax:     6,
         results:       [],
-        usedOpponents: new Set(),   // prevent duplicate duels
+        usedOpponents: new Set(),
         remainingQueue,
-        startedAt:     Date.now()
+        startedAt:     Date.now(),
+        _calibPair:    null
     };
 }
 
-function pickCalibOpponent(lo, hi, targetId, usedOpponents) {
-    const mid  = Math.round((lo + hi) / 2);
+function pickCalibOpponent(rangeMin, rangeMax, targetId, usedOpponents) {
+    const mid  = Math.round((rangeMin + rangeMax) / 2);
     const pool = getBattlePool().filter(b =>
         b.importOrder !== targetId &&
-        !(usedOpponents && usedOpponents.has(b.importOrder))
+        !usedOpponents.has(b.importOrder)
     );
     if (pool.length === 0) return null;
     return pool
         .map(b => {
             const s = battleData.bookStats[b.importOrder];
-            const r = s ? s.rating : getEloMidpoint();
+            const r = s ? s.rating : RATING_START;
             return { b, dist: Math.abs(r - mid) };
         })
         .sort((a, b) => a.dist - b.dist)[0].b;
 }
 
 function startCalibration() {
-    applyDecay();
     const queue = buildCalibQueue();
     if (queue.length === 0) { alert("No eligible books to calibrate!"); return; }
     battleSession = startCalibTarget(queue[0], queue.slice(1));
@@ -1332,13 +884,10 @@ function startCalibration() {
     renderBattlePlay();
 }
 
-// Launch calibration for one specific book, skipping the queue
 function startCalibSingle(importOrder) {
     if (battleSession) {
         if (!confirm("This will interrupt your current session. Continue?")) return;
     }
-    applyDecay();
-    // Build remaining queue from low-evidence books, excluding the target
     const queue = buildCalibQueue().filter(id => id !== importOrder);
     battleSession = startCalibTarget(importOrder, queue);
     duelStartTime = Date.now();
@@ -1353,119 +902,81 @@ function calibChoose(winnerId) {
     const sess     = battleSession;
     const targetId = sess.targetId;
 
-    // Resolve the current opponent from the rendered pair
-    const opponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
+    const opponent = pickCalibOpponent(sess.rangeMin, sess.rangeMax, targetId, sess.usedOpponents);
     if (!opponent) { calibNextBook(); return; }
     const opponentId = opponent.importOrder;
 
     sess.usedOpponents.add(opponentId);
 
-    const actualWinner = winnerId;
-    const actualLoser  = actualWinner === targetId ? opponentId : targetId;
-    const targetWon    = actualWinner === targetId;
+    const targetWon    = winnerId === targetId;
+    const actualWinner = targetWon ? targetId : opponentId;
+    const actualLoser  = targetWon ? opponentId : targetId;
 
-    const oppStat = ensureBookStat(opponentId);
-    sess.results.push({
-        opponentId,
-        opponentRating: oppStat.rating,
-        targetWon,
-        durationMs: duration,
-        lo: sess.lo, hi: sess.hi
-    });
+    const oppRating = ensureBookStat(opponentId).rating;
 
-    // Apply Elo
-    markSeen(targetId); markSeen(opponentId);
-    applyElo(actualWinner, actualLoser, sess.probesDone + 1, CALIB_PROBES_PER_BOOK, CALIB_K_MX);
+    // Apply rating with stronger K for calibration
+    const ws = ensureBookStat(actualWinner);
+    const ls = ensureBookStat(actualLoser);
+    const exp = eloExpected(ws.rating, ls.rating);
+    const kW  = Math.round(kFactor(ws) * CALIB_K_MX);
+    const kL  = Math.round(kFactor(ls) * CALIB_K_MX);
+    ws.rating = Math.min(RATING_MAX, Math.round(ws.rating + kW * (1 - exp)));
+    ls.rating = Math.max(RATING_MIN, Math.round(ls.rating - kL * (1 - exp)));
+    ws.wins   += 1;
+    ls.losses += 1;
     saveBattleData();
 
-    // Narrow the bisection range using the opponent's rating as the pivot
-    const pivot = oppStat.rating;
-    if (targetWon) {
-        sess.lo = Math.max(sess.lo, pivot);  // target is above pivot
-    } else {
-        sess.hi = Math.min(sess.hi, pivot);  // target is below pivot
-    }
-    // Also write the narrowed range back to the stat so it persists
-    if (sess.hi - sess.lo < 100) {
-        const m = Math.round((sess.lo + sess.hi) / 2);
-        sess.lo = Math.max(1, m - 50);
-        sess.hi = Math.min(getEloMax(), m + 50);
-    }
-    // Write the narrowed range back to the stat so it persists
-    const tStat = ensureBookStat(targetId);
-    tStat.lo = Math.max(tStat.lo ?? 1, sess.lo);
-    tStat.hi = Math.min(tStat.hi ?? getEloMax(), sess.hi);
-    if (tStat.lo > tStat.hi) tStat.lo = tStat.hi;
-    if (tStat.hi - tStat.lo < 50) { const m = Math.round((tStat.lo+tStat.hi)/2); tStat.lo = Math.max(1,m-25); tStat.hi = Math.min(getEloMax(),m+25); }
-    anchorRatingToRange(tStat);
-    saveBattleData();
+    // Narrow bisection range
+    if (targetWon) sess.rangeMin = Math.max(sess.rangeMin, oppRating);
+    else           sess.rangeMax = Math.min(sess.rangeMax, oppRating);
 
+    if (sess.rangeMin >= sess.rangeMax) {
+        sess.rangeMin = Math.max(RATING_MIN, sess.rangeMax - 100);
+        sess.rangeMax = Math.min(RATING_MAX, sess.rangeMin + 100);
+    }
+
+    sess.results.push({ opponentId, opponentRating: oppRating, targetWon, durationMs: duration });
     sess.probesDone++;
+    sess._calibPair = null;
 
-    // No auto-finish on probe count — user decides when done via "Next book" or "Stop".
-    // Only auto-advance if no usable opponents remain for this book.
-    const nextOpponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
-    if (!nextOpponent) {
-        calibNextBook();
-    } else {
-        duelStartTime = Date.now();
-        renderBattlePlay();
-    }
+    const nextOpponent = pickCalibOpponent(sess.rangeMin, sess.rangeMax, targetId, sess.usedOpponents);
+    if (!nextOpponent) { calibNextBook(); return; }
+    duelStartTime = Date.now();
+    renderBattlePlay();
 }
 
 function calibDraw() {
     if (!battleSession || battleSession.mode !== "calibration") return;
     const sess     = battleSession;
     const targetId = sess.targetId;
-    const opponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
+    const opponent = pickCalibOpponent(sess.rangeMin, sess.rangeMax, targetId, sess.usedOpponents);
     if (!opponent) { calibNextBook(); return; }
-    const opponentId = opponent.importOrder;
 
-    sess.usedOpponents.add(opponentId);
-    markSeen(targetId); markSeen(opponentId);
-
-    applyDrawBounds(targetId, opponentId);
-
-    // For bisection: draw means target sits at opponent's rating — narrow both sides
-    const pivot = ensureBookStat(opponentId).rating;
-    const margin = Math.round((sess.hi - sess.lo) * 0.2); // keep small band around pivot
-    sess.lo = Math.max(sess.lo, pivot - margin);
-    sess.hi = Math.min(sess.hi, pivot + margin);
-
-    // Write back
-    if (sess.hi - sess.lo < 100) {
-        const m = Math.round((sess.lo + sess.hi) / 2);
-        sess.lo = Math.max(1, m - 50);
-        sess.hi = Math.min(getEloMax(), m + 50);
-    }
-    // Write back
-    const tStat = ensureBookStat(targetId);
-    tStat.lo = Math.max(tStat.lo ?? 1, sess.lo);
-    tStat.hi = Math.min(tStat.hi ?? getEloMax(), sess.hi);
-    if (tStat.lo > tStat.hi) tStat.lo = tStat.hi;
-    if (tStat.hi - tStat.lo < 50) { const m = Math.round((tStat.lo+tStat.hi)/2); tStat.lo = Math.max(1,m-25); tStat.hi = Math.min(getEloMax(),m+25); }
+    sess.usedOpponents.add(opponent.importOrder);
+    const oppRating = ensureBookStat(opponent.importOrder).rating;
+    applyDraw(targetId, opponent.importOrder);
     saveBattleData();
 
-    sess.results.push({ opponentId, opponentRating: pivot, targetWon: null, draw: true, lo: sess.lo, hi: sess.hi });
-    sess.probesDone++;
+    const margin = Math.round((sess.rangeMax - sess.rangeMin) * 0.2);
+    sess.rangeMin = Math.max(sess.rangeMin, oppRating - margin);
+    sess.rangeMax = Math.min(sess.rangeMax, oppRating + margin);
 
-    const nextOpponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
-    if (!nextOpponent) {
-        calibNextBook();
-    } else {
-        duelStartTime = Date.now();
-        renderBattlePlay();
-    }
+    sess.results.push({ opponentId: opponent.importOrder, opponentRating: oppRating, targetWon: null, draw: true });
+    sess.probesDone++;
+    sess._calibPair = null;
+
+    const nextOpponent = pickCalibOpponent(sess.rangeMin, sess.rangeMax, targetId, sess.usedOpponents);
+    if (!nextOpponent) { calibNextBook(); return; }
+    duelStartTime = Date.now();
+    renderBattlePlay();
 }
 
 function calibNextBook() {
     const queue = battleSession?.remainingQueue || [];
     if (queue.length === 0) {
-        // No more books — show final summary
         renderCalibResult();
         return;
     }
-    // Auto-advance to next book without showing a result screen
     battleSession = startCalibTarget(queue[0], queue.slice(1));
     duelStartTime = Date.now();
     renderBattlePlay();
@@ -1485,7 +996,6 @@ function battleKeyHandler(e) {
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
     if (battleSession?.mode === "complex-setup") return;
-
     if (!battleSession) return;
 
     if (battleSession.mode === "classic") {
@@ -1500,7 +1010,7 @@ function battleKeyHandler(e) {
         if (e.key === "ArrowLeft"  || e.key === "1") { e.preventDefault(); flashCard("left");  calibChoose(pair[0]); }
         if (e.key === "ArrowRight" || e.key === "2") { e.preventDefault(); flashCard("right"); calibChoose(pair[1]); }
         if (e.key === "ArrowDown"  || e.key === " ") { e.preventDefault(); calibDraw(); }
-        if (e.key === "n" || e.key === "N") { e.preventDefault(); calibNextBook(); }
+        if (e.key === "n" || e.key === "N")           { e.preventDefault(); calibNextBook(); }
         return;
     }
 
@@ -1537,8 +1047,11 @@ function flashCard(side) {
     const cards = arena.querySelectorAll(".battle-card");
     const idx   = side === "left" ? 0 : 1;
     if (cards[idx]) {
-        cards[idx].style.borderColor = "#5cb85c"; cards[idx].style.background = "#1e2a1e";
-        setTimeout(() => { if (cards[idx]) { cards[idx].style.borderColor = ""; cards[idx].style.background = ""; } }, 120);
+        cards[idx].style.borderColor = "#5cb85c";
+        cards[idx].style.background  = "#1e2a1e";
+        setTimeout(() => {
+            if (cards[idx]) { cards[idx].style.borderColor = ""; cards[idx].style.background = ""; }
+        }, 120);
     }
 }
 
@@ -1551,7 +1064,8 @@ function flashComplexSlot(slotIndexOrReject) {
     const els = document.querySelectorAll(".complex-shelf-slot");
     const el  = els[slotIndexOrReject];
     if (el) {
-        el.style.borderColor = "#5cb85c"; el.style.background = "#1e2a1e";
+        el.style.borderColor = "#5cb85c";
+        el.style.background  = "#1e2a1e";
         setTimeout(() => { if (el) { el.style.borderColor = ""; el.style.background = ""; } }, 120);
     }
 }
@@ -1566,11 +1080,9 @@ function getRankedBooks() {
         .map(([id, stat]) => ({ id: Number(id), stat }))
         .filter(e => e.stat !== null && e.stat !== undefined && getBookById(e.id) !== null)
         .sort((a, b) => {
-            const aPlayed = (a.stat.interactions || 0) > 0;
-            const bPlayed = (b.stat.interactions || 0) > 0;
-            // Unplayed books always sink below played books
+            const aPlayed = getDuels(a.stat) > 0;
+            const bPlayed = getDuels(b.stat) > 0;
             if (aPlayed !== bPlayed) return aPlayed ? -1 : 1;
-            // Both played or both unplayed: sort by point-estimate rating
             return b.stat.rating - a.stat.rating;
         });
 }
@@ -1603,7 +1115,6 @@ function switchBattleView(view) {
     battleView = view;
     renderBattleSubNav();
 
-    // Ensure export div exists (may not be in older index.html versions)
     if (!document.getElementById("battleExportView")) {
         const tab = document.getElementById("tab-battle");
         if (tab) {
@@ -1629,18 +1140,17 @@ function switchBattleView(view) {
 }
 
 // ============================================================
-//  PLAY VIEW — LOBBY + ACTIVE SESSIONS
+//  PLAY VIEW
 // ============================================================
 function renderBattlePlay() {
     const el = document.getElementById("battlePlayView");
     if (!el) return;
 
-    if (battleSession?.mode === "complex-setup")  { renderComplexSetup(el);  return; }
-    if (battleSession?.mode === "complex")         { renderComplexPlay(el);   return; }
-    if (battleSession?.mode === "calibration")     { renderCalibPlay(el);     return; }
+    if (battleSession?.mode === "complex-setup")  { renderComplexSetup(el);   return; }
+    if (battleSession?.mode === "complex")         { renderComplexPlay(el);    return; }
+    if (battleSession?.mode === "calibration")     { renderCalibPlay(el);      return; }
     if (battleSession?.mode === "quick-calib")     { renderQuickCalibPlay(el); return; }
-
-    if (!battleSession) { renderLobby(el); return; }
+    if (!battleSession)                            { renderLobby(el);          return; }
 
     // Classic play
     const pool     = battleSession.pool;
@@ -1673,19 +1183,16 @@ function renderLobby(el) {
     const slots   = battleComplexMode === "off" ? 0 : Number(battleComplexMode);
     const actualSize = Math.min(pool.length, cfg.size);
 
-    // Key hints
     let keyHint = "";
     if (slots === 0)      keyHint = "Keys: ← → or 1 2";
     else if (slots === 2) keyHint = "Keys: ← → or 1 2 · Space/↓ = reject";
     else if (slots === 3) keyHint = "Keys: ← ↑ → or 1 2 3 · Space/↓ = reject";
     else                  keyHint = `Keys: 1–${slots <= 9 ? slots : "9, 0=10"} · Space = reject`;
 
-    // Focus label
-    const focusLabels = { "-2": "Bottom-heavy", "-1": "Lower-mid focus", "0": "Balanced", "1": "Upper-mid focus", "2": "Top-heavy", "random": "Pure random" };
-
-    // Evidence summary
-    const allStats    = Object.values(battleData.bookStats).filter(Boolean);
-    const lowEvidence = allStats.filter(s => getEvidenceScore(s) < 0.2).length;
+    // Stats summary
+    const allStats     = Object.values(battleData.bookStats).filter(Boolean);
+    const unranked     = allStats.filter(s => getDuels(s) === 0).length;
+    const totalDueled  = allStats.filter(s => getDuels(s) > 0).length;
 
     el.innerHTML = `
         <div class="battle-lobby">
@@ -1699,13 +1206,13 @@ function renderLobby(el) {
                         <span class="lobby-mode-label">${c.label}</span>
                         <span class="lobby-mode-size">${c.size === Infinity ? 'All' : c.size} books</span>
                     </button>`).join("")}
-                <button class="lobby-mode-btn lobby-mode-calib ${battleSession?.mode === 'calibration' ? 'active' : ''}"
+                <button class="lobby-mode-btn lobby-mode-calib"
                         onclick="startCalibration()">
                     <span class="lobby-mode-emoji">🔬</span>
                     <span class="lobby-mode-label">Calibrate</span>
-                    <span class="lobby-mode-size">Low-evidence</span>
+                    <span class="lobby-mode-size">Few duels first</span>
                 </button>
-                <button class="lobby-mode-btn lobby-mode-qcalib ${battleSession?.mode === 'quick-calib' ? 'active' : ''}"
+                <button class="lobby-mode-btn lobby-mode-qcalib"
                         onclick="startQuickCalib()">
                     <span class="lobby-mode-emoji">⚡</span>
                     <span class="lobby-mode-label">Quick Calib</span>
@@ -1737,13 +1244,13 @@ function renderLobby(el) {
             <div class="lobby-pool-info">
                 📚 ${pool.length} eligible &nbsp;·&nbsp; This session: ~${actualSize} books
                 ${blCount > 0 ? `<span class="battle-pool-blacklisted">&nbsp;·&nbsp; ${blCount} blacklisted</span>` : ""}
-                ${lowEvidence > 0 ? `<span style="color:#e67e22;">&nbsp;·&nbsp; ${lowEvidence} uncertain</span>` : ""}
+                ${unranked > 0 ? `<span style="color:#e67e22;">&nbsp;·&nbsp; ${unranked} unranked</span>` : ""}
             </div>
 
             ${battleData.sessions.length > 0 ? `
                 <p style="color:#aaa;font-size:0.85em;margin-bottom:16px;">
                     Sessions: <strong>${battleData.sessions.length}</strong> &nbsp;|&nbsp;
-                    Ranked: <strong>${Object.keys(battleData.bookStats).length}</strong>
+                    Books ranked: <strong>${totalDueled}</strong>
                 </p>` : ""}
 
             <button class="battle-start-btn" onclick="startNewSession()">
@@ -1755,7 +1262,7 @@ function renderLobby(el) {
         </div>`;
 }
 
-// ── Complex setup ──
+// ── Complex setup ──────────────────────────────────────────────
 function renderComplexSetup(el) {
     const shelf = battleSession.shelf;
     const slots = battleSession.slots;
@@ -1771,8 +1278,8 @@ function renderComplexSetup(el) {
                 <div class="setup-slot-label">${label}</div>${cover}
                 <div class="setup-book-info"><strong>${b?.title||"?"}</strong><small>${b?.author||""}</small>${stars}</div>
                 <div class="setup-controls">
-                    ${i > 0        ? `<button onclick="shelfMoveUp(${i})"   class="setup-btn">▲</button>` : `<span class="setup-btn-placeholder"></span>`}
-                    ${i < slots-1  ? `<button onclick="shelfMoveDown(${i})" class="setup-btn">▼</button>` : `<span class="setup-btn-placeholder"></span>`}
+                    ${i > 0       ? `<button onclick="shelfMoveUp(${i})"   class="setup-btn">▲</button>` : `<span class="setup-btn-placeholder"></span>`}
+                    ${i < slots-1 ? `<button onclick="shelfMoveDown(${i})" class="setup-btn">▼</button>` : `<span class="setup-btn-placeholder"></span>`}
                 </div>
             </div>`;
     });
@@ -1791,7 +1298,7 @@ function renderComplexSetup(el) {
         </div>`;
 }
 
-// ── Complex play ──
+// ── Complex play ───────────────────────────────────────────────
 function renderComplexPlay(el) {
     const sess       = battleSession;
     const slots      = sess.slots;
@@ -1805,7 +1312,7 @@ function renderComplexPlay(el) {
 
     let keyHint;
     if (slots === 2) keyHint = "← or 1 = slot 1 &nbsp;·&nbsp; → or 2 = slot 2 &nbsp;·&nbsp; Space/↓ = reject";
-    else if (slots === 3) keyHint = "← or 1 = slot 1 &nbsp;·&nbsp; ↑ or 2 = slot 2 &nbsp;·&nbsp; → or 3 = slot 3 &nbsp;·&nbsp; Space/↓ = reject";
+    else if (slots === 3) keyHint = "← or 1 · ↑ or 2 · → or 3 &nbsp;·&nbsp; Space/↓ = reject";
     else keyHint = `Keys 1–${slots <= 9 ? slots : "9, 0=10"} for slots &nbsp;·&nbsp; Space = reject`;
 
     const cover = book.coverUrl ? `<img src="${book.coverUrl}" class="battle-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder">📖</div>`;
@@ -1850,62 +1357,63 @@ function renderComplexPlay(el) {
         <button class="battle-abandon-btn" onclick="abandonSession()">✕ Abandon session</button>`;
 }
 
-// ── Calibration play ──
+// ── Calibration play ───────────────────────────────────────────
 function renderCalibPlay(el) {
     const sess     = battleSession;
     const targetId = sess.targetId;
     const target   = getBookById(targetId);
     if (!target) { calibNextBook(); return; }
 
-    const opponent = pickCalibOpponent(sess.lo, sess.hi, targetId, sess.usedOpponents);
+    const opponent = pickCalibOpponent(sess.rangeMin, sess.rangeMax, targetId, sess.usedOpponents);
     if (!opponent) { calibNextBook(); return; }
 
-    // Store current pair for keyboard handler
+    // Store for keyboard handler
     sess._calibPair = [targetId, opponent.importOrder];
 
-    const stat       = ensureBookStat(targetId);
-    const evidence   = getEvidenceScore(stat);
-    const evInfo     = evidenceLabel(evidence);
-    const oppStat    = ensureBookStat(opponent.importOrder);
-    const ranked     = getRankedBooks();
-    const oppRank    = ranked.findIndex(e => e.id === opponent.importOrder) + 1;
-    const targetRank = ranked.findIndex(e => e.id === targetId) + 1;
-
-    const pct   = Math.round((sess.probesDone / sess.probesMax) * 100);
-    const rangeSize = sess.hi - sess.lo;
+    const tStat   = ensureBookStat(targetId);
+    const oppStat = ensureBookStat(opponent.importOrder);
+    const ranked  = getRankedBooks();
+    const oppRank = ranked.findIndex(e => e.id === opponent.importOrder) + 1;
+    const tRank   = ranked.findIndex(e => e.id === targetId) + 1;
+    const tDuels  = getDuels(tStat);
+    const conf    = confidenceLabel(tStat);
 
     const tCover = target.coverUrl   ? `<img src="${target.coverUrl}"   class="battle-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder">📖</div>`;
     const oCover = opponent.coverUrl ? `<img src="${opponent.coverUrl}" class="battle-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder">📖</div>`;
     const tStars = target.rating   > 0 ? `<div class="battle-stars">${"★".repeat(target.rating)}${"☆".repeat(5-target.rating)}</div>` : "";
     const oStars = opponent.rating > 0 ? `<div class="battle-stars">${"★".repeat(opponent.rating)}${"☆".repeat(5-opponent.rating)}</div>` : "";
 
+    const winRate   = getWinRate(tStat);
+    const winRateTxt = winRate !== null ? `${Math.round(winRate*100)}% W (${tStat.wins}W/${tStat.losses}L)` : "no duels yet";
+
+    const pct = Math.round((sess.probesDone / sess.probesMax) * 100);
+
     const reasoning = `
         <div class="calib-reasoning">
             <div class="calib-reason-row">
                 <span>📍 Calibrating:</span>
                 <strong>${target.title}</strong>
-                ${targetRank > 0 ? `<span style="color:#666;">currently #${targetRank}</span>` : ""}
+                ${tRank > 0 ? `<span style="color:#666;">currently #${tRank}</span>` : ""}
             </div>
             <div class="calib-reason-row">
-                <span>🎯 Plausible range:</span>
-                <strong>${sess.lo.toLocaleString()} – ${sess.hi.toLocaleString()}</strong>
-                <span style="color:#666;">(±${Math.round(rangeSize/2).toLocaleString()} · ${sess.probesDone} probe${sess.probesDone!==1?'s':''} done)</span>
+                <span>📊 Record:</span>
+                <strong style="color:${conf.color}">${winRateTxt} &nbsp;·&nbsp; ${conf.label}</strong>
+                <span style="color:#666;">(${tDuels} duel${tDuels!==1?"s":""})</span>
             </div>
             <div class="calib-reason-row">
-                <span>🔍 Why this opponent:</span>
-                <span>Rated ${oppStat.rating.toLocaleString()} (rank ~#${oppRank||"?"}) — near the midpoint of the current range.
-                Win → range becomes <em>${oppStat.rating.toLocaleString()}–${sess.hi.toLocaleString()}</em>.
-                Loss → range becomes <em>${sess.lo.toLocaleString()}–${oppStat.rating.toLocaleString()}</em>.</span>
+                <span>🎯 Search range:</span>
+                <strong>${sess.rangeMin.toLocaleString()} – ${sess.rangeMax.toLocaleString()}</strong>
+                <span style="color:#666;">opponent is near midpoint (${Math.round((sess.rangeMin+sess.rangeMax)/2).toLocaleString()})</span>
             </div>
             <div class="calib-reason-row">
-                <span>📊 Evidence:</span>
-                <span style="color:${evInfo.color}">${evInfo.label} (${Math.round(evidence*100)}%)</span>
+                <span>🔍 Opponent rank:</span>
+                <span>~#${oppRank||"?"} · rated ${oppStat.rating.toLocaleString()} · ${getDuels(oppStat)} duels</span>
             </div>
         </div>`;
 
     el.innerHTML = `
         <div class="battle-progress-bar-wrap">
-            <div class="battle-progress-label">🔬 Calibrating: <em>${target.title}</em> &nbsp;·&nbsp; ${sess.remainingQueue.length} book${sess.remainingQueue.length!==1?'s':''} queued</div>
+            <div class="battle-progress-label">🔬 Calibrating: <em>${target.title}</em> &nbsp;·&nbsp; ${sess.remainingQueue.length} queued</div>
             <div class="battle-progress-track"><div class="battle-progress-fill" style="width:${pct}%"></div></div>
         </div>
         ${reasoning}
@@ -1921,9 +1429,7 @@ function renderCalibPlay(el) {
             </div>
             <div class="calib-vs-col">
                 <div class="battle-vs">VS</div>
-                <button class="calib-draw-btn" onclick="calibDraw()" title="About the same level [↓ or Space]">
-                    ↕ Same level
-                </button>
+                <button class="calib-draw-btn" onclick="calibDraw()">↕ Same level</button>
             </div>
             <div class="battle-card" onclick="calibChoose(${opponent.importOrder})">
                 ${oCover}
@@ -1931,13 +1437,13 @@ function renderCalibPlay(el) {
                     <div class="battle-card-title">${opponent.title}</div>
                     <div class="battle-card-author">${opponent.author||""}</div>
                     ${oStars}
-                    <div style="font-size:0.75em;color:#777;margin-top:4px;">Rank ~#${oppRank||"?"}</div>
+                    <div style="font-size:0.75em;color:#777;margin-top:4px;">Rank ~#${oppRank||"?"} · ${oppStat.rating}</div>
                 </div>
             </div>
         </div>
         <p class="battle-hint">← → or 1 2 to pick &nbsp;·&nbsp; ↓ or Space = same level &nbsp;·&nbsp; N = next book</p>
         <div style="display:flex;gap:10px;justify-content:center;margin-top:8px;">
-            ${sess.remainingQueue.length > 0 ? `<button class="battle-abandon-btn" style="background:#1a2a1a;border-color:#3a5a3a;color:#8bc88b;" onclick="calibNextBook()">→ Next book</button>` : ''}
+            ${sess.remainingQueue.length > 0 ? `<button class="battle-abandon-btn" style="background:#1a2a1a;border-color:#3a5a3a;color:#8bc88b;" onclick="calibNextBook()">→ Next book</button>` : ""}
             <button class="battle-abandon-btn" onclick="calibStop()">✕ Stop</button>
         </div>`;
 }
@@ -1948,22 +1454,22 @@ function renderCalibResult() {
     const sess = battleSession;
     const stat = ensureBookStat(sess.targetId);
     const book = getBookById(sess.targetId);
-    const ranked = getRankedBooks();
-    const newRank = ranked.findIndex(e => e.id === sess.targetId) + 1;
-    const evidence = getEvidenceScore(stat);
-    const evInfo   = evidenceLabel(evidence);
+    const ranked   = getRankedBooks();
+    const newRank  = ranked.findIndex(e => e.id === sess.targetId) + 1;
+    const conf     = confidenceLabel(stat);
+    const winRate  = getWinRate(stat);
     const cover    = book?.coverUrl ? `<img src="${book.coverUrl}" class="battle-winner-cover" style="width:80px;height:120px;" alt="" onerror="this.style.display='none'">` : `<div style="font-size:3em;">📖</div>`;
 
     let probeRows = "";
     sess.results.forEach((r, i) => {
-        const opp = getBookById(r.opponentId);
+        const opp         = getBookById(r.opponentId);
         const resultColor = r.draw ? '#888' : (r.targetWon ? '#5cb85c' : '#c0392b');
         const resultText  = r.draw ? "Draw ≈" : (r.targetWon ? "Won ✓" : "Lost ✗");
         probeRows += `<tr>
             <td>${i+1}</td>
             <td>${opp ? opp.title : "?"}</td>
             <td style="color:${resultColor}">${resultText}</td>
-            <td style="color:#888;">${r.lo.toLocaleString()}–${r.hi.toLocaleString()}</td>
+            <td style="color:#888;">${r.opponentRating?.toLocaleString?.() ?? "?"}</td>
         </tr>`;
     });
 
@@ -1977,15 +1483,15 @@ function renderCalibResult() {
             <div class="battle-winner-title">${book?.title || "?"}</div>
             <div class="battle-winner-author">${book?.author || ""}</div>
             <div class="battle-session-summary">
-                <div class="battle-summary-row"><span>New estimated rank</span><strong>#${newRank || "?"}</strong></div>
-                <div class="battle-summary-row"><span>Duel rating</span><strong>${stat.rating.toLocaleString()} / ${getEloMax().toLocaleString()}</strong></div>
-                <div class="battle-summary-row"><span>Evidence strength</span><strong style="color:${evInfo.color}">${evInfo.label} (${Math.round(evidence*100)}%)</strong></div>
-                <div class="battle-summary-row"><span>Settled range</span><strong>${sess.lo.toLocaleString()} – ${sess.hi.toLocaleString()}</strong></div>
+                <div class="battle-summary-row"><span>New rank</span><strong>#${newRank || "?"}</strong></div>
+                <div class="battle-summary-row"><span>Rating</span><strong>${stat.rating.toLocaleString()}</strong></div>
+                <div class="battle-summary-row"><span>Win rate</span><strong>${winRate !== null ? Math.round(winRate*100)+"%" : "–"} (${stat.wins}W / ${stat.losses}L)</strong></div>
+                <div class="battle-summary-row"><span>Confidence</span><strong style="color:${conf.color}">${conf.label}</strong></div>
             </div>
             <div class="battle-stats-section" style="margin-top:16px;">
                 <h3 style="font-size:0.9em;color:#aaa;">Probe history</h3>
                 <table class="battle-stats-table">
-                    <thead><tr><th>#</th><th>Opponent</th><th>Result</th><th>Range after</th></tr></thead>
+                    <thead><tr><th>#</th><th>Opponent</th><th>Result</th><th>Opp. rating</th></tr></thead>
                     <tbody>${probeRows}</tbody>
                 </table>
             </div>
@@ -1997,47 +1503,24 @@ function renderCalibResult() {
         </div>`;
 }
 
-function renderBookCard(book, id) {
-    const cover = book.coverUrl ? `<img src="${book.coverUrl}" class="battle-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder">📖</div>`;
-    const stars = book.rating > 0 ? `<div class="battle-stars">${"★".repeat(book.rating)}${"☆".repeat(5-book.rating)}</div>` : "";
-    return `<div class="battle-card" onclick="chooseSide(${id})">${cover}<div class="battle-card-info"><div class="battle-card-title">${book.title}</div><div class="battle-card-author">${book.author||""}</div>${stars}</div></div>`;
-}
-
-// ── Quick Calibration play ──
+// ── Quick Calib play ───────────────────────────────────────────
 function renderQuickCalibPlay(el) {
-    const sess    = battleSession;
+    const sess       = battleSession;
     const [idA, idB] = sess.currentPair;
-    const bookA   = getBookById(idA);
-    const bookB   = getBookById(idB);
+    const bookA      = getBookById(idA);
+    const bookB      = getBookById(idB);
     if (!bookA || !bookB) { qcalibFinish(); return; }
 
     const sA = ensureBookStat(idA);
     const sB = ensureBookStat(idB);
-    const eloMax = getEloMax();
 
-    // Show range indicators on each card
     function cardHtml(book, id, stat) {
         const cover  = book.coverUrl ? `<img src="${book.coverUrl}" class="battle-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder">📖</div>`;
         const stars  = book.rating > 0 ? `<div class="battle-stars">${"★".repeat(book.rating)}${"☆".repeat(5-book.rating)}</div>` : "";
-        const lo     = stat.lo ?? 1;
-        const hi     = stat.hi ?? eloMax;
-        const ev     = getEvidenceScore(stat);
-        const evInfo = evidenceLabel(ev);
-        const loPct  = Math.round((lo / eloMax) * 100);
-        const hiPct  = Math.round((hi / eloMax) * 100);
-        const rPct   = Math.round((stat.rating / eloMax) * 100);
-        const rangeBar = `
-            <div class="qcalib-range-bar" title="${lo.toLocaleString()}–${hi.toLocaleString()}">
-                <div class="range-bar-track" style="height:5px;">
-                    <div class="range-bar-fill" style="left:${loPct}%;width:${hiPct-loPct}%"></div>
-                    <div class="range-bar-point" style="left:${rPct}%"></div>
-                </div>
-                <div style="display:flex;justify-content:space-between;font-size:0.68em;color:#555;margin-top:2px;">
-                    <span>${lo.toLocaleString()}</span>
-                    <span style="color:${evInfo.color};font-size:0.9em;">${evInfo.label}</span>
-                    <span>${hi.toLocaleString()}</span>
-                </div>
-            </div>`;
+        const duels  = getDuels(stat);
+        const wr     = getWinRate(stat);
+        const conf   = confidenceLabel(stat);
+        const wrTxt  = wr !== null ? `${Math.round(wr*100)}% W` : "–";
         return `
             <div class="battle-card qcalib-card" onclick="qcalibChoose(${id})">
                 ${cover}
@@ -2045,22 +1528,25 @@ function renderQuickCalibPlay(el) {
                     <div class="battle-card-title">${book.title}</div>
                     <div class="battle-card-author">${book.author||""}</div>
                     ${stars}
-                    ${rangeBar}
+                    <div class="qcalib-range-bar" style="margin-top:8px;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.72em;color:#777;">
+                            <span>Rating: ${stat.rating.toLocaleString()}</span>
+                            <span style="color:${conf.color}">${conf.label}</span>
+                        </div>
+                        <div style="font-size:0.68em;color:#555;margin-top:2px;">${wrTxt} · ${duels} duel${duels!==1?"s":""}</div>
+                    </div>
                 </div>
             </div>`;
     }
 
-    // Show what this duel will resolve
-    const loAB = Math.max(sA.lo ?? 1,    sB.lo ?? 1);
-    const hiAB = Math.min(sA.hi ?? eloMax, sB.hi ?? eloMax);
-    const overlap = Math.max(0, hiAB - loAB);
-    const infoLine = overlap > 50
-        ? `Shared range: <strong>${loAB.toLocaleString()}–${hiAB.toLocaleString()}</strong> — this duel will resolve <strong>±${Math.round(overlap/2).toLocaleString()}</strong> for both`
-        : `Comparing nearby books to sharpen their bounds`;
+    const gap     = Math.abs(sA.rating - sB.rating);
+    const infoLine = gap < 100
+        ? `Very close ratings (${sA.rating} vs ${sB.rating}) — this will be decisive`
+        : `Ratings: ${sA.rating} vs ${sB.rating} — gap of ${gap}`;
 
     el.innerHTML = `
         <div class="battle-progress-bar-wrap">
-            <div class="battle-progress-label">⚡ Quick Calibration &nbsp;·&nbsp; ${sess.roundsDone} duels played &nbsp;·&nbsp; ← → or 1 2</div>
+            <div class="battle-progress-label">⚡ Quick Calibration &nbsp;·&nbsp; ${sess.roundsDone} duels played</div>
             <div class="battle-progress-track" style="background:#1a1a2a;">
                 <div class="battle-progress-fill" style="width:100%;background:linear-gradient(90deg,#2a2a6a,#4a4aaa);opacity:0.4;"></div>
             </div>
@@ -2070,14 +1556,19 @@ function renderQuickCalibPlay(el) {
             ${cardHtml(bookA, idA, sA)}
             <div class="calib-vs-col">
                 <div class="battle-vs">VS</div>
-                <button class="calib-draw-btn" onclick="qcalibDraw()" title="About the same level [↓ or Space]">
-                    ↕ Same level
-                </button>
+                <button class="calib-draw-btn" onclick="qcalibDraw()">↕ Same level</button>
             </div>
             ${cardHtml(bookB, idB, sB)}
         </div>
         <p class="battle-hint">Tap a book or ← → / 1 2 · ↓ or Space = same level · Stop any time.</p>
         <button class="battle-abandon-btn" onclick="qcalibFinish()">✓ Stop &amp; save</button>`;
+}
+
+// ── Winner screens ─────────────────────────────────────────────
+function renderBookCard(book, id) {
+    const cover = book.coverUrl ? `<img src="${book.coverUrl}" class="battle-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder">📖</div>`;
+    const stars = book.rating > 0 ? `<div class="battle-stars">${"★".repeat(book.rating)}${"☆".repeat(5-book.rating)}</div>` : "";
+    return `<div class="battle-card" onclick="chooseSide(${id})">${cover}<div class="battle-card-info"><div class="battle-card-title">${book.title}</div><div class="battle-card-author">${book.author||""}</div>${stars}</div></div>`;
 }
 
 function renderBattleWinner(winnerId, session) {
@@ -2091,8 +1582,8 @@ function renderBattleWinner(winnerId, session) {
     const fastest = timed[0], slowest = timed[timed.length-1];
     const cover   = winner?.coverUrl ? `<img src="${winner.coverUrl}" class="battle-winner-cover" alt="" onerror="this.style.display='none'">` : `<div class="battle-cover-placeholder" style="font-size:4em;">📖</div>`;
     const cfg     = SESSION_CONFIGS[session.poolMode] || SESSION_CONFIGS.standard;
-    const evidence = getEvidenceScore(stat);
-    const evInfo   = evidenceLabel(evidence);
+    const conf    = confidenceLabel(stat);
+    const winRate = getWinRate(stat);
 
     el.innerHTML = `
         <div class="battle-winner-screen">
@@ -2107,8 +1598,9 @@ function renderBattleWinner(winnerId, session) {
                 ${runnerUp ? `<div class="battle-summary-row"><span>Runner-up</span><strong>${runnerUp.title}</strong></div>` : ""}
                 ${fastest  ? `<div class="battle-summary-row"><span>Fastest pick</span><strong>${fmtMs(fastest.durationMs)}</strong></div>` : ""}
                 ${slowest && slowest !== fastest ? `<div class="battle-summary-row"><span>Slowest pick</span><strong>${fmtMs(slowest.durationMs)}</strong></div>` : ""}
-                <div class="battle-summary-row"><span>Duel rating</span><strong>${stat.rating||getEloMidpoint()} / ${getEloMax()}</strong></div>
-                <div class="battle-summary-row"><span>Evidence</span><strong style="color:${evInfo.color}">${evInfo.label}</strong></div>
+                <div class="battle-summary-row"><span>Rating</span><strong>${stat.rating || RATING_START}</strong></div>
+                <div class="battle-summary-row"><span>Win rate</span><strong>${winRate !== null ? Math.round(winRate*100)+"%" : "–"} (${stat.wins||0}W / ${stat.losses||0}L)</strong></div>
+                <div class="battle-summary-row"><span>Confidence</span><strong style="color:${conf.color}">${conf.label}</strong></div>
                 <div class="battle-summary-row"><span>Session wins</span><strong>${stat.sessionWins||0}</strong></div>
             </div>
             <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;flex-wrap:wrap;">
@@ -2120,15 +1612,15 @@ function renderBattleWinner(winnerId, session) {
 }
 
 function renderComplexWinner(session) {
-    const el     = document.getElementById("battlePlayView");
+    const el    = document.getElementById("battlePlayView");
     if (!el) return;
-    const shelf  = session.shelf;
+    const shelf = session.shelf;
     const podium = ["🥇","🥈","🥉"];
     const cfg    = SESSION_CONFIGS[session.poolMode] || SESSION_CONFIGS.standard;
 
     let podiumHtml = "";
     shelf.forEach((id, i) => {
-        const b = getBookById(id);
+        const b     = getBookById(id);
         const cover = b?.coverUrl ? `<img src="${b.coverUrl}" class="battle-winner-cover" style="width:80px;height:120px;" alt="" onerror="this.style.display='none'">` : `<div style="font-size:3em;">📖</div>`;
         podiumHtml += `<div class="complex-podium-entry"><div style="font-size:2em;">${podium[i]||`#${i+1}`}</div>${cover}<strong>${b?.title||"?"}</strong><small style="color:#aaa;">${b?.author||""}</small></div>`;
     });
@@ -2167,62 +1659,53 @@ function renderBattleRankings() {
     const ranked  = getRankedBooks();
     const limited = ranked.slice(0, battleRankingLimit);
     const medals  = ["🥇","🥈","🥉"];
-    const eloMax  = getEloMax(), eloMid = getEloMidpoint();
 
     if (ranked.length === 0) {
         el.innerHTML = `<p style="color:#aaa;margin:40px;text-align:center;">No rankings yet — play a session first!</p>`;
         return;
     }
 
-    // Split into ranked (have lo > 1 or some wins) and unranked (fully open range, no wins)
-    const hasEvidence = limited.filter(e => e.stat.interactions > 0 || (e.stat.lo ?? 1) > 1);
-    const noEvidence  = limited.filter(e => e.stat.interactions === 0 && (e.stat.lo ?? 1) <= 1);
+    const hasEvidence = limited.filter(e => getDuels(e.stat) > 0);
+    const noEvidence  = limited.filter(e => getDuels(e.stat) === 0);
 
     let html = `
         <h2 style="margin-bottom:4px;">📖 BookDuel Rankings</h2>
         <p style="color:#888;margin-bottom:16px;font-size:0.9em;">
-            ${ranked.length} books ranked &nbsp;·&nbsp; Fixed scale 0–3000 &nbsp;·&nbsp; Sorted by rating
+            ${ranked.length} books ranked &nbsp;·&nbsp; Sorted by rating
         </p>
         <div class="battle-rankings-table">
             <div class="battle-rank-header">
                 <span class="rh-num">#</span>
                 <span class="rh-book">Book</span>
                 <span class="rh-rating">Rating</span>
-                <span class="rh-range">Range</span>
-                <span class="rh-win">W%</span>
-                <span class="rh-ev">Evidence</span>
+                <span class="rh-range">Win rate</span>
+                <span class="rh-win">Duels</span>
+                <span class="rh-ev">Confidence</span>
                 <span class="rh-calib"></span>
             </div>`;
 
     function renderRow(entry, i) {
         const book = getBookById(entry.id);
         if (!book) return "";
-        const s       = entry.stat;
-        const played  = s.wins + s.losses;
-        const winPct  = played > 0 ? Math.round((s.wins / played) * 100) : null;
-        const cover   = book.coverUrl ? `<img src="${book.coverUrl}" class="battle-rank-thumb" alt="" onerror="this.style.display='none'">` : `<div class="battle-rank-thumb-placeholder">📖</div>`;
+        const s        = entry.stat;
+        const duels    = getDuels(s);
+        const winRate  = getWinRate(s);
+        const winPct   = winRate !== null ? Math.round(winRate * 100) : null;
+        const conf     = confidenceLabel(s);
+        const cover    = book.coverUrl ? `<img src="${book.coverUrl}" class="battle-rank-thumb" alt="" onerror="this.style.display='none'">` : `<div class="battle-rank-thumb-placeholder">📖</div>`;
         const undefeated = s.losses === 0 && s.wins > 0 ? `<span class="battle-badge badge-undefeated">Undefeated</span>` : "";
-        const lo      = s.lo ?? 1;
-        const hi      = s.hi ?? eloMax;
-        const spread  = hi - lo;
-        const ratingPct = Math.round((s.rating / eloMax) * 100);
-        const loPct     = Math.round((lo / eloMax) * 100);
-        const hiPct     = Math.round((hi / eloMax) * 100);
-        const evidence  = getEvidenceScore(s);
-        const evInfo    = evidenceLabel(evidence);
-        const evPct     = Math.round(evidence * 100);
 
-        const rangeBar = `
-            <div class="range-bar-wrap" title="Range: ${lo.toLocaleString()}–${hi.toLocaleString()}">
+        // Win rate bar (0–100%)
+        const winBarHtml = winPct !== null ? `
+            <div class="range-bar-wrap" title="${winPct}% win rate">
                 <div class="range-bar-track">
-                    <div class="range-bar-fill" style="left:${loPct}%;width:${hiPct-loPct}%"></div>
-                    <div class="range-bar-point" style="left:${ratingPct}%"></div>
+                    <div class="range-bar-fill" style="left:0;width:${winPct}%;background:${winPct>=50?'#4a8a4a':'#8a4a4a'};"></div>
+                    <div class="range-bar-point" style="left:50%;background:#555;"></div>
                 </div>
                 <div class="range-bar-labels">
-                    <span>${lo.toLocaleString()}</span>
-                    <span>${hi.toLocaleString()}</span>
+                    <span>0%</span><span style="color:#aaa">${winPct}%</span><span>100%</span>
                 </div>
-            </div>`;
+            </div>` : `<span style="color:#444;font-size:0.8em;">no duels</span>`;
 
         const rankLabel = i < 3 ? medals[i] : (i + 1);
         return `
@@ -2239,12 +1722,12 @@ function renderBattleRankings() {
             <span class="rh-rating battle-rank-pts">
                 <span class="battle-rating-num">${s.rating.toLocaleString()}</span>
             </span>
-            <span class="rh-range">${rangeBar}</span>
-            <span class="rh-win">${winPct !== null ? winPct + "%" : "–"}</span>
+            <span class="rh-range">${winBarHtml}</span>
+            <span class="rh-win">${duels > 0 ? duels : "–"}</span>
             <span class="rh-ev">
                 <div class="evidence-cell">
-                    <div class="evidence-bar-track"><div class="evidence-bar-fill" style="width:${evPct}%;background:${evInfo.color}"></div></div>
-                    <span class="evidence-label" style="color:${evInfo.color}">${evInfo.label}</span>
+                    <div class="evidence-bar-track"><div class="evidence-bar-fill" style="width:${Math.min(100,Math.round(duels/30*100))}%;background:${conf.color}"></div></div>
+                    <span class="evidence-label" style="color:${conf.color}">${conf.label}</span>
                 </div>
             </span>
             <span class="rh-calib"><button class="rank-calib-btn" onclick="startCalibSingle(${entry.id})" title="Recalibrate">🔬</button></span>
@@ -2255,7 +1738,7 @@ function renderBattleRankings() {
 
     if (noEvidence.length > 0) {
         html += `<div class="rank-unranked-divider">
-            <span>⬇ ${noEvidence.length} unplayed book${noEvidence.length!==1?"s":""} — range fully open, sorted to bottom</span>
+            <span>⬇ ${noEvidence.length} unplayed book${noEvidence.length!==1?"s":""} — no duels yet</span>
         </div>`;
         noEvidence.forEach((entry, i) => { html += renderRow(entry, hasEvidence.length + i); });
     }
@@ -2352,7 +1835,7 @@ function renderBattleStats() {
     }
 
     const totalDuels = sessions.reduce((s, sess) => s + sess.rounds.length, 0);
-    const totalBooks = Object.keys(battleData.bookStats).length;
+    const totalBooks = Object.values(battleData.bookStats).filter(s => s && getDuels(s) > 0).length;
     const allRounds  = sessions.flatMap(s => s.rounds);
 
     const normalizedRounds = allRounds.map(r => {
@@ -2368,8 +1851,9 @@ function renderBattleStats() {
     const avgMs         = timedRounds.length > 0 ? timedRounds.reduce((s,r) => s+r.durationMs,0)/timedRounds.length : 0;
 
     const ranked = getRankedBooks();
-    const dominant = ranked.filter(e => e.stat.appearances >= 3)
-        .map(e => ({ ...e, winRate: e.stat.wins / Math.max(1, e.stat.wins+e.stat.losses) }))
+    const dominant = ranked
+        .filter(e => e.stat.appearances >= 3)
+        .map(e => ({ ...e, winRate: e.stat.wins / Math.max(1, getDuels(e.stat)) }))
         .sort((a,b) => b.winRate - a.winRate)[0];
 
     const guiltyPleasure = ranked
@@ -2387,9 +1871,8 @@ function renderBattleStats() {
         if (li < wi) { const gap = wi - li; if (!biggestUpset || gap > biggestUpset.gap) biggestUpset = { gap, winner: r.winner, loser: r.loser }; }
     });
 
-    // Mode breakdown
     const modeCounts = {};
-    sessions.forEach(s => { const k = s.poolMode || (s.mode === "classic" ? "standard" : "complex"); modeCounts[k] = (modeCounts[k]||0) + 1; });
+    sessions.forEach(s => { const k = s.poolMode || "standard"; modeCounts[k] = (modeCounts[k]||0) + 1; });
 
     let html = `<h2>📊 BookDuel Stats</h2>
         <div class="battle-stats-grid">
@@ -2426,15 +1909,13 @@ function renderBattleStats() {
     if (dominant) { const db = getBookById(dominant.id); html += highlightCard("👑 Most Dominant", db?db.title:"–", `${Math.round(dominant.winRate*100)}% win rate (min. 3 appearances)`); }
     if (guiltyPleasure) { const gb = guiltyPleasure.book; html += highlightCard("🙈 Guilty Pleasure", gb.title, `Top half of rankings but only ${"★".repeat(gb.rating)} (${gb.rating}/5 stars)`); }
     if (biggestUpset) { const wu = getBookById(biggestUpset.winner), lu = getBookById(biggestUpset.loser); html += highlightCard("🎯 Biggest Upset", wu?wu.title:"–", `Knocked out ${lu?lu.title:"–"} despite being ranked ${biggestUpset.gap} spots lower`); }
-    const ratedRanked = ranked.filter(e => { const b = getBookById(e.id); return b && b.rating > 0; });
-    if (ratedRanked.length >= 3) { const half = Math.ceil(ratedRanked.length/2); const topAvg = (ratedRanked.slice(0,half).reduce((s,e)=>s+getBookById(e.id).rating,0)/half).toFixed(1); html += highlightCard("⭐ Duel vs Stars", `Top avg: ${topAvg} ★`, `Your highest-duelled books average ${topAvg} stars`); }
     html += `</div></div>`;
 
     html += `<div class="battle-stats-section"><h3>📋 Session History</h3>
         <table class="battle-stats-table">
             <thead><tr><th>Date</th><th>Mode</th><th>Pool</th><th>Rounds</th><th>Champion / Shelf</th></tr></thead><tbody>`;
     sessions.slice().reverse().forEach(sess => {
-        const w = getBookById(sess.winner);
+        const w   = getBookById(sess.winner);
         const cfg = SESSION_CONFIGS[sess.poolMode] || SESSION_CONFIGS.standard;
         const modeTag = sess.mode === "complex"
             ? `<span style="color:#aaa;font-size:0.8em;">${cfg.emoji} ${cfg.label} · ${sess.slots}s</span>`
@@ -2448,9 +1929,6 @@ function renderBattleStats() {
     el.innerHTML = html;
 }
 
-// ============================================================
-//  SMALL HELPERS
-// ============================================================
 function statCard(icon, label, value) {
     return `<div class="battle-stat-card"><div class="battle-stat-icon">${icon}</div><div class="battle-stat-value">${value}</div><div class="battle-stat-label">${label}</div></div>`;
 }
@@ -2458,26 +1936,19 @@ function highlightCard(title, main, sub) {
     return `<div class="battle-highlight-card"><div class="battle-highlight-title">${title}</div><div class="battle-highlight-main">${main}</div><div class="battle-highlight-sub">${sub}</div></div>`;
 }
 
-function saveBattleRankingLimit(val) {
-    battleRankingLimit = Math.max(1, Number(val) || DEFAULT_RANKING_LIMIT);
-    localStorage.setItem(BATTLE_LIMIT_KEY, String(battleRankingLimit));
-}
-function saveBattleComplexSetting(val) { saveBattleComplexMode(val); }
-
 // ============================================================
-//  EXPORT / COPY VIEW
+//  EXPORT VIEW
 // ============================================================
-
 const _exportPrefs = {
     includeRank:   true,
     includeTitle:  true,
     includeAuthor: true,
     includeRating: false,
-    includeRange:  false,
-    includeWinPct: false,
+    includeWinRate: false,
+    includeDuels:  false,
     limit:         0,
     onlyRanked:    true,
-    titleLang:     "original",   // ← NEW
+    titleLang:     "original",
 };
 
 function renderBattleExport() {
@@ -2485,37 +1956,33 @@ function renderBattleExport() {
     if (!el) return;
 
     const p = _exportPrefs;
-    // getRankedBooks returns [{id, stat}] — resolve full book objects here
     const ranked = getRankedBooks().map(e => ({
         book: getBookById(e.id),
         stat: e.stat
     })).filter(e => e.book);
 
-    const pool = p.onlyRanked
-        ? ranked.filter(e => (e.stat.interactions || 0) > 0)
-        : ranked;
+    const pool    = p.onlyRanked ? ranked.filter(e => getDuels(e.stat) > 0) : ranked;
     const limited = p.limit > 0 ? pool.slice(0, p.limit) : pool;
 
     const lines = limited.map(({ book: b, stat: s }, i) => {
         const parts = [];
-        if (p.includeRank)   parts.push(`#${i + 1}`);
+        if (p.includeRank)    parts.push(`#${i + 1}`);
         if (p.includeTitle) {
-               const _bookLang = getBookLangCode(b);
-               let _exportTitle = b.title || "Untitled";
-               if (p.titleLang !== "original" && _bookLang !== p.titleLang) {
-                   const _alt = (b.altTitles || {})[p.titleLang];
-                   if (_alt && _alt.trim()) _exportTitle = _alt.trim();
-               }
-               parts.push(_exportTitle);
-           }
-        if (p.includeAuthor && b.author) parts.push(`by ${b.author}`);
-        if (p.includeRating && s) parts.push(`[${Math.round(s.rating)}]`);
-        if (p.includeRange  && s) parts.push(`(${Math.round(s.lo || 0)}–${Math.round(s.hi || 3000)})`);
-        if (p.includeWinPct && s) {
-            const total = (s.wins || 0) + (s.losses || 0);
-            const pct = total > 0 ? Math.round(s.wins / total * 100) : "—";
-            parts.push(`${pct}% W`);
+            const _bookLang    = getBookLangCode(b);
+            let _exportTitle   = b.title || "Untitled";
+            if (p.titleLang !== "original" && _bookLang !== p.titleLang) {
+                const _alt = (b.altTitles || {})[p.titleLang];
+                if (_alt && _alt.trim()) _exportTitle = _alt.trim();
+            }
+            parts.push(_exportTitle);
         }
+        if (p.includeAuthor && b.author)  parts.push(`by ${b.author}`);
+        if (p.includeRating && s)         parts.push(`[${s.rating}]`);
+        if (p.includeWinRate && s) {
+            const wr = getWinRate(s);
+            parts.push(`${wr !== null ? Math.round(wr*100)+"%" : "–"} W`);
+        }
+        if (p.includeDuels && s)          parts.push(`${getDuels(s)} duels`);
         return parts.join(" · ");
     }).filter(line => line.trim());
 
@@ -2534,12 +2001,12 @@ function renderBattleExport() {
             <div style="display:flex;gap:32px;flex-wrap:wrap;margin-bottom:20px;">
                 <div>
                     <div style="font-size:0.75em;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Include</div>
-                    ${chk("includeRank",   "# Rank")}
-                    ${chk("includeTitle",  "Title")}
-                    ${chk("includeAuthor", "Author")}
-                    ${chk("includeRating", "Elo rating")}
-                    ${chk("includeRange",  "Range (lo–hi)")}
-                    ${chk("includeWinPct", "Win %")}
+                    ${chk("includeRank",    "# Rank")}
+                    ${chk("includeTitle",   "Title")}
+                    ${chk("includeAuthor",  "Author")}
+                    ${chk("includeRating",  "Rating score")}
+                    ${chk("includeWinRate", "Win %")}
+                    ${chk("includeDuels",   "Duel count")}
                 </div>
                 <div>
                     <div style="font-size:0.75em;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Filter</div>
@@ -2589,10 +2056,10 @@ function renderBattleExport() {
 }
 
 function exportCopyText() {
-    const area = document.getElementById("exportPreviewArea");
+    const area    = document.getElementById("exportPreviewArea");
     if (!area) return;
     const confirm = document.getElementById("exportCopyConfirm");
-    const show = () => {
+    const show    = () => {
         if (confirm) { confirm.textContent = "✓ Copied!"; confirm.style.opacity = "1"; setTimeout(() => { confirm.style.opacity = "0"; }, 2000); }
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
